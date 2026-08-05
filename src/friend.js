@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { PLAYER } from './config.js';
 import { buildBucketMesh } from './bucket.js';
 import { PALETTE } from './textures.js';
+import { playBucketStep, playBucketJump, playBucketLand } from './audio.js';
 
 /**
  * The thing the machine makes: the bucket you fed it, up on a pair of legs.
@@ -64,6 +65,17 @@ const DRIVE_ACCEL = 22;
 // a bucket that jumps high enough escapes whatever geometry is meant to hold
 // it, which is why the prototype in ../3d-plat kept its hop deliberately low.
 const DRIVE_JUMP = 6.3;
+/**
+ * Shortest gap between footstep sounds, in seconds.
+ *
+ * The gait advances 5.5 radians per metre per second and plants a foot every
+ * half cycle, so cadence is 1.75 x speed: about 6 a second driving, and eleven
+ * when it is following you at 6.5m/s — past the point where separate taps are
+ * audible as taps rather than as a rattle. This is the ceiling. Raise it if the
+ * patter is still too busy; the legs stay as they are either way, since their
+ * timing is the prototype's and looks right.
+ */
+const STEP_MIN_GAP = 0.14;
 
 // Follow tuning, straight from the prototype's tuning.ts.
 const FOLLOW_DISTANCE = 2.6;
@@ -173,6 +185,13 @@ export function createFriend(scene) {
   // updates every tick either way — only where its steering comes from
   // changes. Nothing is ever frozen, so handing control back never needs a
   // resync.
+  // How loud it is from where you are standing. Updated every frame, so the
+  // jump — which is triggered from outside the loop — has something current to
+  // use without needing the camera passed to it.
+  let listenerLevel = 1;
+  let lastStep = 0;
+  let stepCooldown = 0;
+
   let driven = false;
   let driveYaw = 0;
   const driveInput = { forward: false, back: false, left: false, right: false, run: false };
@@ -514,6 +533,7 @@ export function createFriend(scene) {
       if (!grounded) return;
       velocity.y = DRIVE_JUMP;
       grounded = false;
+      playBucketJump(listenerLevel);
     },
 
     update(delta, camera, targetPosition, colliders) {
@@ -529,11 +549,20 @@ export function createFriend(scene) {
       velocity.y -= PLAYER.gravity * delta;
       position.addScaledVector(velocity, delta);
 
+      // Captured before the landing zeroes them, so the impact can be judged.
+      const wasGrounded = grounded;
+      const impact = velocity.y;
+
       const ground = supportHeight(colliders, previousFeetY);
       if (position.y <= ground) {
         position.y = ground;
         velocity.y = 0;
         grounded = true;
+        // Only a real drop lands. Ignore the sub-centimetre settling that
+        // happens on every frame of walking across a flat floor.
+        if (!wasGrounded && impact < -2) {
+          playBucketLand(listenerLevel * Math.min(1, -impact / 6));
+        }
       } else {
         grounded = false;
       }
@@ -545,7 +574,28 @@ export function createFriend(scene) {
       velocity.z *= damp;
 
       mesh.position.copy(position);
-      walk(delta, Math.hypot(velocity.x, velocity.z));
+
+      // Inverse-square off a four-metre reference: full volume when you are
+      // inside it, and well down when it is clanking about across the ward.
+      const range = camera.position.distanceTo(position) / 4;
+      listenerLevel = 1 / (1 + range * range);
+
+      const speed = Math.hypot(velocity.x, velocity.z);
+      walk(delta, speed);
+
+      // A foot plants at each half cycle of the gait, so the step lands with
+      // the leg you can watch going down rather than on a clock of its own.
+      //
+      // With a floor on the interval — see STEP_MIN_GAP.
+      stepCooldown -= delta;
+      const step = Math.floor(walkPhase / Math.PI);
+      if (step !== lastStep) {
+        lastStep = step;
+        if (grounded && speed > 0.5 && stepCooldown <= 0) {
+          stepCooldown = STEP_MIN_GAP;
+          playBucketStep(listenerLevel * Math.min(1, 0.45 + speed / 5));
+        }
+      }
 
       if (driven) {
         // Driving, the body faces where you are looking. There is no one to

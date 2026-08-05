@@ -203,6 +203,120 @@ export function playFootstep(running = false) {
  * maintained a long time ago. Sent hard into the reverb — this is the loudest
  * thing that happens in a big bare room.
  */
+/**
+ * The bucket's own footfalls, jump and landing.
+ *
+ * Deliberately nothing like the player's. Yours is a boot on concrete — a
+ * broadband scuff over a low thump. This is an empty steel pail on two stub
+ * legs, so it is a light tick with a ring under it, and the ring's partials
+ * are spaced off-harmonically because that is what stops struck metal sounding
+ * like a tuned note.
+ *
+ * All three take a level, since the thing making them is usually somewhere
+ * across the room rather than under the camera.
+ */
+const PAIL_PARTIALS = [1, 1.51, 2.34, 3.11];
+
+/** A struck-metal ring: an inharmonic stack decaying together. */
+function pail(t, base, peak, decay, wet) {
+  PAIL_PARTIALS.forEach((ratio, i) => {
+    const partial = context.createOscillator();
+    partial.type = i === 0 ? 'triangle' : 'sine';
+    partial.frequency.value = base * ratio * (0.99 + Math.random() * 0.02);
+
+    const gain = context.createGain();
+    // Higher partials start louder and die faster, which is the shape of a
+    // real strike — the top of the spectrum is gone almost immediately.
+    const share = peak / (1 + i * 1.3);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(share, t + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + decay / (1 + i * 0.5));
+
+    partial.connect(gain);
+    send(gain, wet);
+    partial.start(t);
+    partial.stop(t + decay + 0.05);
+  });
+}
+
+export function playBucketStep(level = 1) {
+  if (!ready() || level < 0.02) return;
+  playedCount++;
+
+  const t = context.currentTime + 0.005;
+
+  // The leg itself: a short, dry tick.
+  const tick = context.createBufferSource();
+  tick.buffer = getNoise();
+  const band = context.createBiquadFilter();
+  band.type = 'bandpass';
+  band.frequency.value = 2400 + Math.random() * 1400;
+  band.Q.value = 1.6;
+  const tickGain = context.createGain();
+  tickGain.gain.setValueAtTime(0.0001, t);
+  tickGain.gain.exponentialRampToValueAtTime(0.085 * level, t + 0.004);
+  tickGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+  tick.connect(band).connect(tickGain);
+  send(tickGain, 0.7);
+  tick.start(t, Math.random() * 1.5);
+  tick.stop(t + 0.08);
+
+  // And the pail above it answering, quietly.
+  pail(t, 470 + Math.random() * 90, 0.05 * level, 0.13, 0.8);
+}
+
+export function playBucketJump(level = 1) {
+  if (!ready() || level < 0.02) return;
+  playedCount++;
+
+  const t = context.currentTime + 0.005;
+
+  // A scrape that rises as it pushes off.
+  const scrape = context.createBufferSource();
+  scrape.buffer = getNoise();
+  const band = context.createBiquadFilter();
+  band.type = 'bandpass';
+  band.Q.value = 3;
+  band.frequency.setValueAtTime(700, t);
+  band.frequency.exponentialRampToValueAtTime(2600, t + 0.12);
+  const scrapeGain = context.createGain();
+  scrapeGain.gain.setValueAtTime(0.0001, t);
+  scrapeGain.gain.exponentialRampToValueAtTime(0.07 * level, t + 0.012);
+  scrapeGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+  scrape.connect(band).connect(scrapeGain);
+  send(scrapeGain, 0.6);
+  scrape.start(t, Math.random() * 1.5);
+  scrape.stop(t + 0.18);
+
+  pail(t, 620, 0.035 * level, 0.1, 0.7);
+}
+
+export function playBucketLand(level = 1) {
+  if (!ready() || level < 0.02) return;
+  playedCount++;
+
+  const t = context.currentTime + 0.005;
+
+  // The floor takes the weight.
+  const thud = context.createBufferSource();
+  thud.buffer = getNoise();
+  const low = context.createBiquadFilter();
+  low.type = 'lowpass';
+  low.frequency.value = 700;
+  const thudGain = context.createGain();
+  thudGain.gain.setValueAtTime(0.0001, t);
+  thudGain.gain.exponentialRampToValueAtTime(0.15 * level, t + 0.005);
+  thudGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+  thud.connect(low).connect(thudGain);
+  send(thudGain, 0.5);
+  thud.start(t, Math.random() * 1.5);
+  thud.stop(t + 0.2);
+
+  // Then the pail rings on, lower and far longer than a step — it is the
+  // whole body arriving rather than one leg tapping.
+  pail(t, 300 + Math.random() * 40, 0.13 * level, 0.42, 1);
+}
+
 export function playDoorClose() {
   if (!ready()) return;
   playedCount++;

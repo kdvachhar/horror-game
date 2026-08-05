@@ -332,9 +332,11 @@ const ARMS = [
   {
     port: [-2.9, 1.25],
     path: [[0, 0, 0], [0, -0.05, 0.8], [0.36, -0.24, 1.7], [0.8, -0.3, 2.7]],
-    // Folded: out of the wall, dropping into a deep hook and sweeping back up
-    // across to the far side. Ends low, so the other arm can pass over it.
-    cross: [[0, 0, 0], [0.2, -0.62, 0.75], [1.55, -0.78, 1.1], [2.9, -0.2, 0.85]],
+    // Folded: out of the wall, dropping into a deep hook and sweeping across
+    // to the far side. The whole fold stays under the screen's bottom edge —
+    // crossing them over the face buries the mouth exactly when it is talking.
+    // This is the lower of the two, so the other can pass above it.
+    cross: [[0, 0, 0], [0.2, -0.75, 0.75], [1.55, -0.85, 1.1], [2.9, -0.75, 0.85]],
     // Fingers carry on down the line of the conduit — `bend` is only a small
     // correction now, since each arm's tangent already points into the room.
     bend: -0.1,
@@ -343,9 +345,9 @@ const ARMS = [
   {
     port: [2.9, 1.55],
     path: [[0, 0, 0], [0, 0.07, 0.85], [-0.38, 0.4, 1.7], [-0.8, 0.82, 2.5]],
-    // Folded: over the top of the other one and down the far side, which is
-    // the hump in the drawing.
-    cross: [[0, 0, 0], [-0.2, 0.42, 0.8], [-1.5, 0.5, 1.15], [-2.9, -0.02, 0.9]],
+    // Folded: down off its higher port, over the top of the other one and on
+    // to the far side — the hump in the drawing, kept below the screen.
+    cross: [[0, 0, 0], [-0.3, -0.6, 0.8], [-1.6, -0.75, 1.15], [-2.9, -0.7, 0.9]],
     bend: 0.34,
     roll: -2.8,
   },
@@ -742,6 +744,15 @@ export function createMedicalRoom(scene) {
     },
     get currentLine() {
       return speech.line;
+    },
+    /** Dev handle: every arm collider step, in world space. */
+    armSamples() {
+      return armBoxes.map(({ box, half }) => ({
+        x: (box.minX + box.maxX) / 2,
+        z: (box.minZ + box.maxZ) / 2,
+        y: box.y,
+        half,
+      }));
     },
     get gesture() {
       return {

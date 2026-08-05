@@ -294,6 +294,14 @@ function buildWallArm(shape) {
   joint.add(hand);
   wrist.add(joint);
 
+  // The hands are still. Set once here rather than animated, so the movement
+  // in these arms is all in the arm — the glove is carried by the conduit and
+  // does nothing of its own. Barely curled, so the fingers stay spread the way
+  // they are drawn.
+  for (const finger of fingers) {
+    for (const knuckle of finger.joints) knuckle.rotation.x = 0.1;
+  }
+
   /**
    * Reshape the arm somewhere between hanging (0) and folded (1).
    *
@@ -323,7 +331,7 @@ function buildWallArm(shape) {
   }
   poseAt(0);
 
-  return { group, limb, joint, bend: shape.bend, fingers, curve, poseAt };
+  return { group, limb, joint, fingers, curve, poseAt };
 }
 
 // Straight from the drawing: one arm low with the hand open and spread, the
@@ -711,7 +719,6 @@ export function createMedicalRoom(scene) {
   let eyesOpen = 1;
   // How much it is gesturing, and how hard the current syllable is landing.
   let talking = 0;
-  let emphasis = 0;
   // 0 is arms out, 1 is folded across in front of it, and `posed` is the
   // amount the conduits were last actually rebuilt at.
   let crossed = 0;
@@ -855,12 +862,9 @@ export function createMedicalRoom(scene) {
       // 0.3 keeps the lips together rather than collapsing the mouth to a line.
       television.mouth.scale.set(mouthWide, 0.3 + mouthOpen * 1.5, 1);
 
-      // The hands. Idle, they flex slowly, like something waiting. Talking,
-      // they gesture — and the gesture runs off the same syllable schedule as
-      // the mouth, so the beats land on what it is actually saying rather than
-      // waving to a clock of their own.
+      // The arms move; the hands on the end of them do not. Everything below
+      // is a movement of the conduit, and the glove is only carried by it.
       talking += ((speech.isSpeaking ? 1 : 0) - talking) * (1 - Math.exp(-4.5 * delta));
-      emphasis += (speech.mouth.open - emphasis) * (1 - Math.exp(-13 * delta));
 
       // Folded across itself on the lines that call for it. Slow — it is a
       // deliberate, self-satisfied movement, not a flinch.
@@ -885,19 +889,6 @@ export function createMedicalRoom(scene) {
         arm.limb.rotation.y = Math.sin(time * 1.6 + phase) * sway;
         arm.limb.rotation.x = Math.sin(time * 1.15 + phase * 1.7) * sway * 0.7;
 
-        // The wrist does most of the talking: a roll and a flick, both scaled
-        // by how much is being said.
-        arm.joint.rotation.x =
-          arm.bend + talking * (Math.sin(time * 3.1 + phase) * 0.2 + emphasis * 0.34);
-        arm.joint.rotation.z = talking * Math.sin(time * 2.3 + phase) * 0.34;
-
-        // Fingers open on the stressed syllables and gather between them, so
-        // the hand punctuates rather than opening and closing on a loop.
-        const idle = 0.25 + Math.sin(time * 0.9 + arm.group.position.x) * 0.22;
-        const curl = Math.max(0, idle - talking * emphasis * 0.42);
-        for (const finger of arm.fingers) {
-          for (const joint of finger.joints) joint.rotation.x = curl;
-        }
       });
 
       // Last, once the arms have finished moving for this frame.

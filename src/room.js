@@ -1,0 +1,631 @@
+import * as THREE from 'three';
+import { ROOM, FIXTURE_HEIGHT, MACHINE, DOOR, BACK_ROOM, LAYER } from './config.js';
+import {
+  makeWallSurface,
+  makeFloorSurface,
+  makeCeilingSurface,
+  makeWoodSurface,
+  makeRockSurface,
+  makeSoftDotTexture,
+  cloneSurface,
+  surfaceTextures,
+  worldRepeat,
+  UNITS_PER_TILE,
+  PALETTE,
+} from './textures.js';
+
+/** Footprint the machine and its conveyor occupy — kept clear of clutter. */
+function insideMachineZone(x, z) {
+  const [cx, , cz] = MACHINE.center;
+  const reach = MACHINE.conveyorStart + MACHINE.conveyorLength + 2;
+  const pad = MACHINE.bodyWidth / 2 + 2;
+  const inBody = Math.abs(x - cx) < pad && Math.abs(z - cz) < pad;
+  const inBelt =
+    x > cx && x < cx + reach && Math.abs(z - cz) < MACHINE.conveyorWidth / 2 + 1.5;
+  return inBody || inBelt;
+}
+
+// Shared between the housings and the lights so the glow lines up with the mesh.
+const FIXTURE_POSITIONS = [
+  [-9, -12],
+  [9, -12],
+  [0, -2],
+  [-9, 9],
+  [9, 9],
+];
+
+// Fixtures still drawing power. One is left dead so the ceiling doesn't read
+// as a fully maintained room.
+const LIVE_FIXTURES = [0, 1, 2, 4];
+
+// Axis-aligned boxes the player can't walk through. Collected as props are
+// placed so collision stays in sync with what you can actually see.
+const colliders = [];
+
+// The shell — both rooms' floors, ceilings, walls and skirting — is rebuilt
+// whenever the editor resizes a room, so it is kept apart from everything else
+// and torn down as a unit. Props, lights and debris are built once and stay.
+let shellGroup = null;
+const shellColliders = [];
+
+// `top` is the surface the player can land on. Omitting it marks the box as
+// unclimbable — it blocks at any height, which is what walls and pillars want.
+function addCollider(x, z, sizeX, sizeZ, top) {
+  colliders.push({
+    minX: x - sizeX / 2,
+    maxX: x + sizeX / 2,
+    minZ: z - sizeZ / 2,
+    maxZ: z + sizeZ / 2,
+    top,
+  });
+}
+
+function woodMaterial(shade = PALETTE.wood) {
+  return new THREE.MeshStandardMaterial({ color: shade, roughness: 0.94, metalness: 0.02 });
+}
+
+function metalMaterial(shade = PALETTE.metal) {
+  return new THREE.MeshStandardMaterial({ color: shade, roughness: 0.55, metalness: 0.7 });
+}
+
+function buildShell(scene) {
+  // `scene` here is the shell group; see rebuildShell().
+  const { width, depth, height } = ROOM;
+
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, depth),
+    new THREE.MeshStandardMaterial({
+      ...makeFloorSurface(...worldRepeat(width, depth)),
+      metalness: 0.02,
+    })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  const ceiling = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, depth),
+    new THREE.MeshStandardMaterial({
+      ...makeCeilingSurface(...worldRepeat(width, depth)),
+    })
+  );
+  ceiling.rotation.x = Math.PI / 2;
+  ceiling.position.y = height;
+  scene.add(ceiling);
+
+  // End and side walls are different widths, so each gets its own repeat to
+  // hold the detail scale constant. Cloning shares the canvas image and only
+  // varies the repeat, so this costs nothing extra.
+  const wallSurface = makeWallSurface(...worldRepeat(width, height));
+  const sideSurface = cloneSurface(wallSurface, ...worldRepeat(depth, height));
+
+  const wallMaterial = new THREE.MeshStandardMaterial({ ...wallSurface, metalness: 0 });
+  const sideMaterial = new THREE.MeshStandardMaterial({ ...sideSurface, metalness: 0 });
+
+  const walls = [
+    { size: [width, height], pos: [0, height / 2, depth / 2], rot: Math.PI, mat: wallMaterial },
+    { size: [depth, height], pos: [-width / 2, height / 2, 0], rot: Math.PI / 2, mat: sideMaterial },
+    { size: [depth, height], pos: [width / 2, height / 2, 0], rot: -Math.PI / 2, mat: sideMaterial },
+  ];
+
+  for (const wall of walls) {
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(...wall.size), wall.mat);
+    mesh.position.set(...wall.pos);
+    mesh.rotation.y = wall.rot;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+  }
+
+  // The far wall is built in three pieces around the doorway. It's also the
+  // near wall of the room beyond, so it's double-sided — a plane is invisible
+  // from behind, which would leave a hole looking back through it.
+  const sideWidth = (width - DOOR.width) / 2;
+  const doorPanels = [
+    { size: [sideWidth, height], pos: [-(DOOR.width + sideWidth) / 2, height / 2] },
+    { size: [sideWidth, height], pos: [(DOOR.width + sideWidth) / 2, height / 2] },
+    {
+      size: [DOOR.width, height - DOOR.height],
+      pos: [0, DOOR.height + (height - DOOR.height) / 2],
+    },
+  ];
+
+  for (const panel of doorPanels) {
+    const [pw, ph] = panel.size;
+    const surface = cloneSurface(wallSurface, ...worldRepeat(pw, ph));
+
+    // Offset each piece by where it actually sits in the wall, so the boards
+    // and tie holes run straight across the joins. Without this every panel
+    // starts the pattern again at its own left edge and the wall reads as
+    // separate slabs bolted together.
+    const fromLeft = panel.pos[0] - pw / 2 + width / 2;
+    const fromFloor = panel.pos[1] - ph / 2;
+    for (const map of surfaceTextures(surface)) {
+      map.offset.set(fromLeft / UNITS_PER_TILE, fromFloor / UNITS_PER_TILE);
+    }
+
+    // Two copies, one per side. A single double-sided mesh belongs to one
+    // render pass, and this wall has a lit room on one face and a dark one on
+    // the other — each face has to be lit by its own room.
+    const geometry = new THREE.PlaneGeometry(pw, ph);
+
+    const front = new THREE.Mesh(
+      geometry,
+      new THREE.MeshStandardMaterial({ ...surface, metalness: 0, side: THREE.FrontSide })
+    );
+    front.position.set(panel.pos[0], panel.pos[1], DOOR.z);
+    front.receiveShadow = true;
+    front.layers.set(LAYER.MAIN);
+    scene.add(front);
+
+    const back = new THREE.Mesh(
+      geometry,
+      new THREE.MeshStandardMaterial({ ...surface, metalness: 0, side: THREE.BackSide })
+    );
+    back.position.copy(front.position);
+    back.receiveShadow = true;
+    back.layers.set(LAYER.DARK);
+    scene.add(back);
+  }
+
+  // Reveals for the doorway, so the wall reads as having thickness.
+  const revealMaterial = new THREE.MeshStandardMaterial({ color: PALETTE.trim, roughness: 0.85 });
+  const jamb = 0.5;
+  const reveals = [
+    [jamb, DOOR.height, -DOOR.width / 2 - jamb / 2 + 0.01, DOOR.height / 2],
+    [jamb, DOOR.height, DOOR.width / 2 + jamb / 2 - 0.01, DOOR.height / 2],
+    [DOOR.width + jamb * 2, jamb, 0, DOOR.height + jamb / 2 - 0.01],
+  ];
+  for (const [rw, rh, rx, ry] of reveals) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(rw, rh, 0.75), revealMaterial);
+    mesh.position.set(rx, ry, DOOR.z - 0.1);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+  }
+
+  // Skirting board around the base of the walls. Four separate boards rather
+  // than one room-sized box — a box's bottom face would sit coplanar with the
+  // floor plane and z-fight across the whole room.
+  const trimMaterial = new THREE.MeshStandardMaterial({ color: PALETTE.trim, roughness: 0.9 });
+  const trimHeight = 0.5;
+  const trimDepth = 0.12;
+
+  // The far wall's board is split around the doorway — a continuous one runs
+  // straight across the opening and buries the bottom of the door.
+  const farBoard = (width - DOOR.width) / 2;
+  const boards = [
+    {
+      size: [farBoard, trimHeight, trimDepth],
+      pos: [-(DOOR.width + farBoard) / 2, trimHeight / 2, -depth / 2 + trimDepth / 2],
+    },
+    {
+      size: [farBoard, trimHeight, trimDepth],
+      pos: [(DOOR.width + farBoard) / 2, trimHeight / 2, -depth / 2 + trimDepth / 2],
+    },
+    { size: [width, trimHeight, trimDepth], pos: [0, trimHeight / 2, depth / 2 - trimDepth / 2] },
+    { size: [trimDepth, trimHeight, depth], pos: [-width / 2 + trimDepth / 2, trimHeight / 2, 0] },
+    { size: [trimDepth, trimHeight, depth], pos: [width / 2 - trimDepth / 2, trimHeight / 2, 0] },
+  ];
+
+  for (const board of boards) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(...board.size), trimMaterial);
+    mesh.position.set(...board.pos);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+  }
+}
+
+/**
+ * The room through the door: bare, low-ceilinged, and lit by exactly one
+ * spotlight standing just inside the threshold.
+ */
+function buildBackRoom(scene) {
+  // `scene` here is the shell group; see rebuildShell().
+  const { width, depth, height, lightOffset } = BACK_ROOM;
+  const centreZ = DOOR.z - depth / 2;
+
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, depth),
+    new THREE.MeshStandardMaterial({
+      ...makeFloorSurface(...worldRepeat(width, depth)),
+      metalness: 0.02,
+    })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.z = centreZ;
+  floor.receiveShadow = true;
+  floor.layers.set(LAYER.DARK);
+  scene.add(floor);
+
+  const ceiling = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, depth),
+    new THREE.MeshStandardMaterial({ ...makeCeilingSurface(...worldRepeat(width, depth)) })
+  );
+  ceiling.rotation.x = Math.PI / 2;
+  ceiling.position.set(0, height, centreZ);
+  ceiling.layers.set(LAYER.DARK);
+  scene.add(ceiling);
+
+  const surface = makeWallSurface(...worldRepeat(width, height));
+  const sides = cloneSurface(surface, ...worldRepeat(depth, height));
+
+  const walls = [
+    { size: [width, height], pos: [0, height / 2, DOOR.z - depth], rot: 0, s: surface },
+    { size: [depth, height], pos: [-width / 2, height / 2, centreZ], rot: Math.PI / 2, s: sides },
+    { size: [depth, height], pos: [width / 2, height / 2, centreZ], rot: -Math.PI / 2, s: sides },
+  ];
+
+  for (const wall of walls) {
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(...wall.size),
+      new THREE.MeshStandardMaterial({ ...wall.s, metalness: 0 })
+    );
+    mesh.position.set(...wall.pos);
+    mesh.rotation.y = wall.rot;
+    mesh.receiveShadow = true;
+    mesh.layers.set(LAYER.DARK);
+    scene.add(mesh);
+  }
+
+  // The one light. Hung just inside the door, aimed straight down, so it puts
+  // a hard pool on the floor and leaves the rest of the room to the dark.
+  const lightZ = DOOR.z - lightOffset;
+
+  const spot = new THREE.SpotLight(0xfff4e2, 300, 18, Math.PI / 7, 0.35, 1.6);
+  spot.position.set(0, height - 0.35, lightZ);
+  spot.target.position.set(0, 0, lightZ);
+  spot.castShadow = true;
+  spot.shadow.mapSize.set(1024, 1024);
+  spot.shadow.camera.near = 0.5;
+  spot.shadow.camera.far = 14;
+  spot.shadow.normalBias = 0.05;
+  // The one light on the dark layer, so the second pass has nothing else.
+  spot.layers.set(LAYER.DARK);
+  scene.add(spot);
+  scene.add(spot.target);
+
+  // The fitting it hangs from.
+  const shade = new THREE.Mesh(
+    new THREE.ConeGeometry(0.42, 0.4, 16, 1, true),
+    new THREE.MeshStandardMaterial({
+      color: PALETTE.metalDark,
+      roughness: 0.5,
+      metalness: 0.6,
+      side: THREE.DoubleSide,
+    })
+  );
+  shade.position.set(0, height - 0.3, lightZ);
+  shade.layers.set(LAYER.DARK);
+  scene.add(shade);
+
+  const bulb = new THREE.Mesh(
+    new THREE.SphereGeometry(0.08, 10, 10),
+    new THREE.MeshBasicMaterial({ color: 0xfff4e2 })
+  );
+  bulb.position.set(0, height - 0.46, lightZ);
+  bulb.layers.set(LAYER.DARK);
+  scene.add(bulb);
+
+  const flex = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.015, 0.015, 0.3),
+    new THREE.MeshStandardMaterial({ color: PALETTE.trim, roughness: 0.8 })
+  );
+  flex.position.set(0, height - 0.15, lightZ);
+  flex.layers.set(LAYER.DARK);
+  scene.add(flex);
+}
+
+/**
+ * Solid boxes standing in for the shell. The player used to be clamped to the
+ * room's rectangle, which cannot express a doorway — with two rooms joined by
+ * a gap, the walls have to be real colliders.
+ */
+function buildWallColliders() {
+  const { width, depth } = ROOM;
+  const t = 1; // thickness; comfortably more than a frame's travel, so no tunnelling
+  const halfDoor = DOOR.width / 2;
+
+  const add = (minX, maxX, minZ, maxZ) => {
+    const box = { minX, maxX, minZ, maxZ };
+    colliders.push(box);
+    shellColliders.push(box);
+  };
+
+  // Main room.
+  add(-width / 2 - t, -width / 2, -depth / 2 - t, depth / 2 + t);
+  add(width / 2, width / 2 + t, -depth / 2 - t, depth / 2 + t);
+  add(-width / 2 - t, width / 2 + t, depth / 2, depth / 2 + t);
+  // Far wall, split around the doorway.
+  add(-width / 2 - t, -halfDoor, DOOR.z - t, DOOR.z);
+  add(halfDoor, width / 2 + t, DOOR.z - t, DOOR.z);
+
+  // Back room.
+  const bw = BACK_ROOM.width / 2;
+  const far = DOOR.z - BACK_ROOM.depth;
+  add(-bw - t, -bw, far - t, DOOR.z);
+  add(bw, bw + t, far - t, DOOR.z);
+  add(-bw - t, bw + t, far - t, far);
+}
+
+/**
+ * Displaces each unique corner of a polyhedron in and out along its own
+ * direction, plus a little lateral wobble, to break up the regular silhouette.
+ *
+ * Polyhedron geometries are non-indexed — every face carries its own copy of
+ * each corner — so the offset has to be looked up by position and reused, or
+ * the faces tear apart from each other and the solid comes open.
+ */
+function jitterRock(geometry, random, amount) {
+  const position = geometry.attributes.position;
+  const offsets = new Map();
+
+  for (let i = 0; i < position.count; i++) {
+    const x = position.getX(i);
+    const y = position.getY(i);
+    const z = position.getZ(i);
+    const key = `${x.toFixed(4)},${y.toFixed(4)},${z.toFixed(4)}`;
+
+    let offset = offsets.get(key);
+    if (!offset) {
+      const push = 1 + (random() - 0.5) * amount * 2;
+      const wobble = amount * 0.12;
+      offset = [
+        x * push - x + (random() - 0.5) * wobble,
+        y * push - y + (random() - 0.5) * wobble,
+        z * push - z + (random() - 0.5) * wobble,
+      ];
+      offsets.set(key, offset);
+    }
+
+    position.setXYZ(i, x + offset[0], y + offset[1], z + offset[2]);
+  }
+
+  position.needsUpdate = true;
+  // Recomputing on non-indexed geometry gives per-face normals, which keeps
+  // the chunks reading as sharp-edged breaks rather than smooth blobs.
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function buildDebris(scene) {
+  const random = mulberry32(20250728);
+
+  // Rubble: low scattered chunks, no collision, just texture underfoot.
+  //
+  // A pool of distinct shapes rather than one geometry per chunk — 130 unique
+  // buffers would be wasteful, and with random rotation and non-uniform scale
+  // on top, a dozen silhouettes is already past the point you'd notice.
+  const rockShapes = [];
+  for (let i = 0; i < 14; i++) {
+    // All fairly many-faced on purpose. A low-vertex solid like an octahedron
+    // jitters into a sharp crystal, which reads as a gemstone, not as rubble.
+    const pick = Math.floor(random() * 3);
+    const base =
+      pick === 0
+        ? new THREE.DodecahedronGeometry(0.28, 0)
+        : pick === 1
+          ? new THREE.IcosahedronGeometry(0.28, 0)
+          : new THREE.IcosahedronGeometry(0.29, 1);
+    rockShapes.push(jitterRock(base, random, pick === 2 ? 0.3 : 0.42));
+  }
+  // Rubble is small and viewed close, so it gets a tighter repeat than the
+  // room shell — stone detail is naturally finer than a poured wall's.
+  const rubbleMaterial = new THREE.MeshStandardMaterial({
+    ...makeRockSurface(2, 2),
+    metalness: 0.02,
+  });
+  for (let i = 0; i < 130; i++) {
+    const scale = 0.2 + random() * 0.9;
+    const x = (random() - 0.5) * (ROOM.width - 2);
+    const z = (random() - 0.5) * (ROOM.depth - 2);
+    if (insideMachineZone(x, z)) continue;
+
+    const chunk = new THREE.Mesh(
+      rockShapes[Math.floor(random() * rockShapes.length)],
+      rubbleMaterial
+    );
+    chunk.position.set(x, 0.05 + scale * 0.1, z);
+    chunk.rotation.set(random() * 3, random() * 3, random() * 3);
+    // Squashed unevenly, so even a repeated shape reads differently.
+    chunk.scale.set(
+      scale * (0.78 + random() * 0.44),
+      scale * (0.62 + random() * 0.5),
+      scale * (0.78 + random() * 0.44)
+    );
+    chunk.castShadow = true;
+    scene.add(chunk);
+  }
+
+  // A long workbench pushed against the left wall.
+  const bench = new THREE.Group();
+  const top = new THREE.Mesh(
+    new THREE.BoxGeometry(6, 0.16, 1.4),
+    new THREE.MeshStandardMaterial({
+      ...makeWoodSurface(3, 1, PALETTE.woodLight),
+      metalness: 0.02,
+    })
+  );
+  top.position.y = 0.95;
+  top.castShadow = true;
+  bench.add(top);
+  for (const [lx, lz] of [[-2.8, -0.6], [-2.8, 0.6], [2.8, -0.6], [2.8, 0.6]]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.95, 0.14), metalMaterial(PALETTE.metalDark));
+    leg.position.set(lx, 0.475, lz);
+    bench.add(leg);
+  }
+  bench.position.set(-ROOM.width / 2 + 1.6, 0, -6);
+  bench.rotation.y = Math.PI / 2;
+  scene.add(bench);
+  addCollider(bench.position.x, bench.position.z, 2.2, 6.4, 1.03);
+
+  // Fluorescent housings slung from the ceiling on long chains.
+  for (const [lx, lz] of FIXTURE_POSITIONS) {
+    const housing = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.18, 0.6), metalMaterial(PALETTE.metalDark));
+    housing.position.set(lx, FIXTURE_HEIGHT, lz);
+    housing.rotation.z = (Math.random() - 0.5) * 0.25;
+    housing.castShadow = true;
+    scene.add(housing);
+
+    const drop = ROOM.height - FIXTURE_HEIGHT;
+    const chain = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.025, 0.025, drop),
+      metalMaterial(PALETTE.trim)
+    );
+    chain.position.set(lx, FIXTURE_HEIGHT + drop / 2, lz);
+    scene.add(chain);
+  }
+}
+
+function buildDust(scene) {
+  const count = 900;
+  const positions = new Float32Array(count * 3);
+  const speeds = new Float32Array(count);
+
+  for (let i = 0; i < count; i++) {
+    positions[i * 3] = (Math.random() - 0.5) * ROOM.width;
+    positions[i * 3 + 1] = Math.random() * ROOM.height;
+    positions[i * 3 + 2] = (Math.random() - 0.5) * ROOM.depth;
+    speeds[i] = 0.04 + Math.random() * 0.12;
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+  const points = new THREE.Points(
+    geometry,
+    new THREE.PointsMaterial({
+      size: 0.045,
+      map: makeSoftDotTexture(),
+      transparent: true,
+      opacity: 0.5,
+      depthWrite: false,
+      color: 0xb9c2bb,
+    })
+  );
+  scene.add(points);
+
+  let time = 0;
+  return (delta) => {
+    time += delta;
+    const array = geometry.attributes.position.array;
+    for (let i = 0; i < count; i++) {
+      array[i * 3 + 1] -= speeds[i] * delta;
+      array[i * 3] += Math.sin(time * 0.4 + i) * 0.0015;
+      if (array[i * 3 + 1] < 0) array[i * 3 + 1] = ROOM.height;
+    }
+    geometry.attributes.position.needsUpdate = true;
+  };
+}
+
+function buildLights(scene) {
+  // With no flashlight, the room's own fixtures are the only thing keeping it
+  // navigable, so the ambient floor is higher than a pitch-dark horror room.
+  scene.add(new THREE.AmbientLight(0x4e5d75, 2.5));
+  scene.add(new THREE.HemisphereLight(0x64758d, 0x232119, 1.5));
+
+  const tubeMaterial = new THREE.MeshBasicMaterial({ color: 0xd8e2ff });
+  const tubeGeometry = new THREE.BoxGeometry(2.1, 0.06, 0.34);
+
+  const fixtures = LIVE_FIXTURES.map((index, order) => {
+    const [x, z] = FIXTURE_POSITIONS[index];
+
+    const light = new THREE.PointLight(0xd8e2ff, 88, 40, 1.45);
+    light.position.set(x, FIXTURE_HEIGHT - 0.12, z);
+
+    // Every live fixture casts. With only one caster the other three simply
+    // filled its shadows back in, so nothing in the room — the player included
+    // — appeared to have one at all. Maps are kept modest to pay for it.
+    light.castShadow = true;
+    light.shadow.mapSize.set(order === 0 ? 1024 : 512, order === 0 ? 1024 : 512);
+    light.shadow.camera.near = 0.5;
+    light.shadow.camera.far = 34;
+    // normalBias offsets along the surface normal, which clears the acne that
+    // was mottling the floor without the peter-panning a large depth bias causes.
+    light.shadow.normalBias = 0.06;
+    light.shadow.bias = -0.0004;
+    scene.add(light);
+
+    const tube = new THREE.Mesh(tubeGeometry, tubeMaterial.clone());
+    tube.position.set(x, FIXTURE_HEIGHT - 0.13, z);
+    scene.add(tube);
+
+    return { light, tube, phase: order * 2.7, nextGlitch: 1.5 + order, glitchUntil: 0 };
+  });
+
+  let time = 0;
+
+  return (delta) => {
+    time += delta;
+    for (const fixture of fixtures) {
+      if (time > fixture.nextGlitch) {
+        fixture.glitchUntil = time + 0.05 + Math.random() * 0.22;
+        fixture.nextGlitch = time + 1.2 + Math.random() * 5;
+      }
+      const dying = time < fixture.glitchUntil;
+      fixture.light.intensity = dying
+        ? Math.random() * 30
+        : 84 + Math.sin(time * 11 + fixture.phase) * 9;
+      fixture.tube.material.color.setScalar(dying ? 0.25 : 1);
+    }
+  };
+}
+
+/** Small deterministic PRNG so the room's clutter is identical every run. */
+function mulberry32(seed) {
+  return function () {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Tears down the shell and rebuilds it from the current ROOM / BACK_ROOM / DOOR
+ * values. The doorway sits in the main hall's far wall, so its z is re-derived
+ * here — the two cannot drift apart.
+ */
+function rebuildShell(scene) {
+  if (shellGroup) {
+    scene.remove(shellGroup);
+    shellGroup.traverse((object) => {
+      object.geometry?.dispose?.();
+      if (Array.isArray(object.material)) object.material.forEach((m) => m.dispose());
+      else object.material?.dispose?.();
+    });
+  }
+  for (const box of shellColliders) {
+    const index = colliders.indexOf(box);
+    if (index !== -1) colliders.splice(index, 1);
+  }
+  shellColliders.length = 0;
+
+  DOOR.z = -ROOM.depth / 2;
+
+  shellGroup = new THREE.Group();
+  scene.add(shellGroup);
+  buildShell(shellGroup);
+  buildBackRoom(shellGroup);
+  buildWallColliders();
+}
+
+export function createRoom(scene) {
+  colliders.length = 0;
+
+  rebuildShell(scene);
+  buildDebris(scene);
+  const updateDust = buildDust(scene);
+  const updateLights = buildLights(scene);
+
+  return {
+    colliders,
+    /** Rebuild both rooms after the editor changes their dimensions. */
+    rebuildShell: () => rebuildShell(scene),
+    update(delta) {
+      updateDust(delta);
+      updateLights(delta);
+    },
+  };
+}

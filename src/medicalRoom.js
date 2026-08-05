@@ -217,36 +217,44 @@ function buildWallArm(shape) {
   const limb = new THREE.Group();
   group.add(limb);
 
-  const curve = new THREE.CatmullRomCurve3(shape.path.map((p) => new THREE.Vector3(...p)));
+  // Two shapes for the same arm: how it hangs, and how it folds. The conduit
+  // is rebuilt between them rather than swung about the port, because folding
+  // these arms is not a rotation — each one hooks down and back up, and no
+  // amount of turning a straight-ish tube produces that.
+  const restPoints = shape.path.map((p) => new THREE.Vector3(...p));
+  const foldPoints = shape.cross.map((p) => new THREE.Vector3(...p));
+  const curve = new THREE.CatmullRomCurve3(restPoints.map((p) => p.clone()));
 
-  // The smooth inner hose, then the ribs over it — that combination is what
-  // makes it read as armoured conduit rather than a plain pipe.
-  const core = new THREE.Mesh(
-    new THREE.TubeGeometry(curve, 40, 0.115, 12, false),
-    clinicalMaterial('#6e6f6a', 0.75)
-  );
-  core.castShadow = true;
-  limb.add(core);
-
+  // Built as a chain of links rather than one baked TubeGeometry, so the shape
+  // can change at all. A tube is welded at build time; these are just meshes
+  // walked onto wherever the curve happens to be this frame.
   const ribMaterial = clinicalMaterial('#a3a49e', 0.5);
-  const ribs = Math.round(curve.getLength() / 0.13);
+  const coreMaterial = clinicalMaterial('#6e6f6a', 0.75);
+  const ribGeometry = new THREE.TorusGeometry(0.15, 0.042, 8, 16);
+  // A shade longer than the spacing, so consecutive pieces overlap and read as
+  // one continuous hose instead of a stack of separate cans.
+  const coreGeometry = new THREE.CylinderGeometry(0.115, 0.115, 0.17, 12);
+
+  const steps = Math.round(curve.getLength() / 0.13);
   const axis = new THREE.Vector3(0, 0, 1);
-  for (let i = 0; i <= ribs; i++) {
-    const t = i / ribs;
-    const rib = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.042, 8, 16), ribMaterial);
-    rib.position.copy(curve.getPointAt(t));
-    rib.quaternion.setFromUnitVectors(axis, curve.getTangentAt(t));
+  const links = [];
+  for (let i = 0; i <= steps; i++) {
+    const rib = new THREE.Mesh(ribGeometry, ribMaterial);
     rib.castShadow = true;
     limb.add(rib);
+
+    const core = new THREE.Mesh(coreGeometry, coreMaterial);
+    core.rotation.x = Math.PI / 2;
+    core.castShadow = true;
+    const carrier = new THREE.Group();
+    carrier.add(core);
+    limb.add(carrier);
+
+    links.push({ rib, carrier, t: i / steps });
   }
 
   // Wrist: a collar where the conduit ends and the glove begins.
-  const end = curve.getPointAt(1);
-  const tangent = curve.getTangentAt(1);
-
   const wrist = new THREE.Group();
-  wrist.position.copy(end);
-  wrist.quaternion.setFromUnitVectors(axis, tangent);
   limb.add(wrist);
 
   const collar = new THREE.Mesh(
@@ -286,7 +294,36 @@ function buildWallArm(shape) {
   joint.add(hand);
   wrist.add(joint);
 
-  return { group, limb, joint, bend: shape.bend, fingers, curve };
+  /**
+   * Reshape the arm somewhere between hanging (0) and folded (1).
+   *
+   * Blends the curve's control points, then walks every link onto the result.
+   * Called only when the amount has actually moved, since it costs a couple of
+   * hundred curve evaluations and sits at 0 or 1 almost all of the time.
+   */
+  function poseAt(amount) {
+    for (let i = 0; i < curve.points.length; i++) {
+      curve.points[i].lerpVectors(restPoints[i], foldPoints[i], amount);
+    }
+    // The arc-length table is what makes getPointAt evenly spaced, and it is
+    // cached — without this the ribs bunch up wherever the curve just tightened.
+    curve.updateArcLengths();
+
+    for (const link of links) {
+      const at = curve.getPointAt(link.t);
+      const along = curve.getTangentAt(link.t);
+      link.rib.position.copy(at);
+      link.rib.quaternion.setFromUnitVectors(axis, along);
+      link.carrier.position.copy(at);
+      link.carrier.quaternion.copy(link.rib.quaternion);
+    }
+
+    wrist.position.copy(curve.getPointAt(1));
+    wrist.quaternion.setFromUnitVectors(axis, curve.getTangentAt(1));
+  }
+  poseAt(0);
+
+  return { group, limb, joint, bend: shape.bend, fingers, curve, poseAt };
 }
 
 // Straight from the drawing: one arm low with the hand open and spread, the
@@ -295,6 +332,9 @@ const ARMS = [
   {
     port: [-2.9, 1.25],
     path: [[0, 0, 0], [0, -0.05, 0.8], [0.36, -0.24, 1.7], [0.8, -0.3, 2.7]],
+    // Folded: out of the wall, dropping into a deep hook and sweeping back up
+    // across to the far side. Ends low, so the other arm can pass over it.
+    cross: [[0, 0, 0], [0.2, -0.62, 0.75], [1.55, -0.78, 1.1], [2.9, -0.2, 0.85]],
     // Fingers carry on down the line of the conduit — `bend` is only a small
     // correction now, since each arm's tangent already points into the room.
     bend: -0.1,
@@ -303,7 +343,9 @@ const ARMS = [
   {
     port: [2.9, 1.55],
     path: [[0, 0, 0], [0, 0.07, 0.85], [-0.38, 0.4, 1.7], [-0.8, 0.82, 2.5]],
-    // This one climbs on its way out, so it needs tipping back down to level.
+    // Folded: over the top of the other one and down the far side, which is
+    // the hump in the drawing.
+    cross: [[0, 0, 0], [-0.2, 0.42, 0.8], [-1.5, 0.5, 1.15], [-2.9, -0.02, 0.9]],
     bend: 0.34,
     roll: -2.8,
   },
@@ -623,7 +665,7 @@ export function createMedicalRoom(scene) {
         // moves and a step's height is no longer fixed.
         enabled: () => box.y - half <= HEAD_CLEARANCE,
       };
-      armBoxes.push({ box, arm, half, local: arm.curve.getPointAt(i / steps) });
+      armBoxes.push({ box, arm, half, t: i / steps });
       colliders.push(box);
     }
   }
@@ -640,8 +682,10 @@ export function createMedicalRoom(scene) {
    * to force a matrix update through the whole room every frame to get it.
    */
   function updateArmColliders() {
-    for (const { box, arm, half, local } of armBoxes) {
-      ARM_POINT.copy(local).applyQuaternion(arm.limb.quaternion);
+    for (const { box, arm, half, t } of armBoxes) {
+      // Read off the live curve, not a cached point — the conduit changes
+      // shape when it folds, so where a step *is* is not fixed either.
+      ARM_POINT.copy(arm.curve.getPointAt(t)).applyQuaternion(arm.limb.quaternion);
       const x = cx + arm.group.position.x + ARM_POINT.x;
       const z = cz + arm.group.position.z + ARM_POINT.z;
       box.minX = x - half;
@@ -666,8 +710,10 @@ export function createMedicalRoom(scene) {
   // How much it is gesturing, and how hard the current syllable is landing.
   let talking = 0;
   let emphasis = 0;
-  // 0 is arms out, 1 is folded across in front of it.
+  // 0 is arms out, 1 is folded across in front of it, and `posed` is the
+  // amount the conduits were last actually rebuilt at.
   let crossed = 0;
+  let posed = 0;
 
   return {
     group,
@@ -809,6 +855,11 @@ export function createMedicalRoom(scene) {
       // deliberate, self-satisfied movement, not a flinch.
       const crossTarget = speech.line?.arms === 'crossed' ? 1 : 0;
       crossed += (crossTarget - crossed) * (1 - Math.exp(-3 * delta));
+      // Reshaping is not free, and this sits at 0 or 1 nearly all the time.
+      if (Math.abs(crossed - posed) > 0.002) {
+        for (const arm of arms) arm.poseAt(crossed);
+        posed = crossed;
+      }
 
       arms.forEach((arm, i) => {
         // Half a cycle apart, or the pair move as one object and it reads as a
@@ -818,12 +869,10 @@ export function createMedicalRoom(scene) {
         // The whole arm swings from the wall port. The colliders are walked
         // onto it below, so this can be a real movement rather than the token
         // wobble it had to be while they were pinned to the resting curve.
-        const sway = 0.03 + talking * 0.17;
-        // Each swings toward the other's side, so they fold across in front.
-        const fold = (i === 0 ? 1 : -1) * crossed * 0.92;
-
-        arm.limb.rotation.y = fold + Math.sin(time * 1.6 + phase) * sway;
-        arm.limb.rotation.x = Math.sin(time * 1.15 + phase * 1.7) * sway * 0.7 - crossed * 0.12;
+        // Folding is not in here — that reshapes the conduit itself, above.
+        const sway = (0.03 + talking * 0.17) * (1 - crossed * 0.7);
+        arm.limb.rotation.y = Math.sin(time * 1.6 + phase) * sway;
+        arm.limb.rotation.x = Math.sin(time * 1.15 + phase * 1.7) * sway * 0.7;
 
         // The wrist does most of the talking: a roll and a flick, both scaled
         // by how much is being said.

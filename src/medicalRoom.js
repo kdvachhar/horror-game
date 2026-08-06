@@ -398,10 +398,12 @@ function buildWardDoor() {
     group.add(piece);
   }
 
-  // The leaf, sat back inside the frame.
+  // The leaf, sat back inside the frame. Institution green, and authored dark
+  // — this one is lit and tone mapped, unlike the television's face, so ACES
+  // lifts it a fair way toward the colour it actually reads as.
   const leaf = new THREE.Mesh(
     new THREE.BoxGeometry(width, height, 0.06),
-    clinicalMaterial('#8c9a93', 0.62)
+    clinicalMaterial('#315c3c', 0.62)
   );
   leaf.position.set(0, height / 2, 0.03);
   leaf.receiveShadow = true;

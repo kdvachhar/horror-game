@@ -368,6 +368,89 @@ const ARMS = [
 ];
 
 /**
+ * The way out, set into the wall behind you.
+ *
+ * Surface-mounted rather than cut through — the room's walls are single
+ * planes, so there is no opening to frame. A shallow frame standing proud of
+ * the wall with the leaf recessed into it reads the same from inside, which is
+ * the only side of it anyone sees.
+ *
+ * It does not open. There is nothing on the other side yet.
+ */
+function buildWardDoor() {
+  const group = new THREE.Group();
+
+  const width = 1.1;
+  const height = 2.15;
+
+  const frame = clinicalMaterial('#b3b7b0', 0.5);
+  const jamb = 0.09;
+  // Two uprights and a head, standing 0.13 off the wall.
+  for (const [w, h, x, y] of [
+    [jamb, height + jamb, -(width + jamb) / 2, (height + jamb) / 2],
+    [jamb, height + jamb, (width + jamb) / 2, (height + jamb) / 2],
+    [width + jamb * 2, jamb, 0, height + jamb / 2],
+  ]) {
+    const piece = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.13), frame);
+    piece.position.set(x, y, 0.065);
+    piece.castShadow = true;
+    piece.receiveShadow = true;
+    group.add(piece);
+  }
+
+  // The leaf, sat back inside the frame.
+  const leaf = new THREE.Mesh(
+    new THREE.BoxGeometry(width, height, 0.06),
+    clinicalMaterial('#8c9a93', 0.62)
+  );
+  leaf.position.set(0, height / 2, 0.03);
+  leaf.receiveShadow = true;
+  group.add(leaf);
+
+  // Wire-glass vision panel, the tall narrow kind.
+  const glass = new THREE.Mesh(
+    new THREE.BoxGeometry(0.34, 0.72, 0.02),
+    new THREE.MeshBasicMaterial({ color: '#12181a', toneMapped: false })
+  );
+  glass.position.set(0, height - 0.62, 0.065);
+  group.add(glass);
+
+  const wire = clinicalMaterial('#6d7a76', 0.5);
+  for (let i = 1; i < 4; i++) {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.008, 0.026), wire);
+    bar.position.set(0, height - 0.62 - 0.36 + (i * 0.72) / 4, 0.066);
+    group.add(bar);
+  }
+  for (const x of [-0.113, 0.113]) {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.72, 0.026), wire);
+    bar.position.set(x, height - 0.62, 0.066);
+    group.add(bar);
+  }
+
+  // Kick plate along the bottom, scuffed by every trolley that ever went
+  // through, and a lever handle on the opening edge.
+  const kick = new THREE.Mesh(
+    new THREE.BoxGeometry(width - 0.06, 0.3, 0.015),
+    clinicalMaterial('#9fa5a2', 0.35)
+  );
+  kick.position.set(0, 0.2, 0.068);
+  group.add(kick);
+
+  const metal = clinicalMaterial('#40474a', 0.4);
+  const rose = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.03, 14), metal);
+  rose.rotation.x = Math.PI / 2;
+  rose.position.set(width / 2 - 0.16, 1.02, 0.07);
+  group.add(rose);
+
+  const lever = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.035, 0.035), metal);
+  lever.position.set(width / 2 - 0.25, 1.02, 0.095);
+  lever.castShadow = true;
+  group.add(lever);
+
+  return group;
+}
+
+/**
  * A ward bed. The one you wake up on and the eight rotting around it are the
  * same object — `knocked` only tips it onto its side, which is the state most
  * of this room's are in.
@@ -566,6 +649,15 @@ export function createMedicalRoom(scene) {
     group.add(arm.group);
     arms.push(arm);
   }
+
+  // ── the way out ───────────────────────────────────────────────────────────
+  // In the corner of the wall behind you: sitting up on the bed you face
+  // straight down it, so this is ahead and to your right, and the television
+  // is the other way.
+  const wardDoor = buildWardDoor();
+  wardDoor.position.set(width / 2 - 1.1, 0, depth / 2 - 0.02);
+  wardDoor.rotation.y = Math.PI;
+  group.add(wardDoor);
 
   // ── the ward ──────────────────────────────────────────────────────────────
   const beds = [];

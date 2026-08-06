@@ -90,6 +90,13 @@ export function createPlayer(camera, domElement, colliders) {
   document.addEventListener('mousemove', onMouseMove);
   document.addEventListener('pointerlockchange', onPointerLockChange);
 
+  /**
+   * How tall the player is, for openings they have to fit through. Eye line
+   * plus a little skull — the same figure the medical room's window is sized
+   * against.
+   */
+  const HEIGHT = PLAYER.eyeHeight + 0.12;
+
   /** True when the player's footprint overlaps this box in plan view. */
   function overlaps(box, x, z, r) {
     return x > box.minX - r && x < box.maxX + r && z > box.minZ - r && z < box.maxZ + r;
@@ -111,6 +118,10 @@ export function createPlayer(camera, domElement, colliders) {
       // Anything the player has jumped clear of no longer blocks them. Boxes
       // without a top (walls, pillars, the machine) block at any height.
       if (feetY >= (box.top ?? Infinity) - 0.02) continue;
+      // A gap only short things fit through. The player is not one of them —
+      // this is the wall around the medical room's broken window, and it is
+      // what makes that room reachable by the bucket and by nothing else.
+      if (HEIGHT <= (box.passHeight ?? -Infinity)) continue;
       if (!overlaps(box, next.x, next.z, r)) continue;
 
       const pushLeft = next.x - (box.minX - r);

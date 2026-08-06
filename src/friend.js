@@ -20,6 +20,13 @@ import { playBucketStep, playBucketJump, playBucketLand } from './audio.js';
  * heavy and slightly unruly rather than glued to the player.
  */
 
+/**
+ * How tall it is for the purpose of squeezing through things. Measured to the
+ * top of the pail rather than the handle, since the handle is a wire loop and
+ * would not be what stopped it.
+ */
+export const FRIEND_HEIGHT = 0.82;
+
 // Origin is at the feet. Legs plus body come to roughly the cube's 0.9m.
 const LEG_HEIGHT = 0.34;
 const BODY_SCALE = 1.33;
@@ -216,6 +223,9 @@ export function createFriend(scene) {
       if (box.enabled?.() === false) continue;
       // Same rule as the player: anything it has climbed above no longer blocks.
       if (position.y >= (box.top ?? Infinity) - 0.02) continue;
+      // And the other way about: a gap sized for something this short is not
+      // a wall to it at all.
+      if (FRIEND_HEIGHT <= (box.passHeight ?? -Infinity)) continue;
       if (
         position.x < box.minX - R ||
         position.x > box.maxX + R ||

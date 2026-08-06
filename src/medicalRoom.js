@@ -7,6 +7,7 @@ import {
   makeMetalPanelSurface,
   cloneSurface,
   worldRepeat,
+  UNITS_PER_TILE,
   PALETTE,
 } from './textures.js';
 import { buildHand } from './glove.js';
@@ -21,6 +22,36 @@ import { createSpeechRunner, MOUTH_AT_REST } from './voice.js';
  * to it at all. They come out of two ports in the wall either side, as ribbed
  * conduit, and end in the same green gloves that reached for you in the dark.
  */
+
+/**
+ * The broken window beside the door, and the store room it opens onto.
+ *
+ * The whole point of it: the opening is 0.95m tall with its sill at 0.7, and
+ * you are 1.8m. There is no arrangement of jumping that gets you through. The
+ * bucket is 0.82m and clears the sill in one hop, so the store room is somewhere
+ * you can only reach by being something else — which is what possession is for.
+ */
+const WINDOW = {
+  x: 3.2,
+  halfWidth: 0.62,
+  sill: 0.7,
+  head: 1.65,
+  /** Wall thickness at the opening, so the reveal has depth to it. */
+  reveal: 0.3,
+};
+
+const STORE = {
+  minX: 0.9,
+  maxX: 6.4,
+  /**
+   * Starts at the shared wall itself, not past it. The medical room's back
+   * wall *is* this room's near wall — there is no second one, or it would sit
+   * squarely behind the opening and you would see nothing through it.
+   */
+  near: 5.5,
+  far: 9.6,
+  height: 2.4,
+};
 
 // Screen face, from the drawing: sickly green on a dead grey tube. Rendered
 // exactly as written — see screenMaterial.
@@ -367,6 +398,137 @@ const ARMS = [
   },
 ];
 
+/** A shelving unit: uprights, shelves, and whatever was left on them. */
+function buildShelves(units) {
+  const group = new THREE.Group();
+  const steel = clinicalMaterial('#8d9490', 0.5);
+  const wide = units * 0.9;
+  const tall = 1.85;
+  const deep = 0.42;
+
+  for (const x of [-wide / 2, wide / 2]) {
+    for (const z of [-deep / 2, deep / 2]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.05, tall, 0.05), steel);
+      post.position.set(x, tall / 2, z);
+      post.castShadow = true;
+      group.add(post);
+    }
+  }
+
+  const clutter = ['#7d8a76', '#9a8f72', '#6f7a82', '#8a7d70'];
+  for (let i = 0; i < 4; i++) {
+    const y = 0.35 + i * 0.46;
+    const shelf = new THREE.Mesh(new THREE.BoxGeometry(wide, 0.035, deep), steel);
+    shelf.position.set(0, y, 0);
+    shelf.castShadow = true;
+    shelf.receiveShadow = true;
+    group.add(shelf);
+
+    // Boxes and tins, thinning out toward the top.
+    const count = Math.max(0, 4 - i) + 1;
+    for (let n = 0; n < count; n++) {
+      const w = 0.16 + Math.random() * 0.2;
+      const h = 0.12 + Math.random() * 0.18;
+      const item = new THREE.Mesh(
+        new THREE.BoxGeometry(w, h, 0.14 + Math.random() * 0.14),
+        clinicalMaterial(clutter[(i + n) % clutter.length], 0.8)
+      );
+      item.position.set(
+        -wide / 2 + 0.2 + Math.random() * (wide - 0.4),
+        y + 0.017 + h / 2,
+        (Math.random() - 0.5) * (deep - 0.2)
+      );
+      item.rotation.y = (Math.random() - 0.5) * 0.5;
+      item.castShadow = true;
+      group.add(item);
+    }
+  }
+
+  return group;
+}
+
+/**
+ * The store room through the window. Small, bare and lit by one failing tube —
+ * the reward for getting in here is that it is somewhere you were not meant to
+ * be, not that it is pleasant.
+ */
+function buildStoreRoom() {
+  const group = new THREE.Group();
+  const w = STORE.maxX - STORE.minX;
+  const d = STORE.far - STORE.near;
+  const midX = (STORE.minX + STORE.maxX) / 2;
+  const midZ = (STORE.near + STORE.far) / 2;
+
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, d),
+    new THREE.MeshStandardMaterial({
+      ...makeFloorSurface(...worldRepeat(w, d)),
+      color: '#7f837c',
+      metalness: 0.02,
+    })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(midX, 0, midZ);
+  floor.receiveShadow = true;
+  group.add(floor);
+
+  const ceiling = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, d),
+    new THREE.MeshStandardMaterial({
+      ...makeCeilingSurface(...worldRepeat(w, d)),
+      color: '#8b8f88',
+    })
+  );
+  ceiling.rotation.x = Math.PI / 2;
+  ceiling.position.set(midX, STORE.height, midZ);
+  group.add(ceiling);
+
+  const shell = new THREE.MeshStandardMaterial({
+    ...makeWallSurface(...worldRepeat(w, STORE.height)),
+    color: '#9aa096',
+    metalness: 0,
+    side: THREE.DoubleSide,
+  });
+  for (const [pw, px, pz, rot] of [
+    [w, midX, STORE.far, 0],
+    [d, STORE.minX, midZ, Math.PI / 2],
+    [d, STORE.maxX, midZ, -Math.PI / 2],
+  ]) {
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(pw, STORE.height), shell);
+    wall.position.set(px, STORE.height / 2, pz);
+    wall.rotation.y = rot;
+    wall.receiveShadow = true;
+    group.add(wall);
+  }
+
+  // Shelving down the far wall and one unit across the end.
+  const back = buildShelves(3);
+  back.position.set(midX + 0.5, 0, STORE.far - 0.3);
+  group.add(back);
+
+  const side = buildShelves(2);
+  side.rotation.y = Math.PI / 2;
+  side.position.set(STORE.maxX - 0.3, 0, midZ + 0.4);
+  group.add(side);
+
+  // One tube, and it is on its way out.
+  const tube = new THREE.Mesh(
+    new THREE.BoxGeometry(1.1, 0.06, 0.14),
+    new THREE.MeshBasicMaterial({ color: '#cfe0d6', toneMapped: false })
+  );
+  tube.position.set(midX, STORE.height - 0.08, midZ - 0.4);
+  group.add(tube);
+
+  const lamp = new THREE.PointLight(0xdfeee4, 14, 9, 1.4);
+  lamp.position.set(midX, STORE.height - 0.3, midZ - 0.4);
+  lamp.castShadow = true;
+  lamp.shadow.mapSize.set(512, 512);
+  lamp.shadow.normalBias = 0.05;
+  group.add(lamp);
+
+  return { group, tube, lamp };
+}
+
 /**
  * The way out, set into the wall behind you.
  *
@@ -607,7 +769,6 @@ export function createMedicalRoom(scene) {
 
   for (const wall of [
     { size: [width, height], pos: [0, height / 2, -depth / 2], rot: 0, mat: wallMaterial },
-    { size: [width, height], pos: [0, height / 2, depth / 2], rot: Math.PI, mat: wallMaterial },
     { size: [depth, height], pos: [-width / 2, height / 2, 0], rot: Math.PI / 2, mat: sideMaterial },
     { size: [depth, height], pos: [width / 2, height / 2, 0], rot: -Math.PI / 2, mat: sideMaterial },
   ]) {
@@ -616,6 +777,98 @@ export function createMedicalRoom(scene) {
     mesh.rotation.y = wall.rot;
     mesh.receiveShadow = true;
     group.add(mesh);
+  }
+
+  // The back wall is four panels around the window rather than one sheet,
+  // because the opening has to be a real hole — the room behind it is visible
+  // through it, and the bucket goes through it. Each panel keeps its own slice
+  // of the texture by offsetting the map, or the seams show as a mismatched
+  // strip the way the first room's doorway did.
+  const winLeft = WINDOW.x - WINDOW.halfWidth;
+  const winRight = WINDOW.x + WINDOW.halfWidth;
+  for (const [w, h, cxPanel, cyPanel] of [
+    [winLeft + width / 2, height, (winLeft - width / 2) / 2, height / 2],
+    [width / 2 - winRight, height, (winRight + width / 2) / 2, height / 2],
+    [WINDOW.halfWidth * 2, WINDOW.sill, WINDOW.x, WINDOW.sill / 2],
+    [WINDOW.halfWidth * 2, height - WINDOW.head, WINDOW.x, (height + WINDOW.head) / 2],
+  ]) {
+    if (w <= 0 || h <= 0) continue;
+    const panelMaterial = new THREE.MeshStandardMaterial({
+      ...cloneSurface(wallSurface, ...worldRepeat(w, h)),
+      color: '#cfd2cb',
+      metalness: 0,
+      side: THREE.DoubleSide,
+    });
+    panelMaterial.map.offset.set(
+      (cxPanel - w / 2 + width / 2) / UNITS_PER_TILE,
+      (cyPanel - h / 2) / UNITS_PER_TILE
+    );
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), panelMaterial);
+    mesh.position.set(cxPanel, cyPanel, depth / 2);
+    mesh.rotation.y = Math.PI;
+    mesh.receiveShadow = true;
+    // Casts, unlike the room's other walls. Point lights ignore geometry, so
+    // without this the store room's tube glows through onto the ward side of
+    // the wall and the ward's lamps light the store room.
+    mesh.castShadow = true;
+    group.add(mesh);
+  }
+
+  // The reveal — the thickness of the wall, seen through the opening.
+  const revealMaterial = clinicalMaterial('#b9bcb6', 0.7);
+  for (const [w, h, d, x, y] of [
+    [WINDOW.halfWidth * 2, 0.04, WINDOW.reveal, WINDOW.x, WINDOW.sill],
+    [WINDOW.halfWidth * 2, 0.04, WINDOW.reveal, WINDOW.x, WINDOW.head],
+    [0.04, WINDOW.head - WINDOW.sill, WINDOW.reveal, winLeft, (WINDOW.sill + WINDOW.head) / 2],
+    [0.04, WINDOW.head - WINDOW.sill, WINDOW.reveal, winRight, (WINDOW.sill + WINDOW.head) / 2],
+  ]) {
+    const piece = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), revealMaterial);
+    piece.position.set(x, y, depth / 2 + WINDOW.reveal / 2);
+    piece.receiveShadow = true;
+    group.add(piece);
+  }
+
+  // What is left of the glass: a rim of shards round the frame, angled every
+  // which way. Nothing spans the middle — that is the way through.
+  const shardMaterial = new THREE.MeshStandardMaterial({
+    color: '#8fb0ae',
+    roughness: 0.08,
+    metalness: 0.1,
+    transparent: true,
+    opacity: 0.42,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  for (let i = 0; i < 22; i++) {
+    const t = i / 22;
+    // Walk the perimeter, biting inward by a random amount at each stop.
+    const along = t * 4;
+    const edge = Math.floor(along);
+    const f = along - edge;
+    const w2 = WINDOW.halfWidth;
+    const h2 = (WINDOW.head - WINDOW.sill) / 2;
+    const midY = (WINDOW.sill + WINDOW.head) / 2;
+    let x;
+    let y;
+    let inward;
+    if (edge === 0) { x = -w2 + f * w2 * 2; y = midY + h2; inward = -1; }
+    else if (edge === 1) { x = w2; y = midY + h2 - f * h2 * 2; inward = -1; }
+    else if (edge === 2) { x = w2 - f * w2 * 2; y = midY - h2; inward = 1; }
+    else { x = -w2; y = midY - h2 + f * h2 * 2; inward = 1; }
+
+    const bite = 0.06 + Math.random() * 0.17;
+    const shard = new THREE.Mesh(new THREE.ConeGeometry(0.05, bite, 3), shardMaterial);
+    shard.position.set(
+      WINDOW.x + x + (edge % 2 === 1 ? (edge === 1 ? -bite / 2 : bite / 2) : 0),
+      y + (edge % 2 === 0 ? inward * (bite / 2) : 0),
+      depth / 2 + 0.02
+    );
+    // Point each one into the opening, with a bit of scatter.
+    shard.rotation.z =
+      (edge === 0 ? Math.PI : edge === 2 ? 0 : edge === 1 ? -Math.PI / 2 : Math.PI / 2) +
+      (Math.random() - 0.5) * 0.5;
+    shard.rotation.y = (Math.random() - 0.5) * 0.6;
+    group.add(shard);
   }
 
   // ── the thing on the wall ─────────────────────────────────────────────────
@@ -631,6 +884,10 @@ export function createMedicalRoom(scene) {
     group.add(arm.group);
     arms.push(arm);
   }
+
+  // ── through the window ────────────────────────────────────────────────────
+  const store = buildStoreRoom();
+  group.add(store.group);
 
   // ── the way out ───────────────────────────────────────────────────────────
   // In the corner of the wall behind you: sitting up on the bed you face
@@ -690,8 +947,41 @@ export function createMedicalRoom(scene) {
     { minX: cx - width / 2 - t, maxX: cx - width / 2, minZ: cz - depth / 2 - t, maxZ: cz + depth / 2 + t },
     { minX: cx + width / 2, maxX: cx + width / 2 + t, minZ: cz - depth / 2 - t, maxZ: cz + depth / 2 + t },
     { minX: cx - width / 2 - t, maxX: cx + width / 2 + t, minZ: cz - depth / 2 - t, maxZ: cz - depth / 2 },
-    { minX: cx - width / 2 - t, maxX: cx + width / 2 + t, minZ: cz + depth / 2, maxZ: cz + depth / 2 + t },
   ];
+
+  // The back wall, in pieces, because there is a hole in it.
+  //
+  // Left and right of the window are ordinary wall. The span of the window
+  // itself is two boxes: the sill, which everything has to climb, and the wall
+  // above it, which only lets something 0.95m or shorter through. That pair is
+  // the whole puzzle — you can jump onto the sill and get no further, and the
+  // bucket clears the sill in one hop and walks straight on.
+  const backNear = cz + depth / 2;
+  const backFar = backNear + WINDOW.reveal;
+  const openLeft = cx + WINDOW.x - WINDOW.halfWidth;
+  const openRight = cx + WINDOW.x + WINDOW.halfWidth;
+
+  colliders.push(
+    { minX: cx - width / 2 - t, maxX: openLeft, minZ: backNear, maxZ: backFar },
+    { minX: openRight, maxX: cx + width / 2 + t, minZ: backNear, maxZ: backFar },
+    { minX: openLeft, maxX: openRight, minZ: backNear, maxZ: backFar, top: WINDOW.sill },
+    {
+      minX: openLeft,
+      maxX: openRight,
+      minZ: backNear,
+      maxZ: backFar,
+      passHeight: WINDOW.head - WINDOW.sill,
+    }
+  );
+
+  // The store room's own shell. Its near wall is the one the window is in, so
+  // it is not repeated here.
+  const s0 = 0.8;
+  colliders.push(
+    { minX: cx + STORE.minX - s0, maxX: cx + STORE.minX, minZ: cz + STORE.near - s0, maxZ: cz + STORE.far + s0 },
+    { minX: cx + STORE.maxX, maxX: cx + STORE.maxX + s0, minZ: cz + STORE.near - s0, maxZ: cz + STORE.far + s0 },
+    { minX: cx + STORE.minX - s0, maxX: cx + STORE.maxX + s0, minZ: cz + STORE.far, maxZ: cz + STORE.far + s0 }
+  );
 
   // One box per bed, standable — you can climb over the wreckage rather than
   // being walled in by it. A rotated rectangle's axis-aligned bounds are

@@ -409,26 +409,6 @@ function buildWardDoor() {
   leaf.receiveShadow = true;
   group.add(leaf);
 
-  // Wire-glass vision panel, the tall narrow kind.
-  const glass = new THREE.Mesh(
-    new THREE.BoxGeometry(0.34, 0.72, 0.02),
-    new THREE.MeshBasicMaterial({ color: '#12181a', toneMapped: false })
-  );
-  glass.position.set(0, height - 0.62, 0.065);
-  group.add(glass);
-
-  const wire = clinicalMaterial('#6d7a76', 0.5);
-  for (let i = 1; i < 4; i++) {
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.008, 0.026), wire);
-    bar.position.set(0, height - 0.62 - 0.36 + (i * 0.72) / 4, 0.066);
-    group.add(bar);
-  }
-  for (const x of [-0.113, 0.113]) {
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.72, 0.026), wire);
-    bar.position.set(x, height - 0.62, 0.066);
-    group.add(bar);
-  }
-
   // Kick plate along the bottom, scuffed by every trolley that ever went
   // through, and a lever handle on the opening edge.
   const kick = new THREE.Mesh(

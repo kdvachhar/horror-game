@@ -22,8 +22,9 @@ import { createSpeechRunner, MOUTH_AT_REST } from './voice.js';
  * conduit, and end in the same green gloves that reached for you in the dark.
  */
 
-// Screen face, from the drawing: sickly green on a dead grey tube.
-const FACE = '#9dbb62';
+// Screen face, from the drawing: sickly green on a dead grey tube. Rendered
+// exactly as written — see screenMaterial.
+const FACE = '#6f9040';
 const WIRE_COLOURS = ['#b23b2e', '#2f4b9c', '#8a9440'];
 
 function clinicalMaterial(color, roughness = 0.55) {
@@ -31,12 +32,17 @@ function clinicalMaterial(color, roughness = 0.55) {
 }
 
 /**
- * The face is drawn, not lit. An unlit material keeps it exactly the green of
- * the concept art no matter what the room's lighting does — a standard material
- * here picked up the ward lamp and washed the whole face out to white.
+ * The face is drawn, not lit — and not tone mapped either.
+ *
+ * Unlit alone was not enough. A standard material picked up the ward lamp and
+ * washed the face out to white, so it became MeshBasicMaterial; but ACES still
+ * had it, and ACES lifts hard through the mids. At an exposure of 1.42 a mid
+ * green came out close to mint no matter what was authored — darkening the
+ * constant twice barely moved the pixels. Exempting it means the value written
+ * here is the value on screen, which is the only way to actually pick a colour.
  */
 function screenMaterial(color) {
-  return new THREE.MeshBasicMaterial({ color });
+  return new THREE.MeshBasicMaterial({ color, toneMapped: false });
 }
 
 /**
@@ -91,7 +97,7 @@ function buildTelevision() {
   // The tube itself, recessed into the bezel.
   const screen = new THREE.Mesh(
     new THREE.BoxGeometry(width - 0.5, height - 0.44, 0.06),
-    new THREE.MeshBasicMaterial({ color: '#100e12' })
+    new THREE.MeshBasicMaterial({ color: '#0b0a0d', toneMapped: false })
   );
   screen.position.z = depth / 2 + 0.01;
   group.add(screen);

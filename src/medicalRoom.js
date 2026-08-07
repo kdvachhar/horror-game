@@ -37,16 +37,22 @@ import { createSpeechRunner, MOUTH_AT_REST } from './voice.js';
  *
  * Its *sill* is deliberately not copied. That one sits at 1.0, and that project
  * records the consequence in its own notes — a hop lifts its cube to about
- * 0.56, so nothing can get in and the room is not solvable by play. Our bucket
- * jumps 0.90, so the sill goes at 0.5 and it clears it comfortably. Height is
- * the only figure the puzzle depends on, and 1.6 against a 1.8m player still
- * holds it shut.
+ * 0.56, so nothing can get in and the room is not solvable by play.
+ *
+ * Ours sits at 0.75, which is as high as it can go. The bucket's jump peaks at
+ * 0.90 (6.3^2 / 2g), and it needs to still be above the sill for long enough to
+ * cross the reveal: at 0.75 it has 0.24s up there, which is 0.8m of travel at
+ * walking speed against a 0.3m opening to get through. Raise the sill much
+ * further and that margin closes, and this room stops being reachable at all.
+ *
+ * Height is the only figure the puzzle itself depends on, and 1.6 against a
+ * 1.8m player holds it shut wherever the sill sits.
  */
 const WINDOW = {
   x: 2.6,
   halfWidth: 1.5,
-  sill: 0.5,
-  head: 2.1,
+  sill: 0.75,
+  head: 2.35,
   /** Wall thickness at the opening, so the reveal has depth to it. */
   reveal: 0.3,
 };
@@ -61,7 +67,7 @@ const STORE = {
    */
   near: 5.5,
   far: 9.6,
-  height: 2.4,
+  height: 2.7,
 };
 
 // Screen face, from the drawing: sickly green on a dead grey tube. Rendered

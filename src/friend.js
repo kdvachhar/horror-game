@@ -497,6 +497,11 @@ export function createFriend(scene) {
       return driven;
     },
 
+    /** Whether its feet are on something. Jumping only works when they are. */
+    get isGrounded() {
+      return grounded;
+    },
+
     /** Where the camera sits when you are inside it — its own eye line. */
     get eyeHeight() {
       return EYE_HEIGHT;

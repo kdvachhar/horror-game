@@ -39,11 +39,17 @@ import { createSpeechRunner, MOUTH_AT_REST } from './voice.js';
  * records the consequence in its own notes — a hop lifts its cube to about
  * 0.56, so nothing can get in and the room is not solvable by play.
  *
- * Ours sits at 0.75, which is as high as it can go. The bucket's jump peaks at
- * 0.90 (6.3^2 / 2g), and it needs to still be above the sill for long enough to
- * cross the reveal: at 0.75 it has 0.24s up there, which is 0.8m of travel at
- * walking speed against a 0.3m opening to get through. Raise the sill much
- * further and that margin closes, and this room stops being reachable at all.
+ * Ours sits at 1.1, which is past what the bucket can reach off the floor —
+ * its jump peaks at 0.90 (6.3^2 / 2g). So it does not go from the floor. There
+ * is a supply crate pushed up under the window, and it goes from there:
+ * 0.45 + 0.90 leaves 0.25m of clearance over the sill, and 0.30s above it,
+ * which is a metre of travel against a 0.3m opening.
+ *
+ * That crate is the piece ../3d-plat is missing. Its own notes put the problem
+ * exactly: "whatever replaces the ramp has to get a 0.9m cube over a 1.0m sill
+ * without also letting the 1.8m player through". A step does, because the gate
+ * is on height and not on reach — the player can stand on the crate too, and
+ * is no closer to fitting for it.
  *
  * Height is the only figure the puzzle itself depends on, and 1.6 against a
  * 1.8m player holds it shut wherever the sill sits.
@@ -51,10 +57,18 @@ import { createSpeechRunner, MOUTH_AT_REST } from './voice.js';
 const WINDOW = {
   x: 2.6,
   halfWidth: 1.5,
-  sill: 0.75,
-  head: 2.35,
+  sill: 1.1,
+  head: 2.7,
   /** Wall thickness at the opening, so the reveal has depth to it. */
   reveal: 0.3,
+};
+
+/** The step up to it, stood against the wall below the opening. */
+const CRATE = {
+  x: WINDOW.x,
+  width: 1.6,
+  depth: 0.75,
+  height: 0.45,
 };
 
 const STORE = {
@@ -67,7 +81,7 @@ const STORE = {
    */
   near: 5.5,
   far: 9.6,
-  height: 2.7,
+  height: 3.0,
 };
 
 // Screen face, from the drawing: sickly green on a dead grey tube. Rendered
@@ -414,6 +428,41 @@ const ARMS = [
     roll: -2.8,
   },
 ];
+
+/** A supply crate. The step up to the window, on both sides of it. */
+function buildCrate() {
+  const crate = new THREE.Group();
+
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(CRATE.width, CRATE.height, CRATE.depth),
+    new THREE.MeshStandardMaterial({
+      ...makeMetalPanelSurface(1.6, 0.6, '#7f857e'),
+      metalness: 0.2,
+      roughness: 0.7,
+    })
+  );
+  body.position.y = CRATE.height / 2;
+  body.castShadow = true;
+  body.receiveShadow = true;
+  crate.add(body);
+
+  // Banding round it and a lip on top, so it reads as a case, not a block.
+  const trim = clinicalMaterial('#5f6560', 0.5);
+  for (const x of [-CRATE.width / 2 + 0.16, CRATE.width / 2 - 0.16]) {
+    const band = new THREE.Mesh(
+      new THREE.BoxGeometry(0.06, CRATE.height + 0.01, CRATE.depth + 0.01),
+      trim
+    );
+    band.position.set(x, CRATE.height / 2, 0);
+    crate.add(band);
+  }
+  const lip = new THREE.Mesh(new THREE.BoxGeometry(CRATE.width + 0.05, 0.05, CRATE.depth + 0.05), trim);
+  lip.position.y = CRATE.height;
+  lip.castShadow = true;
+  crate.add(lip);
+
+  return crate;
+}
 
 /** A shelving unit: uprights, shelves, and whatever was left on them. */
 function buildShelves(units) {
@@ -903,6 +952,21 @@ export function createMedicalRoom(scene) {
     arms.push(arm);
   }
 
+  // ── the steps up to the window ────────────────────────────────────────────
+  // A supply crate shoved against the wall under the opening, and another one
+  // the same on the far side. They are scenery and they are the puzzle: the
+  // sill is above what the bucket can reach off the floor, so these are how it
+  // gets up there — and the one inside is how it gets back out again.
+  const crateZ = {
+    ward: depth / 2 - CRATE.depth / 2,
+    store: depth / 2 + WINDOW.reveal + CRATE.depth / 2,
+  };
+  for (const z of [crateZ.ward, crateZ.store]) {
+    const crate = buildCrate();
+    crate.position.set(CRATE.x, 0, z);
+    group.add(crate);
+  }
+
   // ── through the window ────────────────────────────────────────────────────
   const store = buildStoreRoom();
   group.add(store.group);
@@ -991,6 +1055,18 @@ export function createMedicalRoom(scene) {
       passHeight: WINDOW.head - WINDOW.sill,
     }
   );
+
+  // Both crates, standable — they are the only way onto the sill from either
+  // side. Without the inner one the bucket gets in and is stranded.
+  for (const z of [crateZ.ward, crateZ.store]) {
+    colliders.push({
+      minX: cx + CRATE.x - CRATE.width / 2,
+      maxX: cx + CRATE.x + CRATE.width / 2,
+      minZ: cz + z - CRATE.depth / 2,
+      maxZ: cz + z + CRATE.depth / 2,
+      top: CRATE.height,
+    });
+  }
 
   // The store room's own shell. Its near wall is the one the window is in, so
   // it is not repeated here.

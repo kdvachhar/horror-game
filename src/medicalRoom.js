@@ -5,6 +5,7 @@ import {
   makeFloorSurface,
   makeCeilingSurface,
   makeMetalPanelSurface,
+  makeWoodSurface,
   cloneSurface,
   worldRepeat,
   UNITS_PER_TILE,
@@ -12,6 +13,7 @@ import {
 } from './textures.js';
 import { buildHand } from './glove.js';
 import { createSpeechRunner, MOUTH_AT_REST } from './voice.js';
+import { playButtonPress } from './audio.js';
 
 /**
  * The room you wake up in, and the thing waiting on its wall.
@@ -429,6 +431,101 @@ const ARMS = [
   },
 ];
 
+/**
+ * The climb up the store room, and what is at the top of it.
+ *
+ * Three brown boards up the far wall, staggered rather than stacked. Stacking
+ * them would not work: a board directly above blocks the thing rising toward
+ * it until its feet are clear, so the bucket would be shoved off the one below
+ * every time. Offset along the wall, each jump is diagonal and there is nothing
+ * overhead to catch on.
+ *
+ * Rise is 0.7 to the first and 0.75 between, against a 0.90m jump — enough that
+ * the landing is not frame-perfect, little enough that it is still a climb.
+ *
+ * The first one is set well back from the window wall on purpose. Closer in and
+ * there is nowhere to stand: the bucket is 0.6 across, and between the wall and
+ * the board there has to be room for it *and* the run-up it needs to reach
+ * walking speed, which is another 0.3.
+ */
+const SHELVES = [
+  { y: 0.7, z: 7.05 },
+  { y: 1.45, z: 8.05 },
+  { y: 2.2, z: 9.05 },
+];
+const SHELF = { x: 5.75, width: 1.25, depth: 0.85 };
+
+/** One brown board on two brackets. */
+function buildWoodShelf() {
+  const shelf = new THREE.Group();
+
+  const board = new THREE.Mesh(
+    new THREE.BoxGeometry(SHELF.width, 0.07, SHELF.depth),
+    new THREE.MeshStandardMaterial({
+      ...makeWoodSurface(1.2, 1, '#5a3a22'),
+      color: '#8a5a34',
+      roughness: 0.82,
+      metalness: 0,
+    })
+  );
+  board.position.y = -0.035;
+  board.castShadow = true;
+  board.receiveShadow = true;
+  shelf.add(board);
+
+  // Brackets underneath, back against the wall.
+  const iron = clinicalMaterial('#3f4441', 0.6);
+  for (const z of [-SHELF.depth / 2 + 0.16, SHELF.depth / 2 - 0.16]) {
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(SHELF.width - 0.2, 0.05, 0.05), iron);
+    arm.position.set(0, -0.11, z);
+    arm.castShadow = true;
+    shelf.add(arm);
+
+    const strut = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.22, 0.05), iron);
+    strut.position.set(SHELF.width / 2 - 0.08, -0.18, z);
+    shelf.add(strut);
+  }
+
+  return shelf;
+}
+
+/** A big industrial push button, on a plinth. */
+function buildButton() {
+  const group = new THREE.Group();
+
+  const base = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.13, 0.15, 0.07, 20),
+    clinicalMaterial('#3c4240', 0.5)
+  );
+  base.position.y = 0.035;
+  base.castShadow = true;
+  group.add(base);
+
+  // The cap, which is what moves.
+  const cap = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.1, 0.11, 0.075, 20),
+    new THREE.MeshStandardMaterial({ color: '#a8352c', roughness: 0.45 })
+  );
+  cap.position.y = 0.105;
+  cap.castShadow = true;
+  group.add(cap);
+
+  // A ring round the base that lights when it latches.
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.135, 0.014, 8, 22),
+    new THREE.MeshBasicMaterial({ color: '#2a1512', toneMapped: false })
+  );
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = 0.075;
+  group.add(ring);
+
+  const glow = new THREE.PointLight(0xff6a4a, 0, 2.4, 2);
+  glow.position.y = 0.2;
+  group.add(glow);
+
+  return { group, cap, ring, glow };
+}
+
 /** A supply crate. The step up to the window, on both sides of it. */
 function buildCrate() {
   const crate = new THREE.Group();
@@ -569,13 +666,21 @@ function buildStoreRoom() {
 
   // Shelving down the far wall and one unit across the end.
   const back = buildShelves(3);
-  back.position.set(midX + 0.5, 0, STORE.far - 0.3);
+  back.position.set(midX - 0.85, 0, STORE.far - 0.3);
   group.add(back);
 
-  const side = buildShelves(2);
-  side.rotation.y = Math.PI / 2;
-  side.position.set(STORE.maxX - 0.3, 0, midZ + 0.4);
-  group.add(side);
+  // Brown boards up the far wall, and the button on the top one. The metal
+  // unit that used to stand here was in the way of the climb.
+  for (const step of SHELVES) {
+    const shelf = buildWoodShelf();
+    shelf.position.set(SHELF.x, step.y, step.z);
+    group.add(shelf);
+  }
+
+  const button = buildButton();
+  const topShelf = SHELVES[SHELVES.length - 1];
+  button.group.position.set(SHELF.x + 0.15, topShelf.y, topShelf.z);
+  group.add(button.group);
 
   // One tube, and it is on its way out.
   const tube = new THREE.Mesh(
@@ -592,7 +697,7 @@ function buildStoreRoom() {
   lamp.shadow.normalBias = 0.05;
   group.add(lamp);
 
-  return { group, tube, lamp };
+  return { group, tube, lamp, button, buttonAt: [SHELF.x + 0.15, topShelf.y, topShelf.z] };
 }
 
 /**
@@ -1068,6 +1173,17 @@ export function createMedicalRoom(scene) {
     });
   }
 
+  // The boards, standable. Same rule as the crates: they are the route.
+  for (const step of SHELVES) {
+    colliders.push({
+      minX: cx + SHELF.x - SHELF.width / 2,
+      maxX: cx + SHELF.x + SHELF.width / 2,
+      minZ: cz + step.z - SHELF.depth / 2,
+      maxZ: cz + step.z + SHELF.depth / 2,
+      top: step.y,
+    });
+  }
+
   // The store room's own shell. Its near wall is the one the window is in, so
   // it is not repeated here.
   const s0 = 0.8;
@@ -1171,6 +1287,15 @@ export function createMedicalRoom(scene) {
   }
   updateArmColliders();
 
+  // The button latches once, and stays down.
+  const buttonWorld = new THREE.Vector3(
+    cx + store.buttonAt[0],
+    store.buttonAt[1],
+    cz + store.buttonAt[2]
+  );
+  let buttonPressed = false;
+  let buttonTravel = 0;
+
   const speech = createSpeechRunner();
   let time = 0;
   // Eased rather than snapped to. The schedule steps between shapes instantly
@@ -1203,6 +1328,26 @@ export function createMedicalRoom(scene) {
     get isSpeaking() {
       return speech.isSpeaking;
     },
+    get buttonPressed() {
+      return buttonPressed;
+    },
+
+    /**
+     * Anything standing on the top board, close enough, presses it. Checked
+     * against whatever is passed in rather than reaching for the friend, so
+     * this does not care what got up there — only that something did.
+     */
+    tryPressButton(position, grounded) {
+      if (buttonPressed || !grounded) return false;
+      if (Math.abs(position.y - buttonWorld.y) > 0.25) return false;
+      const reach = Math.hypot(position.x - buttonWorld.x, position.z - buttonWorld.z);
+      if (reach > 0.55) return false;
+
+      buttonPressed = true;
+      playButtonPress();
+      return true;
+    },
+
     /** Dev handles: what the face is doing right now. */
     get mouthScale() {
       return television.mouth.scale;
@@ -1357,6 +1502,12 @@ export function createMedicalRoom(scene) {
 
       // Last, once the arms have finished moving for this frame.
       updateArmColliders();
+
+      // The button going in, and its ring coming up with it.
+      buttonTravel += ((buttonPressed ? 1 : 0) - buttonTravel) * (1 - Math.exp(-16 * delta));
+      store.button.cap.position.y = 0.105 - buttonTravel * 0.045;
+      store.button.ring.material.color.setStyle('#ff6a4a').multiplyScalar(0.1 + buttonTravel * 0.9);
+      store.button.glow.intensity = buttonTravel * 3.5;
     },
   };
 }

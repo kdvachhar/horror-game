@@ -317,6 +317,49 @@ export function playBucketLand(level = 1) {
   pail(t, 300 + Math.random() * 40, 0.13 * level, 0.42, 1);
 }
 
+/**
+ * A big industrial push button going in and latching. Two clicks a few
+ * milliseconds apart — the cap bottoming out and the contact behind it — which
+ * is most of what separates a switch that has *done* something from a tap.
+ */
+export function playButtonPress(level = 1) {
+  if (!ready() || level < 0.02) return;
+  playedCount++;
+
+  const t = context.currentTime + 0.005;
+
+  for (const [at, peak, freq] of [[0, 0.16, 2600], [0.035, 0.11, 1500]]) {
+    const click = context.createBufferSource();
+    click.buffer = getNoise();
+    const band = context.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = freq;
+    band.Q.value = 2.2;
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, t + at);
+    gain.gain.exponentialRampToValueAtTime(peak * level, t + at + 0.003);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + at + 0.05);
+    click.connect(band).connect(gain);
+    send(gain, 0.9);
+    click.start(t + at, Math.random() * 1.5);
+    click.stop(t + at + 0.08);
+  }
+
+  // The clunk of the mechanism under the clicks.
+  const body = context.createOscillator();
+  body.type = 'sine';
+  body.frequency.setValueAtTime(190, t);
+  body.frequency.exponentialRampToValueAtTime(90, t + 0.09);
+  const bodyGain = context.createGain();
+  bodyGain.gain.setValueAtTime(0.0001, t);
+  bodyGain.gain.exponentialRampToValueAtTime(0.1 * level, t + 0.005);
+  bodyGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+  body.connect(bodyGain);
+  send(bodyGain, 0.5);
+  body.start(t);
+  body.stop(t + 0.15);
+}
+
 export function playDoorClose() {
   if (!ready()) return;
   playedCount++;

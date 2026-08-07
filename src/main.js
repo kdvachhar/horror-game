@@ -411,6 +411,9 @@ renderer.setAnimationLoop((time) => {
   }
 
   friend.update(delta, camera, camera.position, room.colliders);
+  // Only the bucket can get up there, but the check is on position rather than
+  // on identity — whatever ends up on the top board presses it.
+  if (friend.isActive) medical.tryPressButton(friend.position, friend.isGrounded);
   // The view has to be written after the body it is attached to has moved, or
   // it trails a frame behind everything you do.
   possession.applyCamera();

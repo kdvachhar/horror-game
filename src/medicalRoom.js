@@ -26,27 +26,33 @@ import { createSpeechRunner, MOUTH_AT_REST } from './voice.js';
 /**
  * The broken window beside the door, and the store room it opens onto.
  *
- * The whole point of it: the opening is 1.25m tall and you are 1.8m. There is
+ * The whole point of it: the opening is 1.6m tall and you are 1.8m. There is
  * no arrangement of jumping that gets you through, because the gate is on your
  * height and not on where your feet are. The bucket is 0.82m and clears the
  * sill in one hop, so the store room is somewhere you can only reach by being
  * something else — which is what possession is for.
  *
- * Width is free: it plays no part in the gate, so the opening can be as wide as
- * the wall allows. Height is the only figure that has to be defended, and the
- * margin here is 0.55m — well clear of anything a rounding error could close.
+ * Sized to match the possession-puzzle window in ../3d-plat: 3m across by 1.6m
+ * tall, the same opening that mechanic was designed around.
+ *
+ * Its *sill* is deliberately not copied. That one sits at 1.0, and that project
+ * records the consequence in its own notes — a hop lifts its cube to about
+ * 0.56, so nothing can get in and the room is not solvable by play. Our bucket
+ * jumps 0.90, so the sill goes at 0.5 and it clears it comfortably. Height is
+ * the only figure the puzzle depends on, and 1.6 against a 1.8m player still
+ * holds it shut.
  */
 const WINDOW = {
-  x: 3.1,
-  halfWidth: 0.95,
+  x: 2.6,
+  halfWidth: 1.5,
   sill: 0.5,
-  head: 1.75,
+  head: 2.1,
   /** Wall thickness at the opening, so the reveal has depth to it. */
   reveal: 0.3,
 };
 
 const STORE = {
-  minX: 0.9,
+  minX: 0.5,
   maxX: 6.4,
   /**
    * Starts at the shared wall itself, not past it. The medical room's back
@@ -844,7 +850,7 @@ export function createMedicalRoom(scene) {
     side: THREE.DoubleSide,
     depthWrite: false,
   });
-  const shardCount = 32;
+  const shardCount = 40;
   for (let i = 0; i < shardCount; i++) {
     const t = i / shardCount;
     // Walk the perimeter, biting inward by a random amount at each stop.

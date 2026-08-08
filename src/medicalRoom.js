@@ -88,6 +88,18 @@ const STORE = {
   height: 3.0,
 };
 
+/**
+ * The ward's walls.
+ *
+ * Two values, because tinting alone cannot get here. The concrete surface is
+ * generated around PALETTE.wall, which is #4d4e47 — nearly black — and the
+ * material colour multiplies that, so no tint short of impossible lifts it past
+ * mid grey. WALL_BASE regenerates the texture light in the first place and the
+ * tint then only has to leave it alone.
+ */
+const WALL_BASE = '#dcdedb';
+const WALL = '#fbfcfa';
+
 // Screen face, from the drawing: sickly green on a dead grey tube. Rendered
 // exactly as written — see screenMaterial.
 const FACE = '#6f9040';
@@ -1011,16 +1023,16 @@ export function createMedicalRoom(scene) {
 
   // Pale clinical walls — the same concrete surface tinted almost white, so it
   // reads as a tiled ward rather than the poured shell you came from.
-  const wallSurface = makeWallSurface(...worldRepeat(width, height));
+  const wallSurface = makeWallSurface(...worldRepeat(width, height), WALL_BASE);
   const wallMaterial = new THREE.MeshStandardMaterial({
     ...wallSurface,
-    color: '#cfd2cb',
+    color: WALL,
     metalness: 0,
     side: THREE.DoubleSide,
   });
   const sideMaterial = new THREE.MeshStandardMaterial({
     ...cloneSurface(wallSurface, ...worldRepeat(depth, height)),
-    color: '#cfd2cb',
+    color: WALL,
     metalness: 0,
     side: THREE.DoubleSide,
   });
@@ -1053,7 +1065,7 @@ export function createMedicalRoom(scene) {
     if (w <= 0 || h <= 0) continue;
     const panelMaterial = new THREE.MeshStandardMaterial({
       ...cloneSurface(wallSurface, ...worldRepeat(w, h)),
-      color: '#cfd2cb',
+      color: WALL,
       metalness: 0,
       side: THREE.DoubleSide,
     });
@@ -1073,7 +1085,7 @@ export function createMedicalRoom(scene) {
   }
 
   // The reveal — the thickness of the wall, seen through the opening.
-  const revealMaterial = clinicalMaterial('#b9bcb6', 0.7);
+  const revealMaterial = clinicalMaterial('#d7d9d4', 0.7);
   for (const [w, h, d, x, y] of [
     [WINDOW.halfWidth * 2, 0.04, WINDOW.reveal, WINDOW.x, WINDOW.sill],
     [WINDOW.halfWidth * 2, 0.04, WINDOW.reveal, WINDOW.x, WINDOW.head],

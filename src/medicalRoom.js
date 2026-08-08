@@ -1281,7 +1281,14 @@ export function createMedicalRoom(scene) {
     top: CHAIR.top,
   });
 
-  // The boards, standable. Same rule as the crates: they are the route.
+  // The boards, standable — and walk-under-able.
+  //
+  // These are planks on brackets with nothing beneath them, so a box solid from
+  // the floor to the board is a column of air you cannot cross. passHeight lets
+  // anything shorter than 1.2 through sideways; `top` is checked separately by
+  // the ground test and is not gated by it, so the bucket walks under a board
+  // and still lands on it. It is the same mechanism as the window, used the
+  // other way round.
   for (const step of SHELVES) {
     colliders.push({
       minX: cx + SHELF.x - SHELF.width / 2,
@@ -1289,6 +1296,7 @@ export function createMedicalRoom(scene) {
       minZ: cz + step.z - SHELF.depth / 2,
       maxZ: cz + step.z + SHELF.depth / 2,
       top: step.y,
+      passHeight: 1.2,
     });
   }
 
@@ -1296,8 +1304,11 @@ export function createMedicalRoom(scene) {
   // it is not repeated here.
   const s0 = 0.8;
   colliders.push(
-    { minX: cx + STORE.minX - s0, maxX: cx + STORE.minX, minZ: cz + STORE.near - s0, maxZ: cz + STORE.far + s0 },
-    { minX: cx + STORE.maxX, maxX: cx + STORE.maxX + s0, minZ: cz + STORE.near - s0, maxZ: cz + STORE.far + s0 },
+    // Both side walls start at the shared wall, not 0.8 before it. Running them
+    // back the extra thickness put a slab of solid nothing inside the ward's
+    // back corner, on the far side of a wall from the room it belongs to.
+    { minX: cx + STORE.minX - s0, maxX: cx + STORE.minX, minZ: cz + STORE.near, maxZ: cz + STORE.far + s0 },
+    { minX: cx + STORE.maxX, maxX: cx + STORE.maxX + s0, minZ: cz + STORE.near, maxZ: cz + STORE.far + s0 },
     { minX: cx + STORE.minX - s0, maxX: cx + STORE.maxX + s0, minZ: cz + STORE.far, maxZ: cz + STORE.far + s0 }
   );
 

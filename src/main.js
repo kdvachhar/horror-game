@@ -59,11 +59,14 @@ room.colliders.push(...machine.colliders);
 
 // The doorway is solid while the door is shut. Gated rather than added and
 // removed, so the array the player holds never changes identity.
+// Hugs the shutter rather than filling the whole reveal. At 0.6 deep against a
+// door 0.1 thick you were stopped a quarter of a metre short of it, in the gap.
+// Still thicker than a frame's travel at running speed, so nothing tunnels.
 const doorwayCollider = {
   minX: -DOOR.width / 2,
   maxX: DOOR.width / 2,
-  minZ: DOOR.z - 0.6,
-  maxZ: DOOR.z,
+  minZ: DOOR.z - 0.45,
+  maxZ: DOOR.z - 0.05,
   enabled: () => !door.isOpen,
 };
 room.colliders.push(doorwayCollider);
@@ -314,8 +317,8 @@ const debugMenu = createDebugMenu({
     room.rebuildShell();
     wallText.reposition();
     door.reposition();
-    doorwayCollider.minZ = DOOR.z - 0.6;
-    doorwayCollider.maxZ = DOOR.z;
+    doorwayCollider.minZ = DOOR.z - 0.45;
+    doorwayCollider.maxZ = DOOR.z - 0.05;
   },
 });
 

@@ -545,12 +545,14 @@ export function createMachine(scene) {
       minZ: cz - bodyHalf,
       maxZ: cz + bodyHalf,
     },
-    // Conveyor, from the housing face out to the end of the run.
+    // Conveyor, from the housing face out to the end of the run. Sized to the
+    // belt itself: it used to carry a quarter metre of padding on each side,
+    // which is a quarter metre of nothing you cannot walk through.
     {
       minX: cx + bodyHalf,
-      maxX: cx + MACHINE.conveyorStart + MACHINE.conveyorLength + 0.2,
-      minZ: cz - MACHINE.conveyorWidth / 2 - 0.25,
-      maxZ: cz + MACHINE.conveyorWidth / 2 + 0.25,
+      maxX: cx + MACHINE.conveyorStart + MACHINE.conveyorLength,
+      minZ: cz - MACHINE.conveyorWidth / 2,
+      maxZ: cz + MACHINE.conveyorWidth / 2,
       top: hoodTop,
     },
   ];

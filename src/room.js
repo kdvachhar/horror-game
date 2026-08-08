@@ -457,7 +457,9 @@ function buildDebris(scene) {
   bench.position.set(-ROOM.width / 2 + 1.6, 0, -6);
   bench.rotation.y = Math.PI / 2;
   scene.add(bench);
-  addCollider(bench.position.x, bench.position.z, 2.2, 6.4, 1.03);
+  // Sized to the bench top, which is 6 by 1.4 and turned a quarter — it used
+  // to be 2.2 by 6.4, which stopped you 40cm short of it in open floor.
+  addCollider(bench.position.x, bench.position.z, 1.5, 6.1, 1.03);
 
   // Fluorescent housings slung from the ceiling on long chains.
   for (const [lx, lz] of FIXTURE_POSITIONS) {

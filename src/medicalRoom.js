@@ -86,7 +86,7 @@ const STORE = {
    */
   near: 5.5,
   far: 9.6,
-  height: 3.7,
+  height: 3.4,
 };
 
 /**
@@ -455,9 +455,8 @@ const ARMS = [
  * every time. Offset along the wall, each jump is diagonal and there is nothing
  * overhead to catch on.
  *
- * Rise is 0.91 from the chair to the first and 0.7 between, against a 1.15m
- * jump — enough that the landing is not frame-perfect, little enough that it is
- * still a climb.
+ * Rise is 0.66 from the chair to the first and 0.7 between, against a 1.15m
+ * jump — comfortably inside it, so the climb is a climb rather than a test.
  *
  * The first one is set well back from the window wall on purpose. Closer in and
  * there is nowhere to stand: the bucket is 0.6 across, and between the wall and
@@ -465,19 +464,21 @@ const ARMS = [
  * walking speed, which is another 0.3.
  */
 const SHELVES = [
-  { y: 1.25, z: 7.05 },
-  { y: 1.95, z: 8.05 },
-  { y: 2.65, z: 9.05 },
+  { y: 1.0, z: 7.05 },
+  { y: 1.7, z: 8.05 },
+  { y: 2.4, z: 9.05 },
 ];
 
 /**
  * The chair, and where it lies.
  *
- * It is the first step of the climb, not scenery beside it. The lowest board
- * sits at 1.25, which is past the bucket's 1.15 jump from the floor, so the
- * chair at 0.34 is the only way onto it — and it is set off to one side of the
- * boards rather than in front of them, because there is not the room to line
- * four platforms up along a store room this shallow.
+ * It is the bottom of the climb, set off to one side of the boards rather than
+ * in front of them — there is not the room to line four platforms up along a
+ * store room this shallow.
+ *
+ * Note that it is no longer *required*. The lowest board is back at 1.0 and the
+ * bucket's jump reaches 1.15, so the floor will do. Putting the board back over
+ * 1.15 is all it would take to make the chair the only way up again.
  */
 const CHAIR = { x: 4.5, z: 6.9, half: 0.42, top: 0.34 };
 const SHELF = { x: 5.75, width: 1.25, depth: 0.85 };

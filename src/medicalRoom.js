@@ -41,11 +41,12 @@ import { playButtonPress } from './audio.js';
  * records the consequence in its own notes — a hop lifts its cube to about
  * 0.56, so nothing can get in and the room is not solvable by play.
  *
- * Ours sits at 1.1, which is past what the bucket can reach off the floor —
- * its jump peaks at 0.90 (6.3^2 / 2g). So it does not go from the floor. There
- * is a supply crate pushed up under the window, and it goes from there:
- * 0.45 + 0.90 leaves 0.25m of clearance over the sill, and 0.30s above it,
- * which is a metre of travel against a 0.3m opening.
+ * Ours sits at 1.35, which is past what the bucket can reach off the floor —
+ * its jump peaks at 1.15 (7.1^2 / 2g). So it does not go from the floor. There
+ * is a bed pushed up under the window and a desk on the other side, and it goes
+ * from those: 0.86 + 1.15 leaves half a metre of clearance over the sill, and
+ * near half a second above it, which is well over a metre of travel against a
+ * 0.3m opening.
  *
  * That crate is the piece ../3d-plat is missing. Its own notes put the problem
  * exactly: "whatever replaces the ramp has to get a 0.9m cube over a 1.0m sill
@@ -59,8 +60,8 @@ import { playButtonPress } from './audio.js';
 const WINDOW = {
   x: 2.6,
   halfWidth: 1.5,
-  sill: 1.1,
-  head: 2.7,
+  sill: 1.35,
+  head: 2.95,
   /** Wall thickness at the opening, so the reveal has depth to it. */
   reveal: 0.3,
 };
@@ -85,7 +86,7 @@ const STORE = {
    */
   near: 5.5,
   far: 9.6,
-  height: 3.0,
+  height: 3.7,
 };
 
 /**
@@ -454,8 +455,9 @@ const ARMS = [
  * every time. Offset along the wall, each jump is diagonal and there is nothing
  * overhead to catch on.
  *
- * Rise is 0.7 to the first and 0.75 between, against a 0.90m jump — enough that
- * the landing is not frame-perfect, little enough that it is still a climb.
+ * Rise is 0.91 from the chair to the first and 0.7 between, against a 1.15m
+ * jump — enough that the landing is not frame-perfect, little enough that it is
+ * still a climb.
  *
  * The first one is set well back from the window wall on purpose. Closer in and
  * there is nowhere to stand: the bucket is 0.6 across, and between the wall and
@@ -463,10 +465,21 @@ const ARMS = [
  * walking speed, which is another 0.3.
  */
 const SHELVES = [
-  { y: 0.7, z: 7.05 },
-  { y: 1.45, z: 8.05 },
-  { y: 2.2, z: 9.05 },
+  { y: 1.25, z: 7.05 },
+  { y: 1.95, z: 8.05 },
+  { y: 2.65, z: 9.05 },
 ];
+
+/**
+ * The chair, and where it lies.
+ *
+ * It is the first step of the climb, not scenery beside it. The lowest board
+ * sits at 1.25, which is past the bucket's 1.15 jump from the floor, so the
+ * chair at 0.34 is the only way onto it — and it is set off to one side of the
+ * boards rather than in front of them, because there is not the room to line
+ * four platforms up along a store room this shallow.
+ */
+const CHAIR = { x: 4.5, z: 6.9, half: 0.42, top: 0.34 };
 const SHELF = { x: 5.75, width: 1.25, depth: 0.85 };
 
 /** One brown board on two brackets. */
@@ -764,7 +777,7 @@ function buildStoreRoom() {
   group.add(desk);
 
   const chair = buildOfficeChair();
-  chair.position.set(STORE.minX + 1.5, 0, midZ + 0.7);
+  chair.position.set(CHAIR.x, 0, CHAIR.z);
   chair.rotation.y = 1.1;
   group.add(chair);
 
@@ -1258,14 +1271,13 @@ export function createMedicalRoom(scene) {
     top: STORE_STEP.top,
   });
 
-  // The chair on its side. Low and solid — you can climb it, which is what a
-  // chair lying in the middle of a floor should let you do.
+  // The chair on its side — the bottom step of the climb.
   colliders.push({
-    minX: cx + STORE.minX + 1.5 - 0.42,
-    maxX: cx + STORE.minX + 1.5 + 0.42,
-    minZ: cz + (STORE.near + STORE.far) / 2 + 0.7 - 0.42,
-    maxZ: cz + (STORE.near + STORE.far) / 2 + 0.7 + 0.42,
-    top: 0.34,
+    minX: cx + CHAIR.x - CHAIR.half,
+    maxX: cx + CHAIR.x + CHAIR.half,
+    minZ: cz + CHAIR.z - CHAIR.half,
+    maxZ: cz + CHAIR.z + CHAIR.half,
+    top: CHAIR.top,
   });
 
   // The boards, standable. Same rule as the crates: they are the route.

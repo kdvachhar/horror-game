@@ -61,17 +61,21 @@ const EYE_TURN_RATE = 3.5;
 // Driving tuning. Deliberately slower and heavier than the player: it is a
 // bucket on stub legs, and the difference between the two bodies is most of
 // what makes swapping between them interesting.
-const DRIVE_SPEED = 3.4;
-const DRIVE_RUN_SPEED = 5.0;
+const DRIVE_SPEED = 2.4;
+const DRIVE_RUN_SPEED = 3.6;
 const DRIVE_ACCEL = 22;
-// Peak is v^2 / 2g, so against PLAYER.gravity of 22 this is a 0.90m hop, up
-// from 0.66m. Measured on a fixed 1/60 step it samples at 0.85 — the apex
-// falls between two frames — and it climbs onto an upright bed's 0.86m
-// mattress but not a tipped one's 1.05m frame, so it can get up some of the
-// wreckage and not all of it. Worth keeping in mind before raising it again:
-// a bucket that jumps high enough escapes whatever geometry is meant to hold
-// it, which is why the prototype in ../3d-plat kept its hop deliberately low.
-const DRIVE_JUMP = 6.3;
+// Peak is v^2 / 2g, so against PLAYER.gravity of 22 this is a 1.15m hop, up
+// from 0.90. Measured on a fixed 1/60 step it samples a little under that —
+// the apex falls between two frames — and it now clears a tipped bed's 1.05m
+// frame as well as an upright one's mattress, so all of the ward's wreckage is
+// climbable.
+//
+// This number is load bearing beyond how it feels. Two gates in the medical
+// room are set just above it on purpose: the window's sill, so the bed and the
+// desk either side are what get you through, and the lowest board in the store
+// room, so the fallen chair is what gets you started up it. Raise this again
+// and both have to go up with it or they stop being gates at all.
+const DRIVE_JUMP = 7.1;
 /**
  * Shortest gap between footstep sounds, in seconds.
  *

@@ -97,6 +97,22 @@ export function createPlayer(camera, domElement, colliders) {
    */
   const HEIGHT = PLAYER.eyeHeight + 0.12;
 
+  /**
+   * How far up the player will step without being asked to jump.
+   *
+   * Set to clear a ward mattress at 0.86, which is high for a step — but the
+   * beds are furniture you walk onto, not obstacles, and being stopped dead by
+   * one is worse than the liberty. Anything taller still wants a jump: the
+   * hall's workbench at 1.03 and a tipped bed's frame at 1.05 both stay put.
+   */
+  const STEP_HEIGHT = 0.9;
+  /** Metres per second the view catches up after a step. */
+  const STEP_SMOOTHING = 4.5;
+
+  // How far the camera is still lagging behind a step already taken. Without
+  // it, walking onto a bed snaps the view up 0.86 in a single frame.
+  let stepLag = 0;
+
   /** True when the player's footprint overlaps this box in plan view. */
   function overlaps(box, x, z, r) {
     return x > box.minX - r && x < box.maxX + r && z > box.minZ - r && z < box.maxZ + r;
@@ -118,6 +134,10 @@ export function createPlayer(camera, domElement, colliders) {
       // Anything the player has jumped clear of no longer blocks them. Boxes
       // without a top (walls, pillars, the machine) block at any height.
       if (feetY >= (box.top ?? Infinity) - 0.02) continue;
+      // Low enough to walk up onto rather than be stopped by. Only from the
+      // ground — stepping in mid air would drag you onto ledges you jumped
+      // past, and the point of a step is that your feet are on something.
+      if (grounded && box.top !== undefined && box.top - feetY <= STEP_HEIGHT) continue;
       // A gap only short things fit through. The player is not one of them —
       // this is the wall around the medical room's broken window, and it is
       // what makes that room reachable by the bucket and by nothing else.
@@ -149,7 +169,11 @@ export function createPlayer(camera, domElement, colliders) {
     for (const box of colliders) {
       const top = box.top;
       if (top === undefined || box.enabled?.() === false) continue;
-      if (top > previousFeetY + 0.02) continue;
+      // Normally only a surface already underfoot supports you, so you cannot
+      // be snapped up through a crate you jumped into from below. Standing on
+      // the ground, that reach opens up to a step's worth, which is what
+      // carries you onto the thing resolveCollisions just let you walk into.
+      if (top > previousFeetY + (grounded ? STEP_HEIGHT : 0.02)) continue;
       if (top <= ground) continue;
       if (overlaps(box, x, z, PLAYER.radius)) ground = top;
     }
@@ -310,6 +334,13 @@ export function createPlayer(camera, domElement, colliders) {
         }
       }
 
+      // A step taken this frame is added to the lag, then bled off, so the
+      // view rises over a fraction of a second instead of teleporting.
+      if (grounded && wasGrounded && nextPosition.y > previousFeetY + 0.02) {
+        stepLag = Math.min(STEP_HEIGHT, stepLag + (nextPosition.y - previousFeetY));
+      }
+      stepLag = Math.max(0, stepLag - STEP_SMOOTHING * delta);
+
       const speedRatio = grounded ? Math.min(1, speed / PLAYER.runSpeed) : 0;
       bobPhase += delta * PLAYER.bobFrequency * speedRatio;
       const bobY = Math.sin(bobPhase * 2) * PLAYER.bobAmplitude * speedRatio;
@@ -319,7 +350,7 @@ export function createPlayer(camera, domElement, colliders) {
       if (!controlled) return;
       camera.position.set(
         position.x + bobX * 0.3,
-        position.y + PLAYER.eyeHeight + bobY,
+        position.y + PLAYER.eyeHeight + bobY - stepLag,
         position.z
       );
       camera.rotation.set(pitch, yaw, bobX * 0.04, 'YXZ');

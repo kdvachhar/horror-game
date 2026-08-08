@@ -941,25 +941,6 @@ function buildBed(knocked = false) {
     body.add(leg);
   }
 
-  // Rails, the kind that stop you rolling off.
-  for (const side of [-1, 1]) {
-    const rail = new THREE.Mesh(
-      new THREE.BoxGeometry(0.05, 0.05, 1.5),
-      clinicalMaterial('#c2c5bf', 0.4)
-    );
-    rail.position.set(side * 0.52, 1.08, 0);
-    rail.castShadow = true;
-    body.add(rail);
-    for (const z of [-0.6, 0.6]) {
-      const post = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.025, 0.025, 0.32, 8),
-        clinicalMaterial('#c2c5bf', 0.4)
-      );
-      post.position.set(side * 0.52, 0.94, z);
-      body.add(post);
-    }
-  }
-
   if (knocked) {
     // Onto its side. The lift and the sideways shift put it back down on the
     // floor and back on its own centre — rotating alone leaves it half sunk

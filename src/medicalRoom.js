@@ -65,13 +65,15 @@ const WINDOW = {
   reveal: 0.3,
 };
 
-/** The step up to it, stood against the wall below the opening. */
-const CRATE = {
-  x: WINDOW.x,
-  width: 1.6,
-  depth: 0.75,
-  height: 0.45,
-};
+/**
+ * The steps up to it, one either side.
+ *
+ * On the ward side a bed shoved lengthways under the window; on the store side
+ * a desk. Both are furniture that belongs where it is, and both happen to be
+ * the right height — 0.86 and 0.75 against a 1.1 sill and a 0.90 jump.
+ */
+const WARD_STEP = { x: WINDOW.x, halfX: 1.08, depth: 1.02, top: 0.86 };
+const STORE_STEP = { x: WINDOW.x, width: 1.7, depth: 0.85, top: 0.75 };
 
 const STORE = {
   minX: 0.5,
@@ -526,39 +528,114 @@ function buildButton() {
   return { group, cap, ring, glow };
 }
 
-/** A supply crate. The step up to the window, on both sides of it. */
-function buildCrate() {
-  const crate = new THREE.Group();
+/** A desk: a top on two end panels, with a stack of drawers under one side. */
+function buildDesk() {
+  const desk = new THREE.Group();
+  const { width, depth, top } = STORE_STEP;
 
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(CRATE.width, CRATE.height, CRATE.depth),
-    new THREE.MeshStandardMaterial({
-      ...makeMetalPanelSurface(1.6, 0.6, '#7f857e'),
-      metalness: 0.2,
-      roughness: 0.7,
-    })
-  );
-  body.position.y = CRATE.height / 2;
-  body.castShadow = true;
-  body.receiveShadow = true;
-  crate.add(body);
+  const wood = new THREE.MeshStandardMaterial({
+    ...makeWoodSurface(1.4, 1, '#4d3320'),
+    color: '#7a5334',
+    roughness: 0.78,
+    metalness: 0,
+  });
 
-  // Banding round it and a lip on top, so it reads as a case, not a block.
-  const trim = clinicalMaterial('#5f6560', 0.5);
-  for (const x of [-CRATE.width / 2 + 0.16, CRATE.width / 2 - 0.16]) {
-    const band = new THREE.Mesh(
-      new THREE.BoxGeometry(0.06, CRATE.height + 0.01, CRATE.depth + 0.01),
-      trim
-    );
-    band.position.set(x, CRATE.height / 2, 0);
-    crate.add(band);
+  const slab = new THREE.Mesh(new THREE.BoxGeometry(width, 0.05, depth), wood);
+  slab.position.y = top - 0.025;
+  slab.castShadow = true;
+  slab.receiveShadow = true;
+  desk.add(slab);
+
+  for (const x of [-width / 2 + 0.03, width / 2 - 0.03]) {
+    const end = new THREE.Mesh(new THREE.BoxGeometry(0.05, top - 0.05, depth - 0.06), wood);
+    end.position.set(x, (top - 0.05) / 2, 0);
+    end.castShadow = true;
+    desk.add(end);
   }
-  const lip = new THREE.Mesh(new THREE.BoxGeometry(CRATE.width + 0.05, 0.05, CRATE.depth + 0.05), trim);
-  lip.position.y = CRATE.height;
-  lip.castShadow = true;
-  crate.add(lip);
 
-  return crate;
+  const modesty = new THREE.Mesh(new THREE.BoxGeometry(width - 0.12, 0.3, 0.03), wood);
+  modesty.position.set(0, top - 0.22, -depth / 2 + 0.05);
+  desk.add(modesty);
+
+  // Drawers down one end, fronts proud of the carcass with a handle each.
+  const carcass = new THREE.Mesh(
+    new THREE.BoxGeometry(0.44, top - 0.09, depth - 0.1),
+    wood
+  );
+  carcass.position.set(width / 2 - 0.3, (top - 0.09) / 2, 0);
+  carcass.castShadow = true;
+  desk.add(carcass);
+
+  const handle = clinicalMaterial('#5c5f5b', 0.4);
+  for (let i = 0; i < 3; i++) {
+    const y = 0.16 + i * 0.2;
+    const front = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.17, 0.02), wood);
+    front.position.set(width / 2 - 0.3, y, depth / 2 - 0.04);
+    desk.add(front);
+
+    const pull = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.02, 0.025), handle);
+    pull.position.set(width / 2 - 0.3, y, depth / 2 - 0.02);
+    desk.add(pull);
+  }
+
+  return desk;
+}
+
+/**
+ * An office chair, on its side.
+ *
+ * Built upright and then tipped, so the star base, the column and the seat all
+ * stay in the relationship they would actually have. Tipping the finished thing
+ * is also the only way the castors end up pointing at the ceiling, which is the
+ * detail that says it went over rather than that it was placed.
+ */
+function buildOfficeChair() {
+  const chair = new THREE.Group();
+  const upright = new THREE.Group();
+  chair.add(upright);
+
+  const dark = clinicalMaterial('#2f3336', 0.6);
+  const fabric = clinicalMaterial('#3d4750', 0.9);
+
+  // Five arms, each with a castor on the end.
+  for (let i = 0; i < 5; i++) {
+    const angle = (i / 5) * Math.PI * 2;
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.05, 0.07), dark);
+    arm.position.set(Math.cos(angle) * 0.17, 0.06, Math.sin(angle) * 0.17);
+    arm.rotation.y = -angle;
+    arm.castShadow = true;
+    upright.add(arm);
+
+    const castor = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.025, 12), dark);
+    castor.rotation.z = Math.PI / 2;
+    castor.position.set(Math.cos(angle) * 0.32, 0.04, Math.sin(angle) * 0.32);
+    castor.rotation.y = -angle;
+    upright.add(castor);
+  }
+
+  const column = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.34, 12), dark);
+  column.position.y = 0.25;
+  column.castShadow = true;
+  upright.add(column);
+
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.09, 0.42), fabric);
+  seat.position.y = 0.46;
+  seat.castShadow = true;
+  upright.add(seat);
+
+  const back = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.08), fabric);
+  back.position.set(0, 0.73, -0.19);
+  back.rotation.x = -0.12;
+  back.castShadow = true;
+  upright.add(back);
+
+  // Over it goes: on its side, and rolled a little past flat so it is resting
+  // on the seat edge and one arm of the base rather than balanced.
+  upright.rotation.z = Math.PI / 2 + 0.18;
+  upright.rotation.x = 0.1;
+  upright.position.y = 0.24;
+
+  return chair;
 }
 
 /** A shelving unit: uprights, shelves, and whatever was left on them. */
@@ -668,6 +745,16 @@ function buildStoreRoom() {
   const back = buildShelves(3);
   back.position.set(midX - 0.85, 0, STORE.far - 0.3);
   group.add(back);
+
+  // The desk under the window on this side, and a chair that went over.
+  const desk = buildDesk();
+  desk.position.set(STORE_STEP.x, 0, 5.5 + WINDOW.reveal + STORE_STEP.depth / 2);
+  group.add(desk);
+
+  const chair = buildOfficeChair();
+  chair.position.set(STORE.minX + 1.5, 0, midZ + 0.7);
+  chair.rotation.y = 1.1;
+  group.add(chair);
 
   // Brown boards up the far wall, and the button on the top one. The metal
   // unit that used to stand here was in the way of the climb.
@@ -1058,19 +1145,19 @@ export function createMedicalRoom(scene) {
   }
 
   // ── the steps up to the window ────────────────────────────────────────────
-  // A supply crate shoved against the wall under the opening, and another one
-  // the same on the far side. They are scenery and they are the puzzle: the
-  // sill is above what the bucket can reach off the floor, so these are how it
-  // gets up there — and the one inside is how it gets back out again.
-  const crateZ = {
-    ward: depth / 2 - CRATE.depth / 2,
-    store: depth / 2 + WINDOW.reveal + CRATE.depth / 2,
-  };
-  for (const z of [crateZ.ward, crateZ.store]) {
-    const crate = buildCrate();
-    crate.position.set(CRATE.x, 0, z);
-    group.add(crate);
-  }
+  // A bed shoved lengthways under the opening on this side, a desk on the
+  // other. Scenery, and the puzzle: the sill is above what the bucket can
+  // reach off the floor, so these are how it gets up — and the desk is how it
+  // gets back out again.
+  const wardStepZ = depth / 2 - WARD_STEP.depth / 2;
+  const storeStepZ = depth / 2 + WINDOW.reveal + STORE_STEP.depth / 2;
+
+  const stepBed = buildBed();
+  // Turned side on, so its length runs along the wall under the window rather
+  // than sticking out into the room.
+  stepBed.rotation.y = Math.PI / 2;
+  stepBed.position.set(WARD_STEP.x, 0, wardStepZ);
+  group.add(stepBed);
 
   // ── through the window ────────────────────────────────────────────────────
   const store = buildStoreRoom();
@@ -1161,17 +1248,32 @@ export function createMedicalRoom(scene) {
     }
   );
 
-  // Both crates, standable — they are the only way onto the sill from either
-  // side. Without the inner one the bucket gets in and is stranded.
-  for (const z of [crateZ.ward, crateZ.store]) {
-    colliders.push({
-      minX: cx + CRATE.x - CRATE.width / 2,
-      maxX: cx + CRATE.x + CRATE.width / 2,
-      minZ: cz + z - CRATE.depth / 2,
-      maxZ: cz + z + CRATE.depth / 2,
-      top: CRATE.height,
-    });
-  }
+  // The bed and the desk, standable — they are the only way onto the sill from
+  // either side. Without the desk the bucket gets in and is stranded.
+  colliders.push({
+    minX: cx + WARD_STEP.x - WARD_STEP.halfX,
+    maxX: cx + WARD_STEP.x + WARD_STEP.halfX,
+    minZ: cz + wardStepZ - WARD_STEP.depth / 2,
+    maxZ: cz + wardStepZ + WARD_STEP.depth / 2,
+    top: WARD_STEP.top,
+  });
+  colliders.push({
+    minX: cx + STORE_STEP.x - STORE_STEP.width / 2,
+    maxX: cx + STORE_STEP.x + STORE_STEP.width / 2,
+    minZ: cz + storeStepZ - STORE_STEP.depth / 2,
+    maxZ: cz + storeStepZ + STORE_STEP.depth / 2,
+    top: STORE_STEP.top,
+  });
+
+  // The chair on its side. Low and solid — you can climb it, which is what a
+  // chair lying in the middle of a floor should let you do.
+  colliders.push({
+    minX: cx + STORE.minX + 1.5 - 0.42,
+    maxX: cx + STORE.minX + 1.5 + 0.42,
+    minZ: cz + (STORE.near + STORE.far) / 2 + 0.7 - 0.42,
+    maxZ: cz + (STORE.near + STORE.far) / 2 + 0.7 + 0.42,
+    top: 0.34,
+  });
 
   // The boards, standable. Same rule as the crates: they are the route.
   for (const step of SHELVES) {

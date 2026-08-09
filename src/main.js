@@ -195,11 +195,33 @@ const TV_LINES = [
   { text: 'You should now be able to control him.', hold: 2.4 },
 ];
 
+/**
+ * What it says the first time you take the bucket over. Split at the sentences
+ * rather than run as one block, because a line is both a subtitle and a mouth
+ * schedule — one long one would sit on screen for ten seconds.
+ */
+const HANDOVER_LINES = [
+  { text: 'Awesome! Now you need to get out of this room.', hold: 2.2 },
+  { text: 'See that broken window?', hold: 1.6 },
+  { text: 'I need you to use your bucket to jump in there and press the button.', hold: 3.0 },
+  { text: 'And the door will open.', hold: 2.2 },
+];
+
+// Said once. Wound back with everything else so a scene jump can hear it again.
+let handoverSaid = false;
+
 const possession = createPossession({
   camera,
   player,
   friend,
   playerBody,
+  onTaken() {
+    if (handoverSaid) return;
+    handoverSaid = true;
+    medical.speak(HANDOVER_LINES, () => {
+      setObjective('Get the bucket through the window and press the button');
+    });
+  },
 });
 
 const wakeUp = createWakeUp({
@@ -235,6 +257,7 @@ function resetSequences() {
   wakeUp.reset();
   possession.reset();
   medical.stopSpeaking();
+  handoverSaid = false;
   // The loop fires the cutscene the moment a door that has been open closes.
   // Clearing this stops a jump from immediately retriggering it underneath you.
   doorHasOpened = false;

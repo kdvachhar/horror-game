@@ -19,7 +19,7 @@
  * the floor with your own body stood across the room, not off a caption.
  */
 
-export function createPossession({ camera, player, friend, playerBody }) {
+export function createPossession({ camera, player, friend, playerBody, onTaken }) {
   let unlocked = false;
   let possessing = false;
 
@@ -30,6 +30,7 @@ export function createPossession({ camera, player, friend, playerBody }) {
     // Your body is left standing where you stepped out of it, and you can turn
     // round and look at it — which is the point of making it visible now.
     playerBody.setVisible(true, player.lookYaw);
+    onTaken?.();
   }
 
   function give() {

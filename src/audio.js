@@ -271,24 +271,30 @@ export function playBucketJump(level = 1) {
 
   const t = context.currentTime + 0.005;
 
-  // A scrape that rises as it pushes off.
-  const scrape = context.createBufferSource();
-  scrape.buffer = getNoise();
+  // The push off: a short dry scuff of the feet against the floor. This used
+  // to be a bandpass swept from 700 up to 2600, which is a slide whistle — it
+  // read as a cartoon boing rather than as something heavy leaving the ground,
+  // and at 0.07 it was quieter than the footstep it followed.
+  const scuff = context.createBufferSource();
+  scuff.buffer = getNoise();
   const band = context.createBiquadFilter();
   band.type = 'bandpass';
-  band.Q.value = 3;
-  band.frequency.setValueAtTime(700, t);
-  band.frequency.exponentialRampToValueAtTime(2600, t + 0.12);
-  const scrapeGain = context.createGain();
-  scrapeGain.gain.setValueAtTime(0.0001, t);
-  scrapeGain.gain.exponentialRampToValueAtTime(0.07 * level, t + 0.012);
-  scrapeGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
-  scrape.connect(band).connect(scrapeGain);
-  send(scrapeGain, 0.6);
-  scrape.start(t, Math.random() * 1.5);
-  scrape.stop(t + 0.18);
+  band.frequency.value = 850 + Math.random() * 400;
+  band.Q.value = 1.3;
+  const scuffGain = context.createGain();
+  scuffGain.gain.setValueAtTime(0.0001, t);
+  scuffGain.gain.exponentialRampToValueAtTime(0.11 * level, t + 0.006);
+  scuffGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+  scuff.connect(band).connect(scuffGain);
+  send(scuffGain, 0.7);
+  scuff.start(t, Math.random() * 1.5);
+  scuff.stop(t + 0.09);
 
-  pail(t, 620, 0.035 * level, 0.1, 0.7);
+  // Then the pail, which is what tells the three apart. A step taps it at 470
+  // and it is gone in 0.13; a landing hits it at 300 and it rings for 0.42.
+  // Leaving the ground sits between: brighter than an arrival, shorter than
+  // one, because nothing has struck it — it has just been swung upward.
+  pail(t, 540, 0.075 * level, 0.22, 0.85);
 }
 
 export function playBucketLand(level = 1) {

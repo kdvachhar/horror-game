@@ -437,6 +437,11 @@ export function createFriend(scene) {
     if (stuckTimer > 0.7 && grounded) {
       velocity.y = HOP_IMPULSE;
       stuckTimer = 0;
+      // Same sound as a jump you asked for. Without this a following bucket
+      // hops in silence and then thumps on the way down, which reads as the
+      // landing having come from nowhere.
+      grounded = false;
+      playBucketJump(listenerLevel);
     }
   }
 
@@ -571,6 +576,11 @@ export function createFriend(scene) {
     /** How far the view should still be held back after a step up. */
     get viewLag() {
       return stepLag;
+    },
+
+    /** Dev handle: how loud its own sounds are from where the listener is. */
+    get listenerLevel() {
+      return listenerLevel;
     },
 
     /**

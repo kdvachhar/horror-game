@@ -17,6 +17,7 @@ import {
   playFootstep,
   playDoorClose,
   audioState,
+  audioPlayed,
   playTestTone,
   mountAudioIndicator,
 } from './audio.js';
@@ -479,6 +480,7 @@ if (import.meta.env.DEV) {
   window.game.__tvLines = TV_LINES;
   // Console handles for diagnosing silence: game.audio.state() / .test()
   window.game.audio = {
+    played: audioPlayed,
     state: audioState,
     test: playTestTone,
     unlock: unlockAudio,

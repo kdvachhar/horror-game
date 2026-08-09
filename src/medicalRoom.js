@@ -1274,14 +1274,15 @@ export function createMedicalRoom(scene) {
     top: CHAIR.top,
   });
 
-  // The boards, standable — and walk-under-able.
+  // The boards. Planks on brackets, so they are solid where the plank is and
+  // open beneath it — `bottom` says where the brackets stop.
   //
-  // These are planks on brackets with nothing beneath them, so a box solid from
-  // the floor to the board is a column of air you cannot cross. passHeight lets
-  // anything shorter than 1.2 through sideways; `top` is checked separately by
-  // the ground test and is not gated by it, so the bucket walks under a board
-  // and still lands on it. It is the same mechanism as the window, used the
-  // other way round.
+  // This used to be passHeight, borrowed from the window to clear the column of
+  // air under a board. It did that, but it also made the plank itself something
+  // the bucket passed straight up through from below. An underside is the
+  // honest shape: you duck under a board, and a jump taken under one stops
+  // against it.
+  const BOARD_UNDERSIDE = 0.3;
   for (const step of SHELVES) {
     colliders.push({
       minX: cx + SHELF.x - SHELF.width / 2,
@@ -1289,7 +1290,7 @@ export function createMedicalRoom(scene) {
       minZ: cz + step.z - SHELF.depth / 2,
       maxZ: cz + step.z + SHELF.depth / 2,
       top: step.y,
-      passHeight: 1.2,
+      bottom: step.y - BOARD_UNDERSIDE,
     });
   }
 

@@ -142,6 +142,10 @@ export function createPlayer(camera, domElement, colliders) {
       // this is the wall around the medical room's broken window, and it is
       // what makes that room reachable by the bucket and by nothing else.
       if (HEIGHT <= (box.passHeight ?? -Infinity)) continue;
+      // Ducked clean under it — a box with a `bottom` is up in the air with
+      // open space beneath. Nothing the player can reach declares one yet, but
+      // the two bodies have to agree on what a box means.
+      if (feetY + HEIGHT <= (box.bottom ?? -Infinity)) continue;
       if (!overlaps(box, next.x, next.z, r)) continue;
 
       const pushLeft = next.x - (box.minX - r);

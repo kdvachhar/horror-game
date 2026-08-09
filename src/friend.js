@@ -253,6 +253,9 @@ export function createFriend(scene) {
       // And the other way about: a gap sized for something this short is not
       // a wall to it at all.
       if (FRIEND_HEIGHT <= (box.passHeight ?? -Infinity)) continue;
+      // Ducked clean under it. A box with a `bottom` is a thing up in the air
+      // with open space beneath, so passing below it is not passing through it.
+      if (position.y + FRIEND_HEIGHT <= (box.bottom ?? -Infinity)) continue;
       if (
         position.x < box.minX - R ||
         position.x > box.maxX + R ||
@@ -304,6 +307,34 @@ export function createFriend(scene) {
       }
     }
     return ground;
+  }
+
+  /**
+   * The lowest underside overhead, so a jump taken beneath something stops
+   * against it instead of passing up through it.
+   *
+   * Only boxes that declare a `bottom` count — everything else is solid to the
+   * floor and was never something you could be underneath. `previousHeadY` is
+   * where the head was at the start of the frame: an underside already below
+   * that has been cleared, and clamping to it would drag the bucket back down
+   * through a board it is standing on.
+   */
+  function ceilingHeight(colliders, previousHeadY) {
+    let ceiling = Infinity;
+    for (const box of colliders) {
+      if (box.bottom === undefined || box.enabled?.() === false) continue;
+      if (box.bottom < previousHeadY - 0.02) continue;
+      if (box.bottom >= ceiling) continue;
+      if (
+        position.x > box.minX - R &&
+        position.x < box.maxX + R &&
+        position.z > box.minZ - R &&
+        position.z < box.maxZ + R
+      ) {
+        ceiling = box.bottom;
+      }
+    }
+    return ceiling;
   }
 
   /**
@@ -615,6 +646,13 @@ export function createFriend(scene) {
         }
       } else {
         grounded = false;
+      }
+
+      // Head first. Anything with an underside stops a jump taken beneath it.
+      const ceiling = ceilingHeight(colliders, previousFeetY + FRIEND_HEIGHT);
+      if (position.y + FRIEND_HEIGHT > ceiling) {
+        position.y = ceiling - FRIEND_HEIGHT;
+        if (velocity.y > 0) velocity.y = 0;
       }
 
       resolveCollisions(colliders);

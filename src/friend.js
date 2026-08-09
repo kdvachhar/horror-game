@@ -27,6 +27,20 @@ import { playBucketStep, playBucketJump, playBucketLand } from './audio.js';
  */
 export const FRIEND_HEIGHT = 0.82;
 
+/**
+ * How far up it will step without being asked to jump. The same 0.9 the player
+ * gets, so a bed is furniture to it too rather than a wall.
+ *
+ * Note what this costs. Every rise in the medical room's climb is under 0.9 —
+ * the chair to the first board is 0.66, board to board is 0.7, and the window's
+ * sill is 0.49 above the bed you reach it from. All of them are now walked
+ * rather than jumped. Bring that platforming back by lifting those gaps over
+ * 0.9, not by lowering this.
+ */
+const STEP_HEIGHT = 0.9;
+/** Metres per second the view catches up after a step, while possessed. */
+const STEP_SMOOTHING = 4.5;
+
 // Origin is at the feet. Legs plus body come to roughly the cube's 0.9m.
 const LEG_HEIGHT = 0.34;
 const BODY_SCALE = 1.33;
@@ -199,6 +213,10 @@ export function createFriend(scene) {
   // How loud it is from where you are standing. Updated every frame, so the
   // jump — which is triggered from outside the loop — has something current to
   // use without needing the camera passed to it.
+  // How far the view is still lagging behind a step already taken. Only seen
+  // while you are inside it, but tracked either way so it is right on entry.
+  let stepLag = 0;
+
   let listenerLevel = 1;
   let lastStep = 0;
   let stepCooldown = 0;
@@ -227,6 +245,8 @@ export function createFriend(scene) {
       if (box.enabled?.() === false) continue;
       // Same rule as the player: anything it has climbed above no longer blocks.
       if (position.y >= (box.top ?? Infinity) - 0.02) continue;
+      // And low enough to step onto rather than be stopped by, from the ground.
+      if (grounded && box.top !== undefined && box.top - position.y <= STEP_HEIGHT) continue;
       // And the other way about: a gap sized for something this short is not
       // a wall to it at all.
       if (FRIEND_HEIGHT <= (box.passHeight ?? -Infinity)) continue;
@@ -266,7 +286,10 @@ export function createFriend(scene) {
     let ground = 0;
     for (const box of colliders) {
       if (box.top === undefined || box.enabled?.() === false) continue;
-      if (box.top > previousFeetY + 0.02) continue;
+      // A step's worth of reach while grounded, which is what carries it up
+      // onto whatever resolveCollisions just let it walk into. Airborne it
+      // stays at a hair, or a jump would snap it onto ledges it flew past.
+      if (box.top > previousFeetY + (grounded ? STEP_HEIGHT : 0.02)) continue;
       if (box.top <= ground) continue;
       if (
         position.x > box.minX - R &&
@@ -511,6 +534,11 @@ export function createFriend(scene) {
       return EYE_HEIGHT;
     },
 
+    /** How far the view should still be held back after a step up. */
+    get viewLag() {
+      return stepLag;
+    },
+
     /**
      * Take it over, or give it back.
      *
@@ -596,6 +624,14 @@ export function createFriend(scene) {
 
       // Inverse-square off a four-metre reference: full volume when you are
       // inside it, and well down when it is clanking about across the ward.
+      // A step taken this frame, bled off over a fraction of a second — the
+      // view is bolted to this body when you are driving it, so an 0.86 rise
+      // in one frame reads as a teleport.
+      if (grounded && wasGrounded && position.y > previousFeetY + 0.02) {
+        stepLag = Math.min(STEP_HEIGHT, stepLag + (position.y - previousFeetY));
+      }
+      stepLag = Math.max(0, stepLag - STEP_SMOOTHING * delta);
+
       const range = camera.position.distanceTo(position) / 4;
       listenerLevel = 1 / (1 + range * range);
 

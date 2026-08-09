@@ -86,7 +86,7 @@ export function createPossession({ camera, player, friend, playerBody }) {
       if (!possessing) return;
       camera.position.set(
         friend.position.x,
-        friend.position.y + friend.eyeHeight,
+        friend.position.y + friend.eyeHeight - friend.viewLag,
         friend.position.z
       );
       camera.rotation.set(player.lookPitch, player.lookYaw, 0, 'YXZ');

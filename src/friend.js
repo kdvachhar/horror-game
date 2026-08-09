@@ -28,16 +28,19 @@ import { playBucketStep, playBucketJump, playBucketLand } from './audio.js';
 export const FRIEND_HEIGHT = 0.82;
 
 /**
- * How far up it will step without being asked to jump. The same 0.9 the player
- * gets, so a bed is furniture to it too rather than a wall.
+ * How far up it will step without being asked to jump.
  *
- * Note what this costs. Every rise in the medical room's climb is under 0.9 —
- * the chair to the first board is 0.66, board to board is 0.7, and the window's
- * sill is 0.49 above the bed you reach it from. All of them are now walked
- * rather than jumped. Bring that platforming back by lifting those gaps over
- * 0.9, not by lowering this.
+ * Much lower than the player's 0.9, and deliberately so. This thing is 0.82
+ * tall on legs a third of a metre long; a step it can take is a small one.
+ *
+ * The number is what every gate in the medical room is measured against, and
+ * it sits under all of them: the mattress a tipped bed sheds is 0.16 and gets
+ * walked over, but the fallen chair at 0.34, the beds at 0.86, the boards at
+ * 0.66 and 0.7 apart, and the window's sill 0.49 above the bed you reach it
+ * from are every one of them a jump. Raise this past 0.34 and the climb starts
+ * losing its bottom step; past 0.49 and the window stops being jumped at all.
  */
-const STEP_HEIGHT = 0.9;
+const STEP_HEIGHT = 0.25;
 /** Metres per second the view catches up after a step, while possessed. */
 const STEP_SMOOTHING = 4.5;
 

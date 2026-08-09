@@ -965,7 +965,7 @@ function buildBed(knocked = false) {
     body.position.set(fall * -0.55, 0.56, 0);
   }
 
-  return bed;
+  return { group: bed, body, mattress };
 }
 
 /**
@@ -1162,9 +1162,9 @@ export function createMedicalRoom(scene) {
   const stepBed = buildBed();
   // Turned side on, so its length runs along the wall under the window rather
   // than sticking out into the room.
-  stepBed.rotation.y = Math.PI / 2;
-  stepBed.position.set(WARD_STEP.x, 0, wardStepZ);
-  group.add(stepBed);
+  stepBed.group.rotation.y = Math.PI / 2;
+  stepBed.group.position.set(WARD_STEP.x, 0, wardStepZ);
+  group.add(stepBed.group);
 
   // ── through the window ────────────────────────────────────────────────────
   const store = buildStoreRoom();
@@ -1183,10 +1183,10 @@ export function createMedicalRoom(scene) {
   const beds = [];
   for (const slot of WARD) {
     const bed = buildBed(slot.knocked);
-    bed.position.set(slot.x, 0, slot.z);
-    bed.rotation.y = slot.yaw;
-    group.add(bed);
-    beds.push(bed);
+    bed.group.position.set(slot.x, 0, slot.z);
+    bed.group.rotation.y = slot.yaw;
+    group.add(bed.group);
+    beds.push({ ...bed, slot });
   }
 
   // ── light ─────────────────────────────────────────────────────────────────
@@ -1255,15 +1255,8 @@ export function createMedicalRoom(scene) {
     }
   );
 
-  // The bed and the desk, standable — they are the only way onto the sill from
-  // either side. Without the desk the bucket gets in and is stranded.
-  colliders.push({
-    minX: cx + WARD_STEP.x - WARD_STEP.halfX,
-    maxX: cx + WARD_STEP.x + WARD_STEP.halfX,
-    minZ: cz + wardStepZ - WARD_STEP.depth / 2,
-    maxZ: cz + wardStepZ + WARD_STEP.depth / 2,
-    top: WARD_STEP.top,
-  });
+  // The desk, standable — with the bed under the window on the other side, it
+  // is how the bucket crosses the sill. Without it, it gets in and is stranded.
   colliders.push({
     minX: cx + STORE_STEP.x - STORE_STEP.width / 2,
     maxX: cx + STORE_STEP.x + STORE_STEP.width / 2,
@@ -1312,22 +1305,49 @@ export function createMedicalRoom(scene) {
     { minX: cx + STORE.minX - s0, maxX: cx + STORE.maxX + s0, minZ: cz + STORE.far, maxZ: cz + STORE.far + s0 }
   );
 
-  // One box per bed, standable — you can climb over the wreckage rather than
-  // being walled in by it. A rotated rectangle's axis-aligned bounds are
-  // |cos|·halfX + |sin|·halfZ across, and the mirror of that deep.
-  for (const slot of WARD) {
-    const halfX = slot.knocked ? 1.1 : 0.53;
-    const halfZ = 1.1;
-    const c = Math.abs(Math.cos(slot.yaw));
-    const sn = Math.abs(Math.sin(slot.yaw));
-    colliders.push({
-      minX: cx + slot.x - (c * halfX + sn * halfZ),
-      maxX: cx + slot.x + (c * halfX + sn * halfZ),
-      minZ: cz + slot.z - (sn * halfX + c * halfZ),
-      maxZ: cz + slot.z + (sn * halfX + c * halfZ),
-      top: slot.knocked ? 1.05 : 0.86,
-    });
+  /**
+   * One box per bed — two for a tipped one — measured off the meshes.
+   *
+   * These used to be derived by hand from the slot's rotation, and were badly
+   * wrong for the tipped ones: a single 2.2 by 2.2 box at 1.05 that missed most
+   * of the frame on one side and claimed a metre of bare floor on the other.
+   * Walking at one hit a wall with nothing in it; jumping at one put you on
+   * thin air a metre up.
+   *
+   * A tipped bed is two separate objects — a frame on its side and a mattress
+   * dumped on the floor beside it — so each gets its own box, and the mattress
+   * is low enough to walk straight onto.
+   */
+  group.updateMatrixWorld(true);
+  const BED_BOX = new THREE.Box3();
+  const bedBox = (part, standOn) => {
+    BED_BOX.setFromObject(part);
+    const box = {
+      minX: BED_BOX.min.x,
+      maxX: BED_BOX.max.x,
+      minZ: BED_BOX.min.z,
+      maxZ: BED_BOX.max.z,
+      top: BED_BOX.max.y,
+    };
+    if (standOn) {
+      // The surface you stand on, where that is not simply the top of the
+      // object — an upright bed's is its mattress, not its head board.
+      BED_BOX.setFromObject(standOn);
+      box.top = BED_BOX.max.y;
+    }
+    colliders.push(box);
+  };
+
+  for (const bed of beds) {
+    if (bed.slot.knocked) {
+      bedBox(bed.body);
+      bedBox(bed.mattress);
+    } else {
+      bedBox(bed.group, bed.mattress);
+    }
   }
+  // And the one under the window, which is a step as well as a bed.
+  bedBox(stepBed.group, stepBed.mattress);
 
   // The television itself. It hangs from 1.1m up, which is below head height,
   // so there is no standing under it — the whole column is solid.

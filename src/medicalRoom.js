@@ -455,8 +455,9 @@ const ARMS = [
  * every time. Offset along the wall, each jump is diagonal and there is nothing
  * overhead to catch on.
  *
- * Rise is 0.66 from the chair to the first and 0.7 between, against a 1.15m
- * jump — comfortably inside it, so the climb is a climb rather than a test.
+ * Rise is 1.0 from the floor to the first board and 0.7 between, against a
+ * 1.15m jump. The first is the hard one now there is nothing to start from —
+ * 0.15m of headroom, so it wants the hop taken at the board, not early.
  *
  * The first one is set well back from the window wall on purpose. Closer in and
  * there is nowhere to stand: the bucket is 0.6 across, and between the wall and
@@ -469,18 +470,6 @@ const SHELVES = [
   { y: 2.4, z: 9.05 },
 ];
 
-/**
- * The chair, and where it lies.
- *
- * It is the bottom of the climb, set off to one side of the boards rather than
- * in front of them — there is not the room to line four platforms up along a
- * store room this shallow.
- *
- * Note that it is no longer *required*. The lowest board is back at 1.0 and the
- * bucket's jump reaches 1.15, so the floor will do. Putting the board back over
- * 1.15 is all it would take to make the chair the only way up again.
- */
-const CHAIR = { x: 4.5, z: 6.9, half: 0.42, top: 0.34 };
 const SHELF = { x: 5.75, width: 1.25, depth: 0.85 };
 
 /** One brown board on two brackets. */
@@ -607,63 +596,6 @@ function buildDesk() {
   return desk;
 }
 
-/**
- * An office chair, on its side.
- *
- * Built upright and then tipped, so the star base, the column and the seat all
- * stay in the relationship they would actually have. Tipping the finished thing
- * is also the only way the castors end up pointing at the ceiling, which is the
- * detail that says it went over rather than that it was placed.
- */
-function buildOfficeChair() {
-  const chair = new THREE.Group();
-  const upright = new THREE.Group();
-  chair.add(upright);
-
-  const dark = clinicalMaterial('#2f3336', 0.6);
-  const fabric = clinicalMaterial('#3d4750', 0.9);
-
-  // Five arms, each with a castor on the end.
-  for (let i = 0; i < 5; i++) {
-    const angle = (i / 5) * Math.PI * 2;
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.05, 0.07), dark);
-    arm.position.set(Math.cos(angle) * 0.17, 0.06, Math.sin(angle) * 0.17);
-    arm.rotation.y = -angle;
-    arm.castShadow = true;
-    upright.add(arm);
-
-    const castor = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.025, 12), dark);
-    castor.rotation.z = Math.PI / 2;
-    castor.position.set(Math.cos(angle) * 0.32, 0.04, Math.sin(angle) * 0.32);
-    castor.rotation.y = -angle;
-    upright.add(castor);
-  }
-
-  const column = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.34, 12), dark);
-  column.position.y = 0.25;
-  column.castShadow = true;
-  upright.add(column);
-
-  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.09, 0.42), fabric);
-  seat.position.y = 0.46;
-  seat.castShadow = true;
-  upright.add(seat);
-
-  const back = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.08), fabric);
-  back.position.set(0, 0.73, -0.19);
-  back.rotation.x = -0.12;
-  back.castShadow = true;
-  upright.add(back);
-
-  // Over it goes: on its side, and rolled a little past flat so it is resting
-  // on the seat edge and one arm of the base rather than balanced.
-  upright.rotation.z = Math.PI / 2 + 0.18;
-  upright.rotation.x = 0.1;
-  upright.position.y = 0.24;
-
-  return chair;
-}
-
 /** A shelving unit: uprights, shelves, and whatever was left on them. */
 function buildShelves(units) {
   const group = new THREE.Group();
@@ -772,15 +704,10 @@ function buildStoreRoom() {
   back.position.set(midX - 0.85, 0, STORE.far - 0.3);
   group.add(back);
 
-  // The desk under the window on this side, and a chair that went over.
+  // The desk under the window on this side.
   const desk = buildDesk();
   desk.position.set(STORE_STEP.x, 0, 5.5 + WINDOW.reveal + STORE_STEP.depth / 2);
   group.add(desk);
-
-  const chair = buildOfficeChair();
-  chair.position.set(CHAIR.x, 0, CHAIR.z);
-  chair.rotation.y = 1.1;
-  group.add(chair);
 
   // Brown boards up the far wall, and the button on the top one. The metal
   // unit that used to stand here was in the way of the climb.
@@ -1263,15 +1190,6 @@ export function createMedicalRoom(scene) {
     minZ: cz + storeStepZ - STORE_STEP.depth / 2,
     maxZ: cz + storeStepZ + STORE_STEP.depth / 2,
     top: STORE_STEP.top,
-  });
-
-  // The chair on its side — the bottom step of the climb.
-  colliders.push({
-    minX: cx + CHAIR.x - CHAIR.half,
-    maxX: cx + CHAIR.x + CHAIR.half,
-    minZ: cz + CHAIR.z - CHAIR.half,
-    maxZ: cz + CHAIR.z + CHAIR.half,
-    top: CHAIR.top,
   });
 
   // The boards. Planks on brackets, so they are solid where the plank is and

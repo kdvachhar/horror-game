@@ -76,14 +76,22 @@ const WINDOW = {
 const WARD_STEP = { x: WINDOW.x, halfX: 1.08, depth: 1.02, top: 0.86 };
 const STORE_STEP = { x: WINDOW.x, width: 1.7, depth: 0.85, top: 0.75 };
 
+/**
+ * Behind the ward's back wall, an L.
+ *
+ * A corridor runs along the wall, taking the window and the door — that is the
+ * bit you walk once the door opens. It turns right at its far end into the
+ * store room, which is where the shelves and the button are.
+ *
+ * The two are one continuous space: they share a ceiling height and the wall
+ * between them exists only past the corner. HALLWAY has no near wall of its
+ * own — the ward's back wall is it, which is what the window and the door are
+ * cut through.
+ */
+const HALLWAY = { minX: 0.5, maxX: 6.5, near: 5.5, far: 8.0 };
 const STORE = {
-  minX: 0.5,
-  maxX: 6.4,
-  /**
-   * Starts at the shared wall itself, not past it. The medical room's back
-   * wall *is* this room's near wall — there is no second one, or it would sit
-   * squarely behind the opening and you would see nothing through it.
-   */
+  minX: 6.5,
+  maxX: 12.4,
   near: 5.5,
   far: 9.6,
   height: 3.4,
@@ -470,7 +478,7 @@ const SHELVES = [
   { y: 2.4, z: 9.05 },
 ];
 
-const SHELF = { x: 5.75, width: 1.25, depth: 0.85 };
+const SHELF = { x: STORE.maxX - 0.65, width: 1.25, depth: 0.85 };
 
 /** One brown board on two brackets. */
 function buildWoodShelf() {
@@ -652,52 +660,94 @@ function buildShelves(units) {
  */
 function buildStoreRoom() {
   const group = new THREE.Group();
-  const w = STORE.maxX - STORE.minX;
-  const d = STORE.far - STORE.near;
-  const midX = (STORE.minX + STORE.maxX) / 2;
-  const midZ = (STORE.near + STORE.far) / 2;
+  const H = STORE.height;
 
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(w, d),
+  const floorMaterial = (w, d) =>
     new THREE.MeshStandardMaterial({
       ...makeFloorSurface(...worldRepeat(w, d)),
       color: '#7f837c',
       metalness: 0.02,
-    })
-  );
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.set(midX, 0, midZ);
-  floor.receiveShadow = true;
-  group.add(floor);
-
-  const ceiling = new THREE.Mesh(
-    new THREE.PlaneGeometry(w, d),
+    });
+  const ceilingMaterial = (w, d) =>
     new THREE.MeshStandardMaterial({
       ...makeCeilingSurface(...worldRepeat(w, d)),
       color: '#8b8f88',
-    })
-  );
-  ceiling.rotation.x = Math.PI / 2;
-  ceiling.position.set(midX, STORE.height, midZ);
-  group.add(ceiling);
+    });
+
+  /** Floor and ceiling over one rectangle of the L. */
+  const deck = (minX, maxX, near, far) => {
+    const w = maxX - minX;
+    const d = far - near;
+    const midX = (minX + maxX) / 2;
+    const midZ = (near + far) / 2;
+
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), floorMaterial(w, d));
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(midX, 0, midZ);
+    floor.receiveShadow = true;
+    group.add(floor);
+
+    const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(w, d), ceilingMaterial(w, d));
+    ceiling.rotation.x = Math.PI / 2;
+    ceiling.position.set(midX, H, midZ);
+    group.add(ceiling);
+  };
+
+  deck(HALLWAY.minX, HALLWAY.maxX, HALLWAY.near, HALLWAY.far);
+  deck(STORE.minX, STORE.maxX, STORE.near, STORE.far);
 
   const shell = new THREE.MeshStandardMaterial({
-    ...makeWallSurface(...worldRepeat(w, STORE.height)),
+    ...makeWallSurface(...worldRepeat(6, H)),
     color: '#9aa096',
     metalness: 0,
     side: THREE.DoubleSide,
   });
-  for (const [pw, px, pz, rot] of [
-    [w, midX, STORE.far, 0],
-    [d, STORE.minX, midZ, Math.PI / 2],
-    [d, STORE.maxX, midZ, -Math.PI / 2],
+
+  /**
+   * The walls, going round the L. The corridor's near side is missing on
+   * purpose — the ward's back wall is that side, and the window and door are
+   * cut through it. The boundary between corridor and store room only exists
+   * past the corner, which is what leaves them open to each other.
+   */
+  for (const [width, px, pz, rot] of [
+    // Corridor: far side, and the dead end at its left.
+    [HALLWAY.maxX - HALLWAY.minX, (HALLWAY.minX + HALLWAY.maxX) / 2, HALLWAY.far, 0],
+    [HALLWAY.far - HALLWAY.near, HALLWAY.minX, (HALLWAY.near + HALLWAY.far) / 2, Math.PI / 2],
+    // Store room: near side, far side, right side.
+    [STORE.maxX - STORE.minX, (STORE.minX + STORE.maxX) / 2, STORE.near, Math.PI],
+    [STORE.maxX - STORE.minX, (STORE.minX + STORE.maxX) / 2, STORE.far, 0],
+    [STORE.far - STORE.near, STORE.maxX, (STORE.near + STORE.far) / 2, -Math.PI / 2],
+    // And the stub of shared wall past the corner, below the opening.
+    [STORE.far - HALLWAY.far, STORE.minX, (HALLWAY.far + STORE.far) / 2, Math.PI / 2],
   ]) {
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(pw, STORE.height), shell);
-    wall.position.set(px, STORE.height / 2, pz);
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(width, H), shell);
+    wall.position.set(px, H / 2, pz);
     wall.rotation.y = rot;
     wall.receiveShadow = true;
     group.add(wall);
   }
+
+  // The corridor's near face: the far side of the ward's back wall, which is a
+  // plane with no thickness of its own. Panelled round the window the same way,
+  // because that hole goes all the way through.
+  const backFar = HALLWAY.near + WINDOW.reveal;
+  const winLeft = WINDOW.x - WINDOW.halfWidth;
+  const winRight = WINDOW.x + WINDOW.halfWidth;
+  for (const [pw, ph, pcx, pcy] of [
+    [winLeft - HALLWAY.minX, H, (HALLWAY.minX + winLeft) / 2, H / 2],
+    [HALLWAY.maxX - winRight, H, (winRight + HALLWAY.maxX) / 2, H / 2],
+    [WINDOW.halfWidth * 2, WINDOW.sill, WINDOW.x, WINDOW.sill / 2],
+    [WINDOW.halfWidth * 2, H - WINDOW.head, WINDOW.x, (H + WINDOW.head) / 2],
+  ]) {
+    if (pw <= 0 || ph <= 0) continue;
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), shell);
+    panel.position.set(pcx, pcy, backFar);
+    panel.receiveShadow = true;
+    group.add(panel);
+  }
+
+  const midX = (STORE.minX + STORE.maxX) / 2;
+  const midZ = (STORE.near + STORE.far) / 2;
 
   // Shelving down the far wall and one unit across the end.
   const back = buildShelves(3);
@@ -736,6 +786,21 @@ function buildStoreRoom() {
   lamp.shadow.mapSize.set(512, 512);
   lamp.shadow.normalBias = 0.05;
   group.add(lamp);
+
+  // And one down the corridor. Dimmer and further gone than the store room's —
+  // it is a passage, and it is the first thing you see through the window.
+  const hallMidX = (HALLWAY.minX + HALLWAY.maxX) / 2;
+  const hallMidZ = (HALLWAY.near + HALLWAY.far) / 2;
+  const hallTube = new THREE.Mesh(
+    new THREE.BoxGeometry(1.6, 0.06, 0.12),
+    new THREE.MeshBasicMaterial({ color: '#b9c8bf', toneMapped: false })
+  );
+  hallTube.position.set(hallMidX, H - 0.08, hallMidZ);
+  group.add(hallTube);
+
+  const hallLamp = new THREE.PointLight(0xd6e6dc, 9, 8, 1.5);
+  hallLamp.position.set(hallMidX, H - 0.3, hallMidZ);
+  group.add(hallLamp);
 
   return { group, tube, lamp, button, buttonAt: [SHELF.x + 0.15, topShelf.y, topShelf.z] };
 }
@@ -1152,8 +1217,10 @@ export function createMedicalRoom(scene) {
   const [cx, , cz] = MEDICAL.center;
   const t = 0.8;
   const colliders = [
-    { minX: cx - width / 2 - t, maxX: cx - width / 2, minZ: cz - depth / 2 - t, maxZ: cz + depth / 2 + t },
-    { minX: cx + width / 2, maxX: cx + width / 2 + t, minZ: cz - depth / 2 - t, maxZ: cz + depth / 2 + t },
+    // Stop at the back wall rather than overhanging it. What is past it now is
+    // the corridor and the store room, and the overhang stood inside them.
+    { minX: cx - width / 2 - t, maxX: cx - width / 2, minZ: cz - depth / 2 - t, maxZ: cz + depth / 2 },
+    { minX: cx + width / 2, maxX: cx + width / 2 + t, minZ: cz - depth / 2 - t, maxZ: cz + depth / 2 },
     { minX: cx - width / 2 - t, maxX: cx + width / 2 + t, minZ: cz - depth / 2 - t, maxZ: cz - depth / 2 },
   ];
 
@@ -1212,16 +1279,20 @@ export function createMedicalRoom(scene) {
     });
   }
 
-  // The store room's own shell. Its near wall is the one the window is in, so
-  // it is not repeated here.
+  // The shell round the L, matching the walls that were built. The corridor's
+  // near side is the ward's back wall and is already covered; the boundary
+  // between corridor and store room exists only past the corner.
   const s0 = 0.8;
   colliders.push(
-    // Both side walls start at the shared wall, not 0.8 before it. Running them
-    // back the extra thickness put a slab of solid nothing inside the ward's
-    // back corner, on the far side of a wall from the room it belongs to.
-    { minX: cx + STORE.minX - s0, maxX: cx + STORE.minX, minZ: cz + STORE.near, maxZ: cz + STORE.far + s0 },
+    // Corridor: far side and its dead end.
+    { minX: cx + HALLWAY.minX - s0, maxX: cx + HALLWAY.maxX, minZ: cz + HALLWAY.far, maxZ: cz + HALLWAY.far + s0 },
+    { minX: cx + HALLWAY.minX - s0, maxX: cx + HALLWAY.minX, minZ: cz + HALLWAY.near, maxZ: cz + HALLWAY.far + s0 },
+    // Store room: near side, far side, right side.
+    { minX: cx + STORE.minX, maxX: cx + STORE.maxX + s0, minZ: cz + STORE.near - s0, maxZ: cz + STORE.near },
+    { minX: cx + STORE.minX - s0, maxX: cx + STORE.maxX + s0, minZ: cz + STORE.far, maxZ: cz + STORE.far + s0 },
     { minX: cx + STORE.maxX, maxX: cx + STORE.maxX + s0, minZ: cz + STORE.near, maxZ: cz + STORE.far + s0 },
-    { minX: cx + STORE.minX - s0, maxX: cx + STORE.maxX + s0, minZ: cz + STORE.far, maxZ: cz + STORE.far + s0 }
+    // The stub between them, below the corner.
+    { minX: cx + STORE.minX - s0, maxX: cx + STORE.minX, minZ: cz + HALLWAY.far, maxZ: cz + STORE.far + s0 }
   );
 
   /**

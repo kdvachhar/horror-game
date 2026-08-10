@@ -71,41 +71,67 @@
       #overlay .prompt { color: #e6efe8; animation: pulse 2.4s ease-in-out infinite; }
       @keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
 
-      /* Objective banner, top centre. */
+      /* Objective banner, top centre. On a plate, because as bare text over a
+         concrete wall it was the one thing on screen you could look straight
+         past — and it is the only thing telling you what to do. */
       #objective {
         position: absolute;
-        top: 2.2rem;
+        top: 1.7rem;
         left: 50%;
         transform: translateX(-50%);
         text-align: center;
         opacity: 0;
         transition: opacity 0.5s;
+        padding: 0.5rem 1.6rem 0.6rem;
+        background: rgba(7, 11, 9, 0.66);
+        border: 1px solid rgba(70, 224, 122, 0.3);
+        border-radius: 7px;
+        box-shadow: 0 6px 26px rgba(0, 0, 0, 0.6);
       }
       body.playing #objective { opacity: 1; }
 
       #objective .label {
-        font-size: 0.62rem;
-        letter-spacing: 0.42em;
-        color: #6f7d72;
+        font-size: 0.6rem;
+        /* The last letter's tracking would otherwise throw the centring out. */
+        letter-spacing: 0.46em;
+        text-indent: 0.46em;
+        color: #46e07a;
         text-transform: uppercase;
-        margin-bottom: 0.45rem;
+        margin-bottom: 0.4rem;
       }
 
       #objective-text {
-        font-size: 1rem;
-        letter-spacing: 0.1em;
-        color: #dfe9e0;
-        text-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
+        font-size: 1.24rem;
+        letter-spacing: 0.08em;
+        color: #f3f8f4;
+        text-shadow: 0 0 14px rgba(0, 0, 0, 0.95);
       }
 
-      /* Replay this whenever the objective changes so it catches the eye. */
+      /* Replay this whenever the objective changes so it catches the eye. The
+         plate flares and settles; the text arrives on top of it. */
+      #objective.updated {
+        animation: objective-pop 0.8s ease-out;
+      }
       #objective.updated #objective-text {
         animation: objective-in 0.7s ease-out;
       }
+      @keyframes objective-pop {
+        0% {
+          transform: translateX(-50%) scale(1.07);
+          border-color: rgba(70, 224, 122, 0.95);
+          box-shadow: 0 0 34px rgba(70, 224, 122, 0.42), 0 6px 26px rgba(0, 0, 0, 0.6);
+        }
+        70% { border-color: rgba(70, 224, 122, 0.6); }
+        100% {
+          transform: translateX(-50%) scale(1);
+          border-color: rgba(70, 224, 122, 0.3);
+          box-shadow: 0 6px 26px rgba(0, 0, 0, 0.6);
+        }
+      }
       @keyframes objective-in {
-        0% { opacity: 0; transform: translateY(-8px); color: #46e07a; }
+        0% { opacity: 0; transform: translateY(-9px); color: #46e07a; }
         60% { opacity: 1; color: #46e07a; }
-        100% { opacity: 1; transform: none; color: #dfe9e0; }
+        100% { opacity: 1; transform: none; color: #f3f8f4; }
       }
 
       /* Interact prompt, just under the crosshair. */

@@ -92,6 +92,45 @@ const HALLWAY = { minX: 0.5, maxX: 6.5, near: 5.5, far: 8.0 };
 
 /** The way out. Hoisted so the wall can be cut to fit it. */
 const WARD_DOOR = { x: 5.4, width: 1.1, height: 2.15 };
+
+/**
+ * The black wire, and the route it takes.
+ *
+ * It leaves the television, crosses the ward floor, goes under the door and
+ * on down the corridor into the store room, where it disappears into a port in
+ * the far wall. It is the thing you follow: the television tells you to, and
+ * from here on the level is wherever this goes.
+ *
+ * The points thread between the beds rather than through them — this lies on
+ * the floor, and a cable running through a bed frame would give the game away
+ * about how little is really here. Consoles are waypoints on it, so adding one
+ * later means adding a point, not rerouting.
+ */
+const WIRE_RADIUS = 0.055;
+const WIRE_PATH = [
+  // Out of the television, down the wall.
+  [0.45, 1.05, -5.15],
+  [0.55, 0.3, -5.05],
+  [0.6, WIRE_RADIUS, -4.85],
+  // Across the ward, threading the gap between the two rows of beds.
+  [2.2, WIRE_RADIUS, -4.35],
+  [3.6, WIRE_RADIUS, -3.3],
+  [4.0, WIRE_RADIUS, -1.8],
+  [3.9, WIRE_RADIUS, 0.6],
+  [4.2, WIRE_RADIUS, 2.4],
+  [4.85, WIRE_RADIUS, 4.0],
+  // Under the door, which is why the leaf hangs clear of the floor.
+  [WARD_DOOR.x, WIRE_RADIUS, 5.2],
+  [WARD_DOOR.x, WIRE_RADIUS, 5.9],
+  // Along the corridor and round the corner.
+  [5.6, WIRE_RADIUS, 6.9],
+  [6.8, WIRE_RADIUS, 7.3],
+  [8.4, WIRE_RADIUS, 8.0],
+  [9.8, WIRE_RADIUS, 8.7],
+  // And up into the far wall, on its way to wherever the next one is.
+  [10.5, 0.35, 9.35],
+  [10.6, 0.95, 9.56],
+];
 const STORE = {
   minX: 6.5,
   maxX: 12.4,
@@ -399,15 +438,19 @@ function buildWallArm(shape) {
   }
 
   /**
-   * Reshape the arm somewhere between hanging (0) and folded (1).
+   * Reshape the arm somewhere between hanging (0) and folded (1), and pull it
+   * back into the wall by `retract`.
    *
    * Blends the curve's control points, then walks every link onto the result.
-   * Called only when the amount has actually moved, since it costs a couple of
-   * hundred curve evaluations and sits at 0 or 1 almost all of the time.
+   * Called only when either amount has actually moved, since it costs a couple
+   * of hundred curve evaluations and sits still almost all of the time.
    */
-  function poseAt(amount) {
+  function poseAt(amount, retract = 0) {
     for (let i = 0; i < curve.points.length; i++) {
       curve.points[i].lerpVectors(restPoints[i], foldPoints[i], amount);
+      // Drawn back toward the port it came out of. Never all the way — a curve
+      // with no length has no tangent, and every rib on it would face nowhere.
+      if (retract > 0) curve.points[i].multiplyScalar(1 - Math.min(retract, 0.96));
     }
     // The arc-length table is what makes getPointAt evenly spaced, and it is
     // cached — without this the ribs bunch up wherever the curve just tightened.
@@ -552,6 +595,58 @@ function buildButton() {
   group.add(glow);
 
   return { group, cap, ring, glow };
+}
+
+/**
+ * The wire itself, plus the port it vanishes into.
+ *
+ * One tube along the whole route rather than a piece per room, so it reads as
+ * a single unbroken run — which is the point of it. Catmull-Rom through the
+ * waypoints, so the corners are turns rather than kinks.
+ */
+function buildBlackWire() {
+  const group = new THREE.Group();
+
+  const curve = new THREE.CatmullRomCurve3(
+    WIRE_PATH.map((p) => new THREE.Vector3(...p))
+  );
+  const wire = new THREE.Mesh(
+    new THREE.TubeGeometry(curve, 220, WIRE_RADIUS, 8, false),
+    new THREE.MeshStandardMaterial({ color: '#141517', roughness: 0.75, metalness: 0.05 })
+  );
+  wire.castShadow = true;
+  wire.receiveShadow = true;
+  group.add(wire);
+
+  // Cable clips every so often, so it reads as run rather than dropped.
+  const clip = clinicalMaterial('#3a3d3f', 0.6);
+  for (let i = 1; i < 9; i++) {
+    const at = curve.getPointAt(i / 9);
+    if (at.y > 0.2) continue;
+    const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.06), clip);
+    saddle.position.set(at.x, 0.015, at.z);
+    saddle.rotation.y = Math.random() * Math.PI;
+    group.add(saddle);
+  }
+
+  // Where it leaves: a socket in the far wall, the same fitting as the arms'.
+  const end = curve.getPointAt(1);
+  const port = new THREE.Mesh(
+    new THREE.TorusGeometry(0.16, 0.045, 10, 20),
+    clinicalMaterial('#4a4d4c', 0.6)
+  );
+  port.position.copy(end);
+  group.add(port);
+
+  const socket = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.14, 0.14, 0.12, 16),
+    clinicalMaterial('#101112', 0.9)
+  );
+  socket.rotation.x = Math.PI / 2;
+  socket.position.set(end.x, end.y, end.z + 0.05);
+  group.add(socket);
+
+  return group;
 }
 
 /** A desk: a top on two end panels, with a stack of drawers under one side. */
@@ -844,18 +939,20 @@ function buildWardDoor() {
 
   // Everything that swings hangs off a hinge at the left jamb, so the leaf
   // turns about its edge rather than about its middle.
+  // Hung clear of the floor, the way a real one is — and the way the black
+  // wire gets under it while it is still shut.
   const hinge = new THREE.Group();
-  hinge.position.set(-width / 2, 0, 0.03);
+  hinge.position.set(-width / 2, 0.13, 0.03);
   group.add(hinge);
 
   // The leaf, sat back inside the frame. Institution green, and authored dark
   // — this one is lit and tone mapped, unlike the television's face, so ACES
   // lifts it a fair way toward the colour it actually reads as.
   const leaf = new THREE.Mesh(
-    new THREE.BoxGeometry(width, height, 0.06),
+    new THREE.BoxGeometry(width, height - 0.13, 0.06),
     clinicalMaterial('#315c3c', 0.62)
   );
-  leaf.position.set(width / 2, height / 2, 0);
+  leaf.position.set(width / 2, (height - 0.13) / 2, 0);
   leaf.castShadow = true;
   leaf.receiveShadow = true;
   hinge.add(leaf);
@@ -1197,6 +1294,8 @@ export function createMedicalRoom(scene) {
   // In the corner of the wall behind you: sitting up on the bed you face
   // straight down it, so this is ahead and to your right, and the television
   // is the other way.
+  group.add(buildBlackWire());
+
   const wardDoor = buildWardDoor();
   wardDoor.group.position.set(WARD_DOOR.x, 0, depth / 2 - 0.02);
   wardDoor.group.rotation.y = Math.PI;
@@ -1463,6 +1562,11 @@ export function createMedicalRoom(scene) {
   }
   updateArmColliders();
 
+  // Going dark, and the arms going home. One way, like everything else here.
+  let shutDown = false;
+  let dimmed = 0;
+  let retracted = 0;
+
   // The door. Shut until something opens it, then it stays open.
   let doorOpen = false;
   let doorSwing = 0;
@@ -1492,6 +1596,7 @@ export function createMedicalRoom(scene) {
   // amount the conduits were last actually rebuilt at.
   let crossed = 0;
   let posed = 0;
+  let retractedPosed = 0;
 
   return {
     group,
@@ -1523,6 +1628,18 @@ export function createMedicalRoom(scene) {
       if (doorOpen) return;
       doorOpen = true;
       playWardDoor();
+    },
+
+    /** Screen out, arms back into the wall. It has said its piece. */
+    shutDown() {
+      shutDown = true;
+    },
+    get isShutDown() {
+      return shutDown;
+    },
+    /** Dev handle: 0 lit and out, 1 dark and gone. */
+    get shutdownProgress() {
+      return { dimmed: +dimmed.toFixed(2), retracted: +retracted.toFixed(2) };
     },
 
     /**
@@ -1625,10 +1742,15 @@ export function createMedicalRoom(scene) {
       const breath = 0.82 + Math.sin(time * 1.9) * 0.14;
       const level = breath * flicker;
 
+      // Going out. Slower than a flicker so it reads as being switched off
+      // rather than as another dropped frame.
+      dimmed += ((shutDown ? 1 : 0) - dimmed) * (1 - Math.exp(-1.6 * delta));
+      const lit = 1 - dimmed;
+
       for (const part of television.faceParts) {
-        part.material.color.setStyle(FACE).multiplyScalar(0.45 + level * 0.55);
+        part.material.color.setStyle(FACE).multiplyScalar((0.45 + level * 0.55) * lit);
       }
-      television.glow.intensity = 2.2 * level;
+      television.glow.intensity = 2.2 * level * lit;
 
       // It watches. The eyes track slowly from side to side.
       const look = Math.sin(time * 0.55) * 0.07;
@@ -1672,10 +1794,18 @@ export function createMedicalRoom(scene) {
       // deliberate, self-satisfied movement, not a flinch.
       const crossTarget = speech.line?.arms === 'crossed' ? 1 : 0;
       crossed += (crossTarget - crossed) * (1 - Math.exp(-3 * delta));
-      // Reshaping is not free, and this sits at 0 or 1 nearly all the time.
-      if (Math.abs(crossed - posed) > 0.002) {
-        for (const arm of arms) arm.poseAt(crossed);
+      retracted += ((shutDown ? 1 : 0) - retracted) * (1 - Math.exp(-1.3 * delta));
+
+      // Reshaping is not free, and these sit still nearly all the time.
+      if (Math.abs(crossed - posed) > 0.002 || Math.abs(retracted - retractedPosed) > 0.002) {
+        for (const arm of arms) {
+          arm.poseAt(crossed, retracted);
+          // Once it is essentially inside the wall, take it out of the scene —
+          // the port ring stays, which is all that should be left.
+          arm.limb.visible = retracted < 0.94;
+        }
         posed = crossed;
+        retractedPosed = retracted;
       }
 
       arms.forEach((arm, i) => {

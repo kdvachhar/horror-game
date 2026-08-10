@@ -211,6 +211,20 @@ const HANDOVER_LINES = [
 /** And what it says when the button goes in. */
 const BUTTON_LINES = [{ text: 'Good. Now go back to your body.', hold: 2.4 }];
 
+/**
+ * The brief, delivered as the way out swings open. The last thing it says
+ * before it goes dark — everything after this is the wire.
+ */
+const DOOR_LINES = [
+  { text: 'Great! I knew you were capable!', hold: 2.0 },
+  { text: 'Now I need your help.', hold: 1.7 },
+  { text: 'I know you want out of here, and I can give you that.', hold: 2.9 },
+  { text: 'When this place was abandoned, I was cut off from my main console.', hold: 3.4 },
+  { text: 'I need you to follow this black wire from console to console.', hold: 3.1 },
+  { text: 'Get me back to the main one, and I can get you out.', hold: 2.9 },
+  { text: 'I’ll see you when you activate the next console.', hold: 2.8 },
+];
+
 // Said once. Wound back with everything else so a scene jump can hear it again.
 let handoverSaid = false;
 
@@ -446,9 +460,15 @@ renderer.setAnimationLoop((time) => {
   // this is true on exactly one frame ever.
   if (friend.isActive && medical.tryPressButton(friend.position, friend.isGrounded)) {
     medical.speak(BUTTON_LINES, () => {
-      // It said the door would open. It opens.
+      // It said the door would open. It opens, and it talks over the swing.
       medical.openDoor();
       setObjective('Press F to return to your body');
+      medical.speak(DOOR_LINES, () => {
+        // Then it goes dark and takes its arms back, and the wire is all that
+        // is left pointing anywhere.
+        medical.shutDown();
+        setObjective('Follow the black wire');
+      });
     });
   }
   // The view has to be written after the body it is attached to has moved, or

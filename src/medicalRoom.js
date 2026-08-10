@@ -13,7 +13,7 @@ import {
 } from './textures.js';
 import { buildHand } from './glove.js';
 import { createSpeechRunner, MOUTH_AT_REST } from './voice.js';
-import { playButtonPress } from './audio.js';
+import { playButtonPress, playWardDoor } from './audio.js';
 
 /**
  * The room you wake up in, and the thing waiting on its wall.
@@ -89,6 +89,9 @@ const STORE_STEP = { x: WINDOW.x, width: 1.7, depth: 0.85, top: 0.75 };
  * cut through.
  */
 const HALLWAY = { minX: 0.5, maxX: 6.5, near: 5.5, far: 8.0 };
+
+/** The way out. Hoisted so the wall can be cut to fit it. */
+const WARD_DOOR = { x: 5.4, width: 1.1, height: 2.15 };
 const STORE = {
   minX: 6.5,
   maxX: 12.4,
@@ -733,11 +736,15 @@ function buildStoreRoom() {
   const backFar = HALLWAY.near + WINDOW.reveal;
   const winLeft = WINDOW.x - WINDOW.halfWidth;
   const winRight = WINDOW.x + WINDOW.halfWidth;
+  const doorLeft = WARD_DOOR.x - WARD_DOOR.width / 2;
+  const doorRight = WARD_DOOR.x + WARD_DOOR.width / 2;
   for (const [pw, ph, pcx, pcy] of [
     [winLeft - HALLWAY.minX, H, (HALLWAY.minX + winLeft) / 2, H / 2],
-    [HALLWAY.maxX - winRight, H, (winRight + HALLWAY.maxX) / 2, H / 2],
+    [doorLeft - winRight, H, (winRight + doorLeft) / 2, H / 2],
+    [HALLWAY.maxX - doorRight, H, (doorRight + HALLWAY.maxX) / 2, H / 2],
     [WINDOW.halfWidth * 2, WINDOW.sill, WINDOW.x, WINDOW.sill / 2],
     [WINDOW.halfWidth * 2, H - WINDOW.head, WINDOW.x, (H + WINDOW.head) / 2],
+    [WARD_DOOR.width, H - WARD_DOOR.height, WARD_DOOR.x, (H + WARD_DOOR.height) / 2],
   ]) {
     if (pw <= 0 || ph <= 0) continue;
     const panel = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), shell);
@@ -818,8 +825,7 @@ function buildStoreRoom() {
 function buildWardDoor() {
   const group = new THREE.Group();
 
-  const width = 1.1;
-  const height = 2.15;
+  const { width, height } = WARD_DOOR;
 
   const frame = clinicalMaterial('#b3b7b0', 0.5);
   const jamb = 0.09;
@@ -836,6 +842,12 @@ function buildWardDoor() {
     group.add(piece);
   }
 
+  // Everything that swings hangs off a hinge at the left jamb, so the leaf
+  // turns about its edge rather than about its middle.
+  const hinge = new THREE.Group();
+  hinge.position.set(-width / 2, 0, 0.03);
+  group.add(hinge);
+
   // The leaf, sat back inside the frame. Institution green, and authored dark
   // — this one is lit and tone mapped, unlike the television's face, so ACES
   // lifts it a fair way toward the colour it actually reads as.
@@ -843,9 +855,10 @@ function buildWardDoor() {
     new THREE.BoxGeometry(width, height, 0.06),
     clinicalMaterial('#315c3c', 0.62)
   );
-  leaf.position.set(0, height / 2, 0.03);
+  leaf.position.set(width / 2, height / 2, 0);
+  leaf.castShadow = true;
   leaf.receiveShadow = true;
-  group.add(leaf);
+  hinge.add(leaf);
 
   // Kick plate along the bottom, scuffed by every trolley that ever went
   // through, and a lever handle on the opening edge.
@@ -853,21 +866,21 @@ function buildWardDoor() {
     new THREE.BoxGeometry(width - 0.06, 0.3, 0.015),
     clinicalMaterial('#9fa5a2', 0.35)
   );
-  kick.position.set(0, 0.2, 0.068);
-  group.add(kick);
+  kick.position.set(width / 2, 0.2, 0.038);
+  hinge.add(kick);
 
   const metal = clinicalMaterial('#40474a', 0.4);
   const rose = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.03, 14), metal);
   rose.rotation.x = Math.PI / 2;
-  rose.position.set(width / 2 - 0.16, 1.02, 0.07);
-  group.add(rose);
+  rose.position.set(width - 0.16, 1.02, 0.04);
+  hinge.add(rose);
 
   const lever = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.035, 0.035), metal);
-  lever.position.set(width / 2 - 0.25, 1.02, 0.095);
+  lever.position.set(width - 0.25, 1.02, 0.065);
   lever.castShadow = true;
-  group.add(lever);
+  hinge.add(lever);
 
-  return group;
+  return { group, hinge };
 }
 
 /**
@@ -1043,11 +1056,18 @@ export function createMedicalRoom(scene) {
   // strip the way the first room's doorway did.
   const winLeft = WINDOW.x - WINDOW.halfWidth;
   const winRight = WINDOW.x + WINDOW.halfWidth;
+  const doorLeft = WARD_DOOR.x - WARD_DOOR.width / 2;
+  const doorRight = WARD_DOOR.x + WARD_DOOR.width / 2;
   for (const [w, h, cxPanel, cyPanel] of [
+    // Left of the window, between the two openings, and right of the door.
     [winLeft + width / 2, height, (winLeft - width / 2) / 2, height / 2],
-    [width / 2 - winRight, height, (winRight + width / 2) / 2, height / 2],
+    [doorLeft - winRight, height, (winRight + doorLeft) / 2, height / 2],
+    [width / 2 - doorRight, height, (doorRight + width / 2) / 2, height / 2],
+    // Under and over the window.
     [WINDOW.halfWidth * 2, WINDOW.sill, WINDOW.x, WINDOW.sill / 2],
     [WINDOW.halfWidth * 2, height - WINDOW.head, WINDOW.x, (height + WINDOW.head) / 2],
+    // And over the door.
+    [WARD_DOOR.width, height - WARD_DOOR.height, WARD_DOOR.x, (height + WARD_DOOR.height) / 2],
   ]) {
     if (w <= 0 || h <= 0) continue;
     const panelMaterial = new THREE.MeshStandardMaterial({
@@ -1078,6 +1098,17 @@ export function createMedicalRoom(scene) {
     [WINDOW.halfWidth * 2, 0.04, WINDOW.reveal, WINDOW.x, WINDOW.head],
     [0.04, WINDOW.head - WINDOW.sill, WINDOW.reveal, winLeft, (WINDOW.sill + WINDOW.head) / 2],
     [0.04, WINDOW.head - WINDOW.sill, WINDOW.reveal, winRight, (WINDOW.sill + WINDOW.head) / 2],
+  ]) {
+    const piece = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), revealMaterial);
+    piece.position.set(x, y, depth / 2 + WINDOW.reveal / 2);
+    piece.receiveShadow = true;
+    group.add(piece);
+  }
+
+  for (const [w, h, d, x, y] of [
+    [WARD_DOOR.width, 0.04, WINDOW.reveal, WARD_DOOR.x, WARD_DOOR.height],
+    [0.04, WARD_DOOR.height, WINDOW.reveal, doorLeft, WARD_DOOR.height / 2],
+    [0.04, WARD_DOOR.height, WINDOW.reveal, doorRight, WARD_DOOR.height / 2],
   ]) {
     const piece = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), revealMaterial);
     piece.position.set(x, y, depth / 2 + WINDOW.reveal / 2);
@@ -1167,9 +1198,9 @@ export function createMedicalRoom(scene) {
   // straight down it, so this is ahead and to your right, and the television
   // is the other way.
   const wardDoor = buildWardDoor();
-  wardDoor.position.set(width / 2 - 1.1, 0, depth / 2 - 0.02);
-  wardDoor.rotation.y = Math.PI;
-  group.add(wardDoor);
+  wardDoor.group.position.set(WARD_DOOR.x, 0, depth / 2 - 0.02);
+  wardDoor.group.rotation.y = Math.PI;
+  group.add(wardDoor.group);
 
   // ── the ward ──────────────────────────────────────────────────────────────
   const beds = [];
@@ -1236,9 +1267,15 @@ export function createMedicalRoom(scene) {
   const openLeft = cx + WINDOW.x - WINDOW.halfWidth;
   const openRight = cx + WINDOW.x + WINDOW.halfWidth;
 
+  const doorLeftX = cx + WARD_DOOR.x - WARD_DOOR.width / 2;
+  const doorRightX = cx + WARD_DOOR.x + WARD_DOOR.width / 2;
+
   colliders.push(
+    // Three pieces of wall, because there are two holes in it. The doorway's
+    // own box is pushed separately and gated on the door being shut.
     { minX: cx - width / 2 - t, maxX: openLeft, minZ: backNear, maxZ: backFar },
-    { minX: openRight, maxX: cx + width / 2 + t, minZ: backNear, maxZ: backFar },
+    { minX: openRight, maxX: doorLeftX, minZ: backNear, maxZ: backFar },
+    { minX: doorRightX, maxX: cx + width / 2 + t, minZ: backNear, maxZ: backFar },
     { minX: openLeft, maxX: openRight, minZ: backNear, maxZ: backFar, top: WINDOW.sill },
     {
       minX: openLeft,
@@ -1257,6 +1294,16 @@ export function createMedicalRoom(scene) {
     minZ: cz + storeStepZ - STORE_STEP.depth / 2,
     maxZ: cz + storeStepZ + STORE_STEP.depth / 2,
     top: STORE_STEP.top,
+  });
+
+  // The doorway, solid while the door is shut. Gated rather than added and
+  // removed, so the array everything holds never changes identity.
+  colliders.push({
+    minX: doorLeftX,
+    maxX: doorRightX,
+    minZ: cz + depth / 2,
+    maxZ: cz + depth / 2 + WINDOW.reveal,
+    enabled: () => doorSwing < 0.35,
   });
 
   // The boards. Planks on brackets, so they are solid where the plank is and
@@ -1416,6 +1463,10 @@ export function createMedicalRoom(scene) {
   }
   updateArmColliders();
 
+  // The door. Shut until something opens it, then it stays open.
+  let doorOpen = false;
+  let doorSwing = 0;
+
   // The button latches once, and stays down.
   const buttonWorld = new THREE.Vector3(
     cx + store.buttonAt[0],
@@ -1459,6 +1510,19 @@ export function createMedicalRoom(scene) {
     },
     get buttonPressed() {
       return buttonPressed;
+    },
+
+    get doorIsOpen() {
+      return doorOpen;
+    },
+    /** How far through the swing, 0 shut to 1 open. */
+    get doorSwing() {
+      return doorSwing;
+    },
+    openDoor() {
+      if (doorOpen) return;
+      doorOpen = true;
+      playWardDoor();
     },
 
     /**
@@ -1631,6 +1695,11 @@ export function createMedicalRoom(scene) {
 
       // Last, once the arms have finished moving for this frame.
       updateArmColliders();
+
+      // The door swinging back into the corridor. Slow, and eased at the end so
+      // it settles against its stop rather than arriving at full speed.
+      doorSwing += ((doorOpen ? 1 : 0) - doorSwing) * (1 - Math.exp(-2.6 * delta));
+      wardDoor.hinge.rotation.y = -doorSwing * 1.95;
 
       // The button going in, and its ring coming up with it.
       buttonTravel += ((buttonPressed ? 1 : 0) - buttonTravel) * (1 - Math.exp(-16 * delta));

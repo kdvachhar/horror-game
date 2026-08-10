@@ -446,6 +446,8 @@ renderer.setAnimationLoop((time) => {
   // this is true on exactly one frame ever.
   if (friend.isActive && medical.tryPressButton(friend.position, friend.isGrounded)) {
     medical.speak(BUTTON_LINES, () => {
+      // It said the door would open. It opens.
+      medical.openDoor();
       setObjective('Press F to return to your body');
     });
   }

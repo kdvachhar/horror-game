@@ -366,6 +366,65 @@ export function playButtonPress(level = 1) {
   body.stop(t + 0.15);
 }
 
+/**
+ * The ward door coming open: a latch letting go, then a slow hinge. The glide
+ * is deliberate here — a hinge really does creak up in pitch as it turns, which
+ * is the one place a swept filter is the honest thing rather than a cartoon.
+ */
+export function playWardDoor(level = 1) {
+  if (!ready() || level < 0.02) return;
+  playedCount++;
+
+  const t = context.currentTime + 0.005;
+
+  const latch = context.createBufferSource();
+  latch.buffer = getNoise();
+  const click = context.createBiquadFilter();
+  click.type = 'bandpass';
+  click.frequency.value = 2100;
+  click.Q.value = 2.4;
+  const latchGain = context.createGain();
+  latchGain.gain.setValueAtTime(0.0001, t);
+  latchGain.gain.exponentialRampToValueAtTime(0.13 * level, t + 0.004);
+  latchGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+  latch.connect(click).connect(latchGain);
+  send(latchGain, 0.9);
+  latch.start(t, Math.random() * 1.5);
+  latch.stop(t + 0.1);
+
+  // The hinge, starting a moment after the latch releases.
+  const creak = context.createOscillator();
+  creak.type = 'sawtooth';
+  creak.frequency.setValueAtTime(180, t + 0.09);
+  creak.frequency.exponentialRampToValueAtTime(420, t + 0.85);
+  const throat = context.createBiquadFilter();
+  throat.type = 'bandpass';
+  throat.frequency.value = 900;
+  throat.Q.value = 6;
+  const creakGain = context.createGain();
+  creakGain.gain.setValueAtTime(0.0001, t + 0.09);
+  creakGain.gain.exponentialRampToValueAtTime(0.05 * level, t + 0.22);
+  creakGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.95);
+  creak.connect(throat).connect(creakGain);
+  send(creakGain, 1);
+  creak.start(t + 0.09);
+  creak.stop(t + 1);
+
+  // And the weight of it settling once it is open.
+  const thud = context.createOscillator();
+  thud.type = 'sine';
+  thud.frequency.setValueAtTime(110, t + 0.88);
+  thud.frequency.exponentialRampToValueAtTime(58, t + 1.02);
+  const thudGain = context.createGain();
+  thudGain.gain.setValueAtTime(0.0001, t + 0.88);
+  thudGain.gain.exponentialRampToValueAtTime(0.09 * level, t + 0.895);
+  thudGain.gain.exponentialRampToValueAtTime(0.0001, t + 1.06);
+  thud.connect(thudGain);
+  send(thudGain, 0.5);
+  thud.start(t + 0.88);
+  thud.stop(t + 1.1);
+}
+
 export function playDoorClose() {
   if (!ready()) return;
   playedCount++;

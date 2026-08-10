@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MEDICAL } from './config.js';
+import { MEDICAL, BACK_ROOM } from './config.js';
 import {
   makeWallSurface,
   makeFloorSurface,
@@ -138,6 +138,28 @@ const STORE = {
   far: 9.6,
   height: 3.4,
 };
+
+/**
+ * The room across the corridor from the green door.
+ *
+ * It is the room you were knocked out in — same floor, same walls, the same
+ * sixteen by eighteen by eight the dark one has — reached from its other end
+ * and with the lights on. Coming back into it lit is the point; it is the only
+ * place in the game you have already been.
+ */
+const LIT_ROOM = {
+  // Runs left from the corridor/store-room corner. Centring it on the doorway
+  // instead put sixteen metres of it straight through the store room.
+  minX: STORE.minX - BACK_ROOM.width,
+  maxX: STORE.minX,
+  near: HALLWAY.far,
+  far: HALLWAY.far + BACK_ROOM.depth,
+  height: BACK_ROOM.height,
+};
+
+/** The doorway into it, directly opposite the green one. */
+const LIT_DOOR = { x: WARD_DOOR.x, width: 1.2, height: 2.3 };
+
 
 /**
  * The ward's walls.
@@ -598,6 +620,157 @@ function buildButton() {
 }
 
 /**
+ * The room you woke up next to, from the other side and with the lights on.
+ *
+ * Built to the dark room's dimensions off BACK_ROOM rather than to numbers of
+ * its own, so if that one is ever resized this follows. Deliberately bare —
+ * the whole of it is that you have stood in here before and could not see it.
+ */
+function buildLitRoom() {
+  const group = new THREE.Group();
+  const w = LIT_ROOM.maxX - LIT_ROOM.minX;
+  const d = LIT_ROOM.far - LIT_ROOM.near;
+  const H = LIT_ROOM.height;
+  const midX = (LIT_ROOM.minX + LIT_ROOM.maxX) / 2;
+  const midZ = (LIT_ROOM.near + LIT_ROOM.far) / 2;
+
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, d),
+    new THREE.MeshStandardMaterial({ ...makeFloorSurface(...worldRepeat(w, d)), metalness: 0.02 })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(midX, 0, midZ);
+  floor.receiveShadow = true;
+  group.add(floor);
+
+  const ceiling = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, d),
+    new THREE.MeshStandardMaterial({ ...makeCeilingSurface(...worldRepeat(w, d)) })
+  );
+  ceiling.rotation.x = Math.PI / 2;
+  ceiling.position.set(midX, H, midZ);
+  group.add(ceiling);
+
+  const surface = makeWallSurface(...worldRepeat(w, H));
+  const sides = cloneSurface(surface, ...worldRepeat(d, H));
+  const wallOf = (spec) =>
+    new THREE.MeshStandardMaterial({ ...spec, metalness: 0, side: THREE.DoubleSide });
+
+  for (const [pw, spec, px, pz, rot] of [
+    [w, surface, midX, LIT_ROOM.far, 0],
+    [d, sides, LIT_ROOM.minX, midZ, Math.PI / 2],
+    [d, sides, LIT_ROOM.maxX, midZ, -Math.PI / 2],
+  ]) {
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(pw, H), wallOf(spec));
+    wall.position.set(px, H / 2, pz);
+    wall.rotation.y = rot;
+    wall.receiveShadow = true;
+    group.add(wall);
+  }
+
+  // Near wall, in pieces round the doorway.
+  const doorLeft = LIT_DOOR.x - LIT_DOOR.width / 2;
+  const doorRight = LIT_DOOR.x + LIT_DOOR.width / 2;
+  for (const [pw, ph, pcx, pcy] of [
+    [doorLeft - LIT_ROOM.minX, H, (LIT_ROOM.minX + doorLeft) / 2, H / 2],
+    [LIT_ROOM.maxX - doorRight, H, (doorRight + LIT_ROOM.maxX) / 2, H / 2],
+    [LIT_DOOR.width, H - LIT_DOOR.height, LIT_DOOR.x, (H + LIT_DOOR.height) / 2],
+  ]) {
+    if (pw <= 0 || ph <= 0) continue;
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), wallOf(surface));
+    wall.position.set(pcx, pcy, LIT_ROOM.near);
+    wall.rotation.y = Math.PI;
+    wall.receiveShadow = true;
+    group.add(wall);
+  }
+
+  // Lights. It has a ceiling eight metres up, so these hang on chains the way
+  // the first room's do — flush to that ceiling nothing would reach the floor.
+  // Six of them, in two rows. The whole point of this room is that it is lit,
+  // so it wants enough fittings to actually read as a working ceiling rather
+  // than as the dark one with a couple of lamps found in it.
+  for (const [lx, lz] of [
+    [midX - 4.5, midZ - 6], [midX + 4.5, midZ - 6],
+    [midX - 4.5, midZ], [midX + 4.5, midZ],
+    [midX - 4.5, midZ + 6], [midX + 4.5, midZ + 6],
+  ]) {
+    const chain = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.02, 0.02, H - 4.2, 6),
+      clinicalMaterial('#3d4143', 0.6)
+    );
+    chain.position.set(lx, H - (H - 4.2) / 2, lz);
+    group.add(chain);
+
+    const housing = new THREE.Mesh(
+      new THREE.BoxGeometry(2.2, 0.16, 0.55),
+      clinicalMaterial('#4a4f51', 0.5)
+    );
+    housing.position.set(lx, 4.2, lz);
+    housing.castShadow = true;
+    group.add(housing);
+
+    const tube = new THREE.Mesh(
+      new THREE.BoxGeometry(2.0, 0.05, 0.32),
+      new THREE.MeshBasicMaterial({ color: '#e8f2ea', toneMapped: false })
+    );
+    tube.position.set(lx, 4.11, lz);
+    group.add(tube);
+
+    const lamp = new THREE.PointLight(0xdfe9e2, 72, 20, 1.25);
+    lamp.position.set(lx, 4.0, lz);
+    group.add(lamp);
+  }
+
+  return group;
+}
+
+/**
+ * A doorway with its door standing open against the wall — the way on, rather
+ * than another thing to be let through.
+ */
+function buildOpenDoorway() {
+  const group = new THREE.Group();
+  const { width, height } = LIT_DOOR;
+  const frame = clinicalMaterial('#9aa09b', 0.5);
+  const jamb = 0.1;
+
+  for (const [w, h, x, y] of [
+    [jamb, height + jamb, -(width + jamb) / 2, (height + jamb) / 2],
+    [jamb, height + jamb, (width + jamb) / 2, (height + jamb) / 2],
+    [width + jamb * 2, jamb, 0, height + jamb / 2],
+  ]) {
+    const piece = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.16), frame);
+    piece.position.set(x, y, 0);
+    piece.castShadow = true;
+    piece.receiveShadow = true;
+    group.add(piece);
+  }
+
+  // The leaf, swung back flat against the far side of the wall.
+  const hinge = new THREE.Group();
+  hinge.position.set(-width / 2, 0.12, 0.09);
+  hinge.rotation.y = -1.98;
+  group.add(hinge);
+
+  const leaf = new THREE.Mesh(
+    new THREE.BoxGeometry(width, height - 0.12, 0.06),
+    clinicalMaterial('#4a5560', 0.62)
+  );
+  leaf.position.set(width / 2, (height - 0.12) / 2, 0);
+  leaf.castShadow = true;
+  hinge.add(leaf);
+
+  const lever = new THREE.Mesh(
+    new THREE.BoxGeometry(0.19, 0.035, 0.035),
+    clinicalMaterial('#40474a', 0.4)
+  );
+  lever.position.set(width - 0.25, 1.02, 0.06);
+  hinge.add(lever);
+
+  return group;
+}
+
+/**
  * The wire itself, plus the port it vanishes into.
  *
  * One tube along the whole route rather than a piece per room, so it reads as
@@ -808,8 +981,8 @@ function buildStoreRoom() {
    * past the corner, which is what leaves them open to each other.
    */
   for (const [width, px, pz, rot] of [
-    // Corridor: far side, and the dead end at its left.
-    [HALLWAY.maxX - HALLWAY.minX, (HALLWAY.minX + HALLWAY.maxX) / 2, HALLWAY.far, 0],
+    // Corridor: the dead end at its left. Its far side is built below, in
+    // pieces, because the way on is cut through it.
     [HALLWAY.far - HALLWAY.near, HALLWAY.minX, (HALLWAY.near + HALLWAY.far) / 2, Math.PI / 2],
     // Store room: near side, far side, right side.
     [STORE.maxX - STORE.minX, (STORE.minX + STORE.maxX) / 2, STORE.near, Math.PI],
@@ -823,6 +996,23 @@ function buildStoreRoom() {
     wall.rotation.y = rot;
     wall.receiveShadow = true;
     group.add(wall);
+  }
+
+  // The corridor's far side, round the opening opposite the green door.
+  {
+    const litLeft = LIT_DOOR.x - LIT_DOOR.width / 2;
+    const litRight = LIT_DOOR.x + LIT_DOOR.width / 2;
+    for (const [pw, ph, pcx, pcy] of [
+      [litLeft - HALLWAY.minX, H, (HALLWAY.minX + litLeft) / 2, H / 2],
+      [HALLWAY.maxX - litRight, H, (litRight + HALLWAY.maxX) / 2, H / 2],
+      [LIT_DOOR.width, H - LIT_DOOR.height, LIT_DOOR.x, (H + LIT_DOOR.height) / 2],
+    ]) {
+      if (pw <= 0 || ph <= 0) continue;
+      const wall = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), shell);
+      wall.position.set(pcx, pcy, HALLWAY.far);
+      wall.receiveShadow = true;
+      group.add(wall);
+    }
   }
 
   // The corridor's near face: the far side of the ward's back wall, which is a
@@ -1294,6 +1484,12 @@ export function createMedicalRoom(scene) {
   // In the corner of the wall behind you: sitting up on the bed you face
   // straight down it, so this is ahead and to your right, and the television
   // is the other way.
+  group.add(buildLitRoom());
+
+  const litDoorway = buildOpenDoorway();
+  litDoorway.position.set(LIT_DOOR.x, 0, HALLWAY.far);
+  group.add(litDoorway);
+
   group.add(buildBlackWire());
 
   const wardDoor = buildWardDoor();
@@ -1430,15 +1626,30 @@ export function createMedicalRoom(scene) {
   // between corridor and store room exists only past the corner.
   const s0 = 0.8;
   colliders.push(
-    // Corridor: far side and its dead end.
-    { minX: cx + HALLWAY.minX - s0, maxX: cx + HALLWAY.maxX, minZ: cz + HALLWAY.far, maxZ: cz + HALLWAY.far + s0 },
-    { minX: cx + HALLWAY.minX - s0, maxX: cx + HALLWAY.minX, minZ: cz + HALLWAY.near, maxZ: cz + HALLWAY.far + s0 },
+    // The wall between the corridor and the lit room, in two pieces round the
+    // way on. One set, not two — it is a single plane with a room on each side,
+    // and it is thin and centred on it so neither side is stopped short of a
+    // wall it can see.
+    { minX: cx + LIT_ROOM.minX - s0, maxX: cx + LIT_DOOR.x - LIT_DOOR.width / 2, minZ: cz + HALLWAY.far - 0.25, maxZ: cz + HALLWAY.far + 0.25 },
+    { minX: cx + LIT_DOOR.x + LIT_DOOR.width / 2, maxX: cx + HALLWAY.maxX, minZ: cz + HALLWAY.far - 0.25, maxZ: cz + HALLWAY.far + 0.25 },
+    // Stops at the corridor's far wall — past that is the lit room, which is
+    // open at this end and had 0.8m of corridor wall standing in it.
+    { minX: cx + HALLWAY.minX - s0, maxX: cx + HALLWAY.minX, minZ: cz + HALLWAY.near, maxZ: cz + HALLWAY.far },
+    // The lit room across from it.
+    { minX: cx + LIT_ROOM.minX - s0, maxX: cx + LIT_ROOM.minX, minZ: cz + LIT_ROOM.near - s0, maxZ: cz + LIT_ROOM.far + s0 },
+    { minX: cx + LIT_ROOM.maxX, maxX: cx + LIT_ROOM.maxX + s0, minZ: cz + LIT_ROOM.near - s0, maxZ: cz + LIT_ROOM.far + s0 },
+    { minX: cx + LIT_ROOM.minX - s0, maxX: cx + LIT_ROOM.maxX + s0, minZ: cz + LIT_ROOM.far, maxZ: cz + LIT_ROOM.far + s0 },
+
     // Store room: near side, far side, right side.
     { minX: cx + STORE.minX, maxX: cx + STORE.maxX + s0, minZ: cz + STORE.near - s0, maxZ: cz + STORE.near },
-    { minX: cx + STORE.minX - s0, maxX: cx + STORE.maxX + s0, minZ: cz + STORE.far, maxZ: cz + STORE.far + s0 },
+    // Starts at the store room's own wall, not 0.8 left of it — that overhang
+    // reached across the lit room's doorway and stopped you just inside it.
+    { minX: cx + STORE.minX, maxX: cx + STORE.maxX + s0, minZ: cz + STORE.far, maxZ: cz + STORE.far + s0 },
     { minX: cx + STORE.maxX, maxX: cx + STORE.maxX + s0, minZ: cz + STORE.near, maxZ: cz + STORE.far + s0 },
-    // The stub between them, below the corner.
-    { minX: cx + STORE.minX - s0, maxX: cx + STORE.minX, minZ: cz + HALLWAY.far, maxZ: cz + STORE.far + s0 }
+    // The stub between them, past the corner. Its thickness straddles the wall
+    // plane rather than sitting entirely on the corridor side — a 0.8 overhang
+    // there reached across the doorway into the lit room and sealed it.
+    { minX: cx + STORE.minX - 0.3, maxX: cx + STORE.minX + 0.3, minZ: cz + HALLWAY.far, maxZ: cz + STORE.far + s0 }
   );
 
   /**

@@ -208,6 +208,9 @@ const HANDOVER_LINES = [
   { text: 'And the door will open.', hold: 2.2 },
 ];
 
+/** And what it says when the button goes in. */
+const BUTTON_LINES = [{ text: 'Good. Now go back to your body.', hold: 2.4 }];
+
 // Said once. Wound back with everything else so a scene jump can hear it again.
 let handoverSaid = false;
 
@@ -439,8 +442,13 @@ renderer.setAnimationLoop((time) => {
 
   friend.update(delta, camera, camera.position, room.colliders);
   // Only the bucket can get up there, but the check is on position rather than
-  // on identity — whatever ends up on the top board presses it.
-  if (friend.isActive) medical.tryPressButton(friend.position, friend.isGrounded);
+  // on identity — whatever ends up on the top board presses it. It latches, so
+  // this is true on exactly one frame ever.
+  if (friend.isActive && medical.tryPressButton(friend.position, friend.isGrounded)) {
+    medical.speak(BUTTON_LINES, () => {
+      setObjective('Press F to return to your body');
+    });
+  }
   // The view has to be written after the body it is attached to has moved, or
   // it trails a frame behind everything you do.
   possession.applyCamera();

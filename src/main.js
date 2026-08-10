@@ -25,6 +25,7 @@ import { createDebugMenu } from './debug.js';
 import { createCutscene } from './cutscene.js';
 import { createWakeUp } from './wakeUp.js';
 import { createPossession } from './possession.js';
+import { createSpeechRunner } from './voice.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -77,6 +78,19 @@ const medical = createMedicalRoom(scene);
 room.colliders.push(...medical.colliders);
 
 const interactions = createInteractions(camera, showPrompt);
+
+/**
+ * What you think, turning round and finding the way you came in is shut.
+ *
+ * Silent lines: subtitles with no voice behind them. The television is the only
+ * thing in this game that speaks, and it should stay that way — you get text.
+ */
+const OPENING_LINES = [
+  { text: 'Why is the door locked?', hold: 2.2, silent: true },
+  { text: 'Well… I guess I should find a way out.', hold: 2.8, silent: true },
+  { text: 'I’ll start by checking out that machine.', hold: 3.0, silent: true },
+];
+const monologue = createSpeechRunner();
 
 setObjective('Inspect the machine');
 
@@ -394,6 +408,7 @@ overlay.addEventListener('click', () => {
     if (announced) return;
     announced = true;
     playObjectiveBlip();
+    monologue.play(OPENING_LINES);
   });
 });
 
@@ -424,6 +439,7 @@ renderer.setAnimationLoop((time) => {
   lastTime = time;
 
   debugMenu.update(delta);
+  monologue.update(delta);
   player.update(delta);
   playerBody.update(delta, player.pose);
   // Routes the keys to whoever is being driven. Before the friend's update, so
@@ -506,7 +522,7 @@ renderer.setAnimationLoop((time) => {
 
 // Dev-only handle for poking at the scene from the console.
 if (import.meta.env.DEV) {
-  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, wakeUp, possession };
+  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, wakeUp, possession, monologue };
   window.game.__tvLines = TV_LINES;
   // Console handles for diagnosing silence: game.audio.state() / .test()
   window.game.audio = {

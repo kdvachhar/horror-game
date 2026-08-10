@@ -185,6 +185,10 @@ export function stopSpeaking() {
 export function speak(line, onEnd, onWord) {
   showSubtitle(line.text);
 
+  // A `silent` line is text and nothing else — the player thinking, which has
+  // no voice in this game and should not borrow the one thing that does.
+  if (line.silent) return;
+
   if (line.clip) {
     const audio = new Audio(line.clip);
     audio.onended = () => onEnd?.();
@@ -301,8 +305,9 @@ export function createSpeechRunner() {
   function say() {
     const line = lines[index];
     // The backstop, not the primary clock: onEnd shortens it when playback
-    // actually reports finishing.
-    timer = line.hold + 2.5;
+    // actually reports finishing. A silent line has no playback to wait on, so
+    // its hold is the whole of it.
+    timer = line.silent ? line.hold : line.hold + 2.5;
     schedule = buildSchedule(line.text);
     playhead = 0;
 

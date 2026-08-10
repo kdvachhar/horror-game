@@ -34,6 +34,16 @@ const FIXTURE_POSITIONS = [
   [9, 9],
 ];
 
+/**
+ * The way in, in the wall you spawn with your back to.
+ *
+ * A pair of glass doors, and they do not open — the whole first beat of the
+ * game is turning round, seeing daylight you cannot reach, and going to look
+ * at the machine instead. There is a shallow dead vestibule behind them so the
+ * glass has somewhere to look into rather than showing the wall it is set in.
+ */
+const ENTRANCE = { width: 2.6, height: 3.2, recess: 1.1 };
+
 // Fixtures still drawing power. One is left dead so the ceiling doesn't read
 // as a fully maintained room.
 const LIVE_FIXTURES = [0, 1, 2, 4];
@@ -58,6 +68,87 @@ function addCollider(x, z, sizeX, sizeZ, top) {
     maxZ: z + sizeZ / 2,
     top,
   });
+}
+
+/** The glass doors, their frame, and the dead space behind them. */
+function buildEntrance() {
+  const group = new THREE.Group();
+  const z = ROOM.depth / 2;
+  const half = ENTRANCE.width / 2;
+
+  // The recess: a box of nothing behind the glass, so it reads as somewhere
+  // rather than as a hole cut in a wall.
+  const dead = new THREE.MeshStandardMaterial({ color: '#0d1013', roughness: 0.95 });
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(ENTRANCE.width, ENTRANCE.height), dead);
+  back.position.set(0, ENTRANCE.height / 2, z + ENTRANCE.recess);
+  back.rotation.y = Math.PI;
+  group.add(back);
+  for (const side of [-1, 1]) {
+    const cheek = new THREE.Mesh(new THREE.PlaneGeometry(ENTRANCE.recess, ENTRANCE.height), dead);
+    cheek.position.set(side * half, ENTRANCE.height / 2, z + ENTRANCE.recess / 2);
+    cheek.rotation.y = side * -Math.PI / 2;
+    group.add(cheek);
+  }
+  const soffit = new THREE.Mesh(new THREE.PlaneGeometry(ENTRANCE.width, ENTRANCE.recess), dead);
+  soffit.rotation.x = Math.PI / 2;
+  soffit.position.set(0, ENTRANCE.height, z + ENTRANCE.recess / 2);
+  group.add(soffit);
+
+  const frameMat = metalMaterial(PALETTE.metalDark);
+  // Outer frame, and the mullion the two leaves meet at.
+  for (const [w, h, x, y] of [
+    [0.12, ENTRANCE.height + 0.12, -half, ENTRANCE.height / 2],
+    [0.12, ENTRANCE.height + 0.12, half, ENTRANCE.height / 2],
+    [ENTRANCE.width + 0.12, 0.12, 0, ENTRANCE.height],
+  ]) {
+    const piece = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.16), frameMat);
+    piece.position.set(x, y, z - 0.08);
+    piece.castShadow = true;
+    group.add(piece);
+  }
+
+  // Two leaves. Glass: dark, barely transparent, and no depth write, or the
+  // recess behind it is rejected before it is ever drawn.
+  const glass = new THREE.MeshStandardMaterial({
+    color: '#8fa9ae',
+    roughness: 0.06,
+    metalness: 0.2,
+    transparent: true,
+    opacity: 0.3,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  for (const side of [-1, 1]) {
+    const leaf = new THREE.Mesh(
+      new THREE.PlaneGeometry(half - 0.14, ENTRANCE.height - 0.16),
+      glass
+    );
+    leaf.position.set(side * (half / 2), ENTRANCE.height / 2, z - 0.06);
+    group.add(leaf);
+
+    // Stile down the meeting edge, rail across the middle, and a push bar.
+    const stile = new THREE.Mesh(
+      new THREE.BoxGeometry(0.07, ENTRANCE.height - 0.1, 0.12),
+      frameMat
+    );
+    stile.position.set(side * 0.045, ENTRANCE.height / 2, z - 0.06);
+    group.add(stile);
+
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(half - 0.1, 0.09, 0.1), frameMat);
+    rail.position.set(side * (half / 2), 0.9, z - 0.06);
+    group.add(rail);
+
+    const bar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.028, 0.028, half - 0.34, 10),
+      metalMaterial(PALETTE.metal)
+    );
+    bar.rotation.z = Math.PI / 2;
+    bar.position.set(side * (half / 2), 1.05, z - 0.14);
+    bar.castShadow = true;
+    group.add(bar);
+  }
+
+  return group;
 }
 
 function woodMaterial(shade = PALETTE.wood) {
@@ -103,10 +194,33 @@ function buildShell(scene) {
   const sideMaterial = new THREE.MeshStandardMaterial({ ...sideSurface, metalness: 0 });
 
   const walls = [
-    { size: [width, height], pos: [0, height / 2, depth / 2], rot: Math.PI, mat: wallMaterial },
     { size: [depth, height], pos: [-width / 2, height / 2, 0], rot: Math.PI / 2, mat: sideMaterial },
     { size: [depth, height], pos: [width / 2, height / 2, 0], rot: -Math.PI / 2, mat: sideMaterial },
   ];
+
+  // The wall behind the spawn is built round the entrance instead of as one
+  // sheet — there are glass doors in it, and you need to be able to see that
+  // they are the way out before you find out they are locked.
+  const eHalf = ENTRANCE.width / 2;
+  for (const [w, h, px, py] of [
+    [width / 2 - eHalf, height, -(width / 2 + eHalf) / 2, height / 2],
+    [width / 2 - eHalf, height, (width / 2 + eHalf) / 2, height / 2],
+    [ENTRANCE.width, height - ENTRANCE.height, 0, (height + ENTRANCE.height) / 2],
+  ]) {
+    if (w <= 0 || h <= 0) continue;
+    const panelSurface = cloneSurface(wallSurface, ...worldRepeat(w, h));
+    panelSurface.map.offset.set((px - w / 2 + width / 2) / UNITS_PER_TILE, (py - h / 2) / UNITS_PER_TILE);
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, h),
+      new THREE.MeshStandardMaterial({ ...panelSurface, metalness: 0 })
+    );
+    mesh.position.set(px, py, depth / 2);
+    mesh.rotation.y = Math.PI;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+  }
+
+  scene.add(buildEntrance());
 
   for (const wall of walls) {
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(...wall.size), wall.mat);

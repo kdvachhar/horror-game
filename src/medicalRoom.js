@@ -725,10 +725,10 @@ function buildLitRoom() {
 }
 
 /**
- * A doorway with its door standing open against the wall — the way on, rather
- * than another thing to be let through.
+ * The doorway across the corridor, and the door in it. Shut until the green one
+ * opens; the two go together, off the same swing.
  */
-function buildOpenDoorway() {
+function buildCorridorDoor() {
   const group = new THREE.Group();
   const { width, height } = LIT_DOOR;
   const frame = clinicalMaterial('#9aa09b', 0.5);
@@ -746,10 +746,9 @@ function buildOpenDoorway() {
     group.add(piece);
   }
 
-  // The leaf, swung back flat against the far side of the wall.
+  // Hinged at the jamb, hanging clear of the floor like the other one.
   const hinge = new THREE.Group();
   hinge.position.set(-width / 2, 0.12, 0.09);
-  hinge.rotation.y = -1.98;
   group.add(hinge);
 
   const leaf = new THREE.Mesh(
@@ -767,7 +766,7 @@ function buildOpenDoorway() {
   lever.position.set(width - 0.25, 1.02, 0.06);
   hinge.add(lever);
 
-  return group;
+  return { group, hinge };
 }
 
 /**
@@ -1486,9 +1485,9 @@ export function createMedicalRoom(scene) {
   // is the other way.
   group.add(buildLitRoom());
 
-  const litDoorway = buildOpenDoorway();
-  litDoorway.position.set(LIT_DOOR.x, 0, HALLWAY.far);
-  group.add(litDoorway);
+  const litDoorway = buildCorridorDoor();
+  litDoorway.group.position.set(LIT_DOOR.x, 0, HALLWAY.far);
+  group.add(litDoorway.group);
 
   group.add(buildBlackWire());
 
@@ -1635,6 +1634,14 @@ export function createMedicalRoom(scene) {
     // Stops at the corridor's far wall — past that is the lit room, which is
     // open at this end and had 0.8m of corridor wall standing in it.
     { minX: cx + HALLWAY.minX - s0, maxX: cx + HALLWAY.minX, minZ: cz + HALLWAY.near, maxZ: cz + HALLWAY.far },
+    // The way on, solid while that door is still shut.
+    {
+      minX: cx + LIT_DOOR.x - LIT_DOOR.width / 2,
+      maxX: cx + LIT_DOOR.x + LIT_DOOR.width / 2,
+      minZ: cz + HALLWAY.far - 0.25,
+      maxZ: cz + HALLWAY.far + 0.25,
+      enabled: () => litSwing < 0.35,
+    },
     // The lit room across from it.
     { minX: cx + LIT_ROOM.minX - s0, maxX: cx + LIT_ROOM.minX, minZ: cz + LIT_ROOM.near - s0, maxZ: cz + LIT_ROOM.far + s0 },
     { minX: cx + LIT_ROOM.maxX, maxX: cx + LIT_ROOM.maxX + s0, minZ: cz + LIT_ROOM.near - s0, maxZ: cz + LIT_ROOM.far + s0 },
@@ -1781,6 +1788,7 @@ export function createMedicalRoom(scene) {
   // The door. Shut until something opens it, then it stays open.
   let doorOpen = false;
   let doorSwing = 0;
+  let litSwing = 0;
 
   // The button latches once, and stays down.
   const buttonWorld = new THREE.Vector3(
@@ -1830,6 +1838,10 @@ export function createMedicalRoom(scene) {
 
     get doorIsOpen() {
       return doorOpen;
+    },
+    /** Dev handle: both leaves, 0 shut to 1 open. */
+    get doorSwings() {
+      return { green: +doorSwing.toFixed(2), far: +litSwing.toFixed(2) };
     },
     /** How far through the swing, 0 shut to 1 open. */
     get doorSwing() {
@@ -2041,6 +2053,10 @@ export function createMedicalRoom(scene) {
       // it settles against its stop rather than arriving at full speed.
       doorSwing += ((doorOpen ? 1 : 0) - doorSwing) * (1 - Math.exp(-2.6 * delta));
       wardDoor.hinge.rotation.y = -doorSwing * 1.95;
+      // The one across the corridor goes with it, a beat behind so the pair
+      // read as two doors rather than as one object hinged in two places.
+      litSwing += (doorSwing - litSwing) * (1 - Math.exp(-2.1 * delta));
+      litDoorway.hinge.rotation.y = -litSwing * 1.98;
 
       // The button going in, and its ring coming up with it.
       buttonTravel += ((buttonPressed ? 1 : 0) - buttonTravel) * (1 - Math.exp(-16 * delta));

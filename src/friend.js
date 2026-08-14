@@ -55,20 +55,11 @@ const BODY_HEIGHT = 0.41 * BODY_SCALE;
 // chamber, pushed by the cube's own acceleration.
 // Scaled down from the cube's 0.16, since a bucket's face is narrower than a
 // 0.9m flat panel and the eyes have to sit within its curve.
-const EYE_RADIUS = 0.155;
-const PUPIL_RADIUS = 0.078;
-/**
- * How far a pupil's centre travels before it stops.
- *
- * Deliberately short of the rim. Its eyes are 0.68m up and yours are 1.68, so
- * it is always looking up at you — and a big pupil pinned into the top corner
- * with white showing underneath is a glare, not a look. Kept nearer the middle,
- * with white all the way round, it reads as wide-eyed instead.
- */
-const PUPIL_TRAVEL = (EYE_RADIUS - PUPIL_RADIUS) * 0.6;
-const EYE_SPACING = 0.165;
-/** Blush, low and to the outside of each eye. */
-const BLUSH_RADIUS = 0.075;
+const EYE_RADIUS = 0.115;
+const PUPIL_RADIUS = 0.054;
+/** How far a pupil's centre can travel before it hits the rim. */
+const PUPIL_TRAVEL = EYE_RADIUS - PUPIL_RADIUS;
+const EYE_SPACING = 0.15;
 /** Height of the eyes above the feet — the upper third of the bucket. */
 const EYE_HEIGHT = LEG_HEIGHT + BODY_HEIGHT * 0.62;
 /** Lift off the surface so they never z-fight with the face beneath. */
@@ -181,13 +172,6 @@ export function createFriend(scene) {
   const pupilGeometry = new THREE.CircleGeometry(PUPIL_RADIUS, 20);
   const scleraMaterial = new THREE.MeshBasicMaterial({ color: 0xfbfbf7 });
   const pupilMaterial = new THREE.MeshBasicMaterial({ color: 0x14110d });
-  const highlightMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  const blushMaterial = new THREE.MeshBasicMaterial({
-    color: 0xe98d88,
-    transparent: true,
-    opacity: 0.6,
-  });
-  const mouthMaterial = new THREE.MeshBasicMaterial({ color: 0x14110d });
   const pupils = [];
 
   // Radius of the bucket at eye height — it tapers, so this isn't the rim.
@@ -203,38 +187,12 @@ export function createFriend(scene) {
 
     const sclera = new THREE.Mesh(scleraGeometry, scleraMaterial);
     sclera.position.set(x, EYE_HEIGHT, surfaceZ + EYE_LIFT);
-    // Only part of the way round. Matching the barrel exactly turns both
-    // circles into slanted ellipses that read as eyebrows drawn down.
-    sclera.rotation.y = Math.atan2(x, surfaceZ) * 0.5;
+    sclera.rotation.y = Math.atan2(x, surfaceZ);
     eyeGroup.add(sclera);
 
     const pupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
     pupil.position.set(0, 0, 0.002);
     sclera.add(pupil);
-
-    // A catchlight, parented to the pupil so it swims with it. Two dots, one
-    // big one small, which is the whole trick — a flat black disc reads as a
-    // hole and the same disc with a highlight reads as looking at you.
-    for (const [hx, hy, hr] of [
-      [-0.026, 0.028, 0.026],
-      [0.022, -0.022, 0.012],
-    ]) {
-      const glint = new THREE.Mesh(new THREE.CircleGeometry(hr, 12), highlightMaterial);
-      glint.position.set(hx, hy, 0.002);
-      pupil.add(glint);
-    }
-
-    // Blush, sat on the barrel below and outside the eye.
-    // Kept round the front. Further out and the barrel carries it past 45
-    // degrees, where it is edge-on to anyone looking at the face.
-    const bx = side * (EYE_SPACING + 0.045);
-    const by = EYE_HEIGHT - 0.12;
-    const bz = Math.sqrt(Math.max(faceRadius * faceRadius - bx * bx, 0.0001));
-    const blush = new THREE.Mesh(new THREE.CircleGeometry(BLUSH_RADIUS, 18), blushMaterial);
-    blush.position.set(bx, by, bz + EYE_LIFT * 0.5);
-    blush.rotation.y = Math.atan2(bx, bz);
-    blush.scale.set(1, 0.62, 1);
-    eyeGroup.add(blush);
 
     pupils.push({
       mesh: pupil,
@@ -244,20 +202,6 @@ export function createFriend(scene) {
       pos: new THREE.Vector2(),
       vel: new THREE.Vector2(),
     });
-  }
-
-  // And a mouth: the bottom of a ring, which is a smile. Built from beads
-  // first and they read as gritted teeth — a smile has to be one unbroken
-  // curve or it is a row of something else.
-  {
-    const smile = new THREE.Mesh(
-      new THREE.TorusGeometry(0.085, 0.013, 6, 20, Math.PI * 0.78),
-      mouthMaterial
-    );
-    // Turned so the open side is up and the arc hangs below it.
-    smile.rotation.z = -Math.PI * 0.89;
-    smile.position.set(0, EYE_HEIGHT - 0.145, faceRadius + EYE_LIFT);
-    eyeGroup.add(smile);
   }
 
   eyeGroup.renderOrder = 1;
@@ -555,10 +499,7 @@ export function createFriend(scene) {
         // saturating at the rim so the pupil never tries to leave the eye.
         const amount = Math.min(1, Math.atan2(off, ez) / trackLimit);
         tx = (ex / off) * PUPIL_TRAVEL * amount;
-        // Vertical tracking is held right back. You are a metre above it, so
-        // aiming honestly parks both pupils against the top of the eye for the
-        // whole game, and that is the single thing that made it look angry.
-        ty = (ey / off) * PUPIL_TRAVEL * amount * 0.4;
+        ty = (ey / off) * PUPIL_TRAVEL * amount;
       }
 
       pupil.vel.x =

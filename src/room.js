@@ -70,7 +70,10 @@ function buildSideDoor() {
   const { width, height } = SIDE_DOOR;
   const half = width / 2;
 
-  const leafMat = new THREE.MeshStandardMaterial({ color: '#55605c', roughness: 0.66, metalness: 0.08 });
+  // Authored dark, the same as the ward's green door and for the same reason:
+  // this is lit and tone mapped, and ACES lifts hard through the mids, so a red
+  // picked at the value you want it to read as comes out closer to pink.
+  const leafMat = new THREE.MeshStandardMaterial({ color: '#4a0f0c', roughness: 0.66, metalness: 0.08 });
   const trim = new THREE.MeshStandardMaterial({ color: '#3b4240', roughness: 0.5, metalness: 0.2 });
   const hazard = new THREE.MeshStandardMaterial({ color: '#8d7a2e', roughness: 0.7 });
 

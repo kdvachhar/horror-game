@@ -417,7 +417,19 @@ function buildBackRoom(scene) {
       new THREE.PlaneGeometry(pw, ph),
       new THREE.MeshStandardMaterial({ ...panel, metalness: 0 })
     );
-    mesh.position.set(px, py, BACK_DOOR.z);
+    // Two centimetres proud of the wall plane rather than in it, so the medical
+    // surfaces that end on that plane are unambiguously behind this one.
+    //
+    // It does not get them all. A few dozen pixels of lit corridor still come
+    // through along the shared edges, and they survive a bigger standoff and a
+    // polygon offset alike — both were tried and both only moved which edge
+    // won. That is the signature of edge antialiasing rather than a depth
+    // fight: the samples are being blended at the silhouette, where no amount
+    // of depth bias reaches. Left as it is at about a hundredth of a percent of
+    // the frame; fixing it properly means not building the medical side of
+    // these surfaces at all and letting this wall serve both rooms, which is a
+    // bigger change than the fault justifies.
+    mesh.position.set(px, py, BACK_DOOR.z + 0.02);
     mesh.receiveShadow = true;
     place(mesh);
   }
@@ -439,6 +451,38 @@ function buildBackRoom(scene) {
     mesh.receiveShadow = true;
     place(mesh);
   }
+
+  // What you see instead of the corridor, while the door at the end of it is
+  // shut — which is the whole of act one.
+  //
+  // The corridor is lit, and a lit room on the far side of a 1.2m hole is
+  // plainly visible from anywhere in a black one: it read as a pale blue slab
+  // hanging in the dark, fifteen metres away, before you had taken a step into
+  // the room. The door itself is no help, because it belongs to the medical
+  // block and is drawn in the main pass, where the hall's ambient light finds
+  // it however little light is actually falling on it.
+  //
+  // So the opening is blanked from this side. It is not a cheat: the door is
+  // shut, and this is the back of it. It goes when the door opens, which is the
+  // same moment the room gets its power back.
+  // Sized past the opening and stood 0.3 clear of the wall, in front of the
+  // door rather than behind it — the door's frame is built on the medical side
+  // but hangs 0.16 through the hole, so a panel flush with the wall lost the
+  // depth test to it and the door went on showing.
+  // Well oversized, and only just clear of the door — 0.18, which puts it in
+  // front of the frame's 0.16 of protrusion and no further. Both matter: it
+  // stands a little in front of the wall it is patching, so from off to one side
+  // you look between the two, and the amount you can see through that gap grows
+  // with both the standoff and how far off-axis you are. At 0.3 and a 0.25
+  // overlap the sums came out at 0.196 against 0.25 and a hairline of lit
+  // corridor showed from the middle of the room. It is a black plane in a black
+  // room; there is nothing to pay for making it much bigger than the hole.
+  backRoom.doorBlank = new THREE.Mesh(
+    new THREE.PlaneGeometry(BACK_DOOR.width + 1.6, BACK_DOOR.height + 1.0),
+    new THREE.MeshBasicMaterial({ color: 0x000000, toneMapped: false, fog: false })
+  );
+  backRoom.doorBlank.position.set(BACK_DOOR.x, (BACK_DOOR.height + 1.0) / 2, BACK_DOOR.z + 0.18);
+  place(backRoom.doorBlank);
 
   // The one light. Hung just inside the hall door, aimed straight down, so it
   // puts a hard pool on the floor and leaves the rest of the room to the dark.
@@ -507,9 +551,15 @@ function buildBackRoom(scene) {
       housing.castShadow = true;
       place(housing);
 
+      // Black, not dark grey. A lit tube has to be a basic material — it is
+      // the light source, so it cannot depend on being lit — and a basic
+      // material ignores lighting in both directions: at 0x33383a these hung in
+      // the pitch-black room as six pale bars, the brightest thing in it and
+      // visible from the doorway before you had taken a step. Unlit means
+      // unlit, and lightUpBackRoom is what gives them a colour.
       const tube = new THREE.Mesh(
         new THREE.BoxGeometry(2.0, 0.05, 0.32),
-        new THREE.MeshBasicMaterial({ color: 0x33383a, toneMapped: false })
+        new THREE.MeshBasicMaterial({ color: 0x000000, toneMapped: false })
       );
       tube.position.set(lx, 4.11, lz);
       place(tube);
@@ -521,6 +571,34 @@ function buildBackRoom(scene) {
       backRoom.fittings.push({ light, tube });
     }
   }
+}
+
+/**
+ * Fog on or off for everything in the back room.
+ *
+ * Fog is not lighting. It mixes a surface toward the fog colour by distance
+ * alone, so it lands on geometry that has no light on it whatever — which in a
+ * room lit by one spotlight means every wall in it comes up a faint blue-grey
+ * and the room reads as dim rather than as dark. Fifteen metres of 0x0d1219 is
+ * only about three percent, and three percent of anything against true black is
+ * a wall you can see the panel joins on.
+ *
+ * So the dark room opts out of the hall's fog until it has lights of its own,
+ * at which point there is something for fog to sit in front of and it goes back
+ * on. Found by layer rather than kept in a list, the same as everything else
+ * about this room, because two builders contribute to it.
+ */
+function setDarkRoomFog(scene, on) {
+  const darkOnly = 1 << LAYER.DARK;
+  scene.traverse((object) => {
+    if (!object.isMesh || object.layers.mask !== darkOnly) return;
+    for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+      // The blanking panel is never fogged; it is meant to be a hole.
+      if (!material || material === backRoom?.doorBlank?.material) continue;
+      material.fog = on;
+      material.needsUpdate = true;
+    }
+  });
 }
 
 /**
@@ -550,6 +628,11 @@ function buildBackRoom(scene) {
 function lightUpBackRoom(scene) {
   if (!backRoom || backRoom.lit) return;
   backRoom.lit = true;
+
+  // Fog back on before the layers move, while they can still be found by it,
+  // and the blank out of the doorway — the door on the other side is opening.
+  setDarkRoomFog(scene, true);
+  backRoom.doorBlank.visible = false;
 
   const darkOnly = 1 << LAYER.DARK;
   scene.traverse((object) => {
@@ -886,6 +969,9 @@ function rebuildShell(scene) {
   scene.add(shellGroup);
   buildShell(shellGroup);
   buildBackRoom(shellGroup);
+  // After both, because both put meshes in that room — the far wall's inward
+  // face comes from buildShell and everything else from buildBackRoom.
+  setDarkRoomFog(shellGroup, false);
   buildWallColliders();
 }
 

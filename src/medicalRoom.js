@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MEDICAL, BACK_ROOM, BACK_DOOR, DOOR } from './config.js';
+import { MEDICAL, BACK_ROOM, BACK_DOOR, DOOR, LAYER } from './config.js';
 import {
   makeWallSurface,
   makeFloorSurface,
@@ -183,6 +183,17 @@ if (import.meta.env?.DEV) {
  * about how little is really here. Consoles are waypoints on it, so adding one
  * later means adding a point, not rerouting.
  */
+/**
+ * How far a medical surface keeps back from a wall it shares with the dark room.
+ *
+ * Anything that ends exactly in that plane fights the dark room's own wall for
+ * the last row of pixels, and a row of pixels of lit corridor standing in a
+ * pitch-black room is about as visible as a thing can be. Held at module scope
+ * because three separate places need it and one of them runs before the block
+ * that used to declare it, which is a dead-zone error at import.
+ */
+const SHARED_WALL_GAP = 0.03;
+
 const WIRE_RADIUS = 0.055;
 const WIRE_PATH = [
   // Out of the television, down the wall.
@@ -742,13 +753,56 @@ function buildBlackWire() {
   const curve = new THREE.CatmullRomCurve3(
     WIRE_PATH.map((p) => new THREE.Vector3(...p))
   );
-  const wire = new THREE.Mesh(
-    new THREE.TubeGeometry(curve, 320, WIRE_RADIUS, 8, false),
-    new THREE.MeshStandardMaterial({ color: '#141517', roughness: 0.75, metalness: 0.05 })
-  );
-  wire.castShadow = true;
-  wire.receiveShadow = true;
-  group.add(wire);
+
+  /**
+   * Built in two halves, cut where it crosses into the dark room.
+   *
+   * One tube would have to belong to one render pass, and this cable runs
+   * through two rooms that are lit by different things. On the medical block's
+   * pass the half lying in the dark room was picked out by the hall's ambient
+   * light and read as a grey line across a floor you are not supposed to be
+   * able to see — in a room whose whole job in act one is that there is nothing
+   * in it but the spotlight.
+   *
+   * Split, its far half is lit by that spotlight and nothing else: it shows
+   * where the pool crosses it, which is right, and is black everywhere else,
+   * which is also right. lightUpBackRoom moves it into the main pass with the
+   * rest of the room when the power comes back.
+   *
+   * Sampled rather than sliced by control point, so the cut lands exactly at
+   * the wall instead of at whichever waypoint happens to be nearest it.
+   */
+  const samples = curve.getSpacedPoints(600);
+  let cut = samples.findIndex((p) => p.z >= HALLWAY.far);
+  if (cut < 1) cut = samples.length - 1;
+
+  for (const [points, inDarkRoom] of [
+    [samples.slice(0, cut + 1), false],
+    [samples.slice(cut), true],
+  ]) {
+    if (points.length < 2) continue;
+    const half = new THREE.Mesh(
+      new THREE.TubeGeometry(
+        new THREE.CatmullRomCurve3(points),
+        points.length,
+        WIRE_RADIUS,
+        8,
+        false
+      ),
+      new THREE.MeshStandardMaterial({
+        color: '#141517',
+        roughness: 0.75,
+        metalness: 0.05,
+        // Fog is distance tinting and takes no notice of light, so on an unlit
+        // cable in an unlit room it is the only thing you would see of it.
+        fog: !inDarkRoom,
+      })
+    );
+    half.castShadow = true;
+    half.receiveShadow = true;
+    if (inDarkRoom) half.layers.set(LAYER.DARK);
+    group.add(half);
+  }
 
   // Cable clips every so often, so it reads as run rather than dropped. Count
   // scales with the route: eight of them was one every two and a half metres
@@ -762,16 +816,21 @@ function buildBlackWire() {
     const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.06), clip);
     saddle.position.set(at.x, 0.015, at.z);
     saddle.rotation.y = Math.random() * Math.PI;
+    // Each clip belongs to whichever room it is screwed down in, same as the
+    // cable it holds.
+    if (at.z >= HALLWAY.far) saddle.layers.set(LAYER.DARK);
     group.add(saddle);
   }
 
   // Where it leaves: a socket in the far wall, the same fitting as the arms'.
+  // Both in the dark room, at the far end of it.
   const end = curve.getPointAt(1);
   const port = new THREE.Mesh(
     new THREE.TorusGeometry(0.16, 0.045, 10, 20),
     clinicalMaterial('#4a4d4c', 0.6)
   );
   port.position.copy(end);
+  port.layers.set(LAYER.DARK);
   group.add(port);
 
   const socket = new THREE.Mesh(
@@ -780,6 +839,7 @@ function buildBlackWire() {
   );
   socket.rotation.x = Math.PI / 2;
   socket.position.set(end.x, end.y, end.z + 0.05);
+  socket.layers.set(LAYER.DARK);
   group.add(socket);
 
   return group;
@@ -946,7 +1006,17 @@ function buildStoreRoom() {
   for (const [width, px, pz, rot] of [
     // Corridor: the dead end at its left. Its far side is built below, in
     // pieces, because the way on is cut through it.
-    [HALLWAY.far - HALLWAY.near, HALLWAY.minX, (HALLWAY.near + HALLWAY.far) / 2, Math.PI / 2],
+    //
+    // Stops 3cm short of that far side rather than running into it. Its far
+    // edge landed exactly in the dark room's far wall plane, and the two fought
+    // over the last pixel of it — which showed up as a bright hairline standing
+    // in the pitch-black room, lit corridor leaking through the seam.
+    [
+      HALLWAY.far - HALLWAY.near - SHARED_WALL_GAP * 8,
+      HALLWAY.minX,
+      (HALLWAY.near + HALLWAY.far) / 2 - SHARED_WALL_GAP * 4,
+      Math.PI / 2,
+    ],
     // Store room: near side, far side, right side.
     [STORE.maxX - STORE.minX, (STORE.minX + STORE.maxX) / 2, STORE.near, Math.PI],
     [STORE.maxX - STORE.minX, (STORE.minX + STORE.maxX) / 2, STORE.far, 0],
@@ -977,7 +1047,6 @@ function buildStoreRoom() {
   // Two one-sided walls rather than one shared double-sided one, because they
   // are in different render passes until the second act: this face is lit by
   // the medical block's lights and the other by whatever the dark room has.
-  const SHARED_WALL_GAP = 0.03;
   {
     const litLeft = LIT_DOOR.x - LIT_DOOR.width / 2;
     const litRight = LIT_DOOR.x + LIT_DOOR.width / 2;

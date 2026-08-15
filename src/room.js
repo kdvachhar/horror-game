@@ -7,6 +7,7 @@ import {
   makeWoodSurface,
   makeRockSurface,
   makeSoftDotTexture,
+  makePosterTexture,
   cloneSurface,
   surfaceTextures,
   worldRepeat,
@@ -451,6 +452,45 @@ function buildBackRoom(scene) {
     mesh.receiveShadow = true;
     place(mesh);
   }
+
+  // The sign, on the same wall as the corridor door and just along from it, so
+  // it is the first thing in this room you are looking at when you come out of
+  // the medical block.
+  //
+  // Which way it points is a fact about the room, not a choice. You read it
+  // facing -z, and facing -z your right hand is +x — so the hall doorway at
+  // x = 0 is on your left as you stand at a sign hung at x = 4.6, and the arm
+  // has to go that way. Getting this backwards would be worse than not having
+  // a sign: an arrow you believe is an arrow you follow.
+  // The hall doorway is centred in its wall, so it is at x = 0; DOOR carries no
+  // x of its own. Drawn pointing toward -x, which is the reader's left, and
+  // mirrored only if the door it is sending you to ever moves to the other side
+  // of the sign.
+  const POSTER = { x: 4.6, width: 1.15, height: 1.44, bottom: 0.95 };
+  const HALL_DOORWAY_X = 0;
+  const poster = new THREE.Mesh(
+    new THREE.PlaneGeometry(POSTER.width, POSTER.height),
+    new THREE.MeshStandardMaterial({
+      map: makePosterTexture(HALL_DOORWAY_X > POSTER.x),
+      roughness: 0.92,
+      metalness: 0,
+    })
+  );
+  poster.position.set(POSTER.x, POSTER.bottom + POSTER.height / 2, BACK_DOOR.z + 0.17);
+  poster.receiveShadow = true;
+  place(poster);
+
+  // Paper does not hang in mid-air. A sliver of board behind it, a shade darker
+  // than the wall, so it reads as stuck up rather than painted on. Its front
+  // face has to sit clear of the sheet — the board is 2cm thick, so centring it
+  // where the paper is put its face exactly in the paper's plane and the board
+  // won, which is a poster that is a blank grey rectangle.
+  const backing = new THREE.Mesh(
+    new THREE.BoxGeometry(POSTER.width + 0.06, POSTER.height + 0.06, 0.02),
+    new THREE.MeshStandardMaterial({ color: '#2b2e2b', roughness: 0.95 })
+  );
+  backing.position.set(POSTER.x, POSTER.bottom + POSTER.height / 2, BACK_DOOR.z + 0.15);
+  place(backing);
 
   // What you see instead of the corridor, while the door at the end of it is
   // shut — which is the whole of act one.

@@ -951,6 +951,198 @@ export function makeRadialFalloffTexture() {
 }
 
 /** Soft round falloff used for dust motes. */
+/**
+ * The sign on the dark room's wall: the thing from the television, drawn as a
+ * cartoon of itself, pointing the way and saying so.
+ *
+ * Flat shapes and heavy outlines on purpose. Everything else in this building
+ * is rendered — lit, tone mapped, weathered — and this is a printed notice
+ * stuck to a wall, so it should look drawn, by someone, on purpose. The joke
+ * only lands if it is obviously a picture of him rather than another one of him.
+ *
+ * `flip` mirrors the drawing, because the arm has to point at a door whose side
+ * is a fact about the room, not about the artwork.
+ */
+export function makePosterTexture(flip = false) {
+  const W = 512;
+  const H = 640;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const c = canvas.getContext('2d');
+
+  // Paper: off-white, and grubbier toward the edges the way tape and hands
+  // leave it. Drawn before the mirror so the staining does not read as part of
+  // the picture.
+  c.fillStyle = '#e8e6da';
+  c.fillRect(0, 0, W, H);
+  const grime = c.createRadialGradient(W / 2, H / 2, H * 0.25, W / 2, H / 2, H * 0.62);
+  grime.addColorStop(0, 'rgba(120,118,96,0)');
+  grime.addColorStop(1, 'rgba(120,118,96,0.34)');
+  c.fillStyle = grime;
+  c.fillRect(0, 0, W, H);
+  for (let i = 0; i < 240; i++) {
+    const x = Math.random() * W;
+    const y = Math.random() * H;
+    c.fillStyle = `rgba(90,86,70,${0.02 + Math.random() * 0.07})`;
+    c.fillRect(x, y, 1 + Math.random() * 3, 1 + Math.random() * 3);
+  }
+
+  if (flip) {
+    c.translate(W, 0);
+    c.scale(-1, 1);
+  }
+
+  const ink = '#1b1d1a';
+  const line = (w) => {
+    c.strokeStyle = ink;
+    c.lineWidth = w;
+    c.lineJoin = 'round';
+    c.lineCap = 'round';
+  };
+  const box = (x, y, w, h, r, fill) => {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+    if (fill) {
+      c.fillStyle = fill;
+      c.fill();
+    }
+    c.stroke();
+  };
+
+  // ── the speech bubble, up top ──────────────────────────────────────────────
+  line(7);
+  box(48, 40, W - 96, 150, 26, '#fbfbf5');
+  // Tail, down toward the head.
+  c.beginPath();
+  c.moveTo(238, 186);
+  c.lineTo(284, 234);
+  c.lineTo(302, 186);
+  c.closePath();
+  c.fillStyle = '#fbfbf5';
+  c.fill();
+  c.stroke();
+
+  // "THIS WAY". Drawn unmirrored inside a mirrored context, or the sign would
+  // be the one thing on the wall you had to stand behind to read.
+  c.save();
+  if (flip) {
+    c.translate(W, 0);
+    c.scale(-1, 1);
+  }
+  c.fillStyle = ink;
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.font = 'bold 84px "Courier New", Courier, monospace';
+  c.fillText('THIS', W / 2, 92);
+  c.fillText('WAY', W / 2, 158);
+  c.restore();
+
+  // ── the television itself ──────────────────────────────────────────────────
+  // Sat well right of centre. The arm is what this picture is for and it needs
+  // somewhere to go: at 118 the glove and its finger ran off the left edge of
+  // the sheet and the sign pointed at nothing.
+  const tvX = 206;
+  const tvY = 250;
+  const tvW = 250;
+  const tvH = 200;
+
+  line(8);
+  box(tvX, tvY, tvW, tvH, 22, '#b9bdb6');       // the case
+  line(6);
+  box(tvX + 24, tvY + 22, tvW - 48, tvH - 70, 12, '#15181a'); // the screen
+
+  // Two plug eyes: a round pin with two prongs, the way they are drawn on the
+  // real one. Green, and flat — no gradient, this is printed.
+  const face = '#4e7d33';
+  for (const ex of [tvX + 84, tvX + 166]) {
+    const ey = tvY + 88;
+    c.fillStyle = face;
+    c.beginPath();
+    c.arc(ex, ey, 26, 0, Math.PI * 2);
+    c.fill();
+    line(5);
+    c.stroke();
+    c.fillStyle = face;
+    for (const px of [ex - 11, ex + 11]) c.fillRect(px - 4, ey - 46, 8, 24);
+  }
+
+  // The stepped mouth, three courses of it.
+  c.fillStyle = face;
+  for (const [mw, my] of [[104, 0], [66, 19], [32, 38]]) {
+    c.fillRect(tvX + tvW / 2 - mw / 2, tvY + 120 + my, mw, 19);
+  }
+
+  // Feet, so it is standing rather than floating.
+  c.fillStyle = '#8d928b';
+  line(6);
+  for (const fx of [tvX + 48, tvX + tvW - 78]) {
+    c.beginPath();
+    c.rect(fx, tvY + tvH, 30, 26);
+    c.fill();
+    c.stroke();
+  }
+
+  // ── the arm, pointing ──────────────────────────────────────────────────────
+  // Out of the case's left side, along a ribbed conduit, to a glove with the
+  // index finger out. Ribs rather than a plain tube, because that is what the
+  // arms in the medical room are.
+  const armY = tvY + 112;
+  line(9);
+  c.beginPath();
+  c.moveTo(tvX, armY);
+  c.quadraticCurveTo(tvX - 40, armY + 8, tvX - 74, armY - 2);
+  c.stroke();
+  line(4);
+  for (let i = 0; i < 6; i++) {
+    const t = i / 5;
+    const x = tvX - 8 - t * 58;
+    const y = armY + 6 - t * 7;
+    c.beginPath();
+    c.moveTo(x, y - 12);
+    c.lineTo(x, y + 12);
+    c.stroke();
+  }
+
+  const gy = armY - 4;
+  c.fillStyle = face;
+  line(7);
+  box(tvX - 118, gy - 25, 48, 50, 15, face);    // the fist
+  c.beginPath();                                 // and the finger
+  c.moveTo(tvX - 116, gy - 9);
+  c.lineTo(tvX - 166, gy - 9);
+  c.lineTo(tvX - 166, gy + 9);
+  c.lineTo(tvX - 116, gy + 9);
+  c.closePath();
+  c.fillStyle = face;
+  c.fill();
+  c.stroke();
+
+  // ── and a big arrow under it all, in case the finger is missed ─────────────
+  line(9);
+  c.fillStyle = ink;
+  c.beginPath();
+  c.moveTo(W - 96, 556);
+  c.lineTo(160, 556);
+  c.lineTo(160, 528);
+  c.lineTo(72, 578);
+  c.lineTo(160, 628);
+  c.lineTo(160, 600);
+  c.lineTo(W - 96, 600);
+  c.closePath();
+  c.fill();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+
 export function makeSoftDotTexture() {
   const size = 64;
   const canvas = createCanvas(size);

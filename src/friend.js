@@ -114,6 +114,9 @@ const HOP_IMPULSE = 5.4;
 const LINEAR_DAMPING = 0.45;
 
 const EYE_FORCE = new THREE.Vector3();
+const PUPIL_NORMAL = new THREE.Vector3();
+/** Which way a CircleGeometry faces before it is turned. */
+const FACE_AXIS = new THREE.Vector3(0, 0, 1);
 const EYE_TO_CAM = new THREE.Vector3();
 const WORLD_QUAT = new THREE.Quaternion();
 
@@ -165,12 +168,21 @@ export function createFriend(scene) {
   }
 
   // Two eyes stuck on the front of the bucket. Parented to the root so the
-  // creature brings them round to you by turning its whole body. Unlit on
-  // purpose: they should read as cartoon paint at any light level.
+  // creature brings them round to you by turning its whole body.
+  //
+  // Balls, half sunk into the barrel, rather than discs painted on it. The
+  // sclera is lit — a sphere under a flat colour has no shading and reads as
+  // the disc it replaced — with just enough emissive that it never goes fully
+  // dark in a room that does. The pupil stays unlit and flat black.
   const eyeGroup = new THREE.Group();
-  const scleraGeometry = new THREE.CircleGeometry(EYE_RADIUS, 28);
+  const scleraGeometry = new THREE.SphereGeometry(EYE_RADIUS, 24, 18);
   const pupilGeometry = new THREE.CircleGeometry(PUPIL_RADIUS, 20);
-  const scleraMaterial = new THREE.MeshBasicMaterial({ color: 0xfbfbf7 });
+  const scleraMaterial = new THREE.MeshStandardMaterial({
+    color: 0xfbfbf7,
+    roughness: 0.26,
+    metalness: 0,
+    emissive: 0x46453f,
+  });
   const pupilMaterial = new THREE.MeshBasicMaterial({ color: 0x14110d });
   const pupils = [];
 
@@ -185,13 +197,19 @@ export function createFriend(scene) {
     // edges floating well clear of the bucket.
     const surfaceZ = Math.sqrt(Math.max(faceRadius * faceRadius - x * x, 0.0001));
 
+    // Sunk a third of its radius into the barrel, so it sits in the bucket
+    // rather than balancing on it. No rotation to get right — a sphere has no
+    // front, which is also what stops the edges dipping under the surface the
+    // way a tilted disc's did.
     const sclera = new THREE.Mesh(scleraGeometry, scleraMaterial);
-    sclera.position.set(x, EYE_HEIGHT, surfaceZ + EYE_LIFT);
-    sclera.rotation.y = Math.atan2(x, surfaceZ);
+    sclera.position.set(x, EYE_HEIGHT, surfaceZ - EYE_RADIUS * 0.26);
+    sclera.castShadow = true;
     eyeGroup.add(sclera);
 
+    // The pupil lies on the ball and is walked round it every frame, so it
+    // slides over the curve instead of sitting on a flat plate in front.
     const pupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
-    pupil.position.set(0, 0, 0.002);
+    pupil.position.set(0, 0, EYE_RADIUS + 0.002);
     sclera.add(pupil);
 
     pupils.push({
@@ -527,8 +545,13 @@ export function createFriend(scene) {
         }
       }
 
-      pupil.mesh.position.x = pupil.pos.x;
-      pupil.mesh.position.y = pupil.pos.y;
+      // Onto the surface of the ball: the depth follows from how far across
+      // it has travelled, and the disc is turned to lie flat against it.
+      const lateral = Math.hypot(pupil.pos.x, pupil.pos.y);
+      const depth = Math.sqrt(Math.max(EYE_RADIUS * EYE_RADIUS - lateral * lateral, 1e-4));
+      pupil.mesh.position.set(pupil.pos.x, pupil.pos.y, depth + 0.002);
+      PUPIL_NORMAL.set(pupil.pos.x, pupil.pos.y, depth).normalize();
+      pupil.mesh.quaternion.setFromUnitVectors(FACE_AXIS, PUPIL_NORMAL);
     }
   }
 

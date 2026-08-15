@@ -160,6 +160,20 @@ const LIT_ROOM = {
 /** The doorway into it, directly opposite the green one. */
 const LIT_DOOR = { x: WARD_DOOR.x, width: 1.2, height: 2.3 };
 
+/**
+ * And the one out of it, in the far wall: shut, and staying shut for now.
+ *
+ * Double, and taller than the others — this room has an eight metre ceiling
+ * and a ward door in it would look like a hatch. Surface-mounted on a solid
+ * wall, the way the green one started: there is nothing behind it yet, and
+ * cutting the hole is the job for whenever there is.
+ */
+const LIT_EXIT = {
+  x: (STORE.minX - BACK_ROOM.width + STORE.minX) / 2,
+  width: 1.9,
+  height: 2.6,
+};
+
 
 /**
  * The ward's walls.
@@ -720,6 +734,78 @@ function buildLitRoom() {
     lamp.position.set(lx, 4.0, lz);
     group.add(lamp);
   }
+
+  return group;
+}
+
+/**
+ * The double door at the far end of the lit room. Shut, and nothing works it.
+ * Heavier than the others: two leaves, a rail across each, and a stripe along
+ * the bottom of the kind that gets painted on anything a trolley hits.
+ */
+function buildClosedExit() {
+  const group = new THREE.Group();
+  const { width, height } = LIT_EXIT;
+  const half = width / 2;
+
+  const frameMat = clinicalMaterial('#6d726e', 0.55);
+  const jamb = 0.12;
+  for (const [w, h, x, y] of [
+    [jamb, height + jamb, -(width + jamb) / 2, (height + jamb) / 2],
+    [jamb, height + jamb, (width + jamb) / 2, (height + jamb) / 2],
+    [width + jamb * 2, jamb, 0, height + jamb / 2],
+  ]) {
+    const piece = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.18), frameMat);
+    piece.position.set(x, y, 0.09);
+    piece.castShadow = true;
+    piece.receiveShadow = true;
+    group.add(piece);
+  }
+
+  const leafMat = clinicalMaterial('#5b625f', 0.66);
+  const trim = clinicalMaterial('#3f4644', 0.5);
+  const hazard = clinicalMaterial('#8d7a2e', 0.7);
+
+  for (const side of [-1, 1]) {
+    const leaf = new THREE.Mesh(
+      new THREE.BoxGeometry(half - 0.02, height - 0.06, 0.07),
+      leafMat
+    );
+    leaf.position.set(side * (half / 2), (height - 0.06) / 2, 0.035);
+    leaf.castShadow = true;
+    leaf.receiveShadow = true;
+    group.add(leaf);
+
+    // Rail across the middle, and the stripe along the foot.
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(half - 0.1, 0.1, 0.03), trim);
+    rail.position.set(side * (half / 2), 1.35, 0.078);
+    group.add(rail);
+
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(half - 0.06, 0.26, 0.012), hazard);
+    stripe.position.set(side * (half / 2), 0.22, 0.078);
+    group.add(stripe);
+
+    // Push bar, running most of the leaf.
+    const bar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.032, 0.032, half - 0.24, 10),
+      clinicalMaterial('#9aa09c', 0.4)
+    );
+    bar.rotation.z = Math.PI / 2;
+    bar.position.set(side * (half / 2), 1.05, 0.13);
+    bar.castShadow = true;
+    group.add(bar);
+
+    for (const bx of [-1, 1]) {
+      const mount = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.1), trim);
+      mount.position.set(side * (half / 2) + bx * ((half - 0.26) / 2), 1.05, 0.09);
+      group.add(mount);
+    }
+  }
+
+  // The seam where the two meet.
+  const seam = new THREE.Mesh(new THREE.BoxGeometry(0.035, height - 0.06, 0.09), trim);
+  seam.position.set(0, (height - 0.06) / 2, 0.045);
+  group.add(seam);
 
   return group;
 }
@@ -1484,6 +1570,11 @@ export function createMedicalRoom(scene) {
   // straight down it, so this is ahead and to your right, and the television
   // is the other way.
   group.add(buildLitRoom());
+
+  const litExit = buildClosedExit();
+  litExit.position.set(LIT_EXIT.x, 0, LIT_ROOM.far - 0.02);
+  litExit.rotation.y = Math.PI;
+  group.add(litExit);
 
   const litDoorway = buildCorridorDoor();
   litDoorway.group.position.set(LIT_DOOR.x, 0, HALLWAY.far);

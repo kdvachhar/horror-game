@@ -233,11 +233,18 @@ export function createDoor(scene) {
 
   // Housing for the retracted door. The wall hides it from the lit room, but
   // the door hangs on the far side of that wall, so from the dark room it would
-  // otherwise be left dangling in mid-air above the opening. On the dark layer,
-  // so it renders as unlit black and reads as nothing at all.
+  // otherwise be left dangling in mid-air above the opening.
+  //
+  // It is on the dark layer because it is in that room, and it now has to hold
+  // up as an object rather than as an absence. It used to be near-black on the
+  // reasoning that unlit black reads as nothing — which was true for exactly as
+  // long as the room was unlit. The room gets its power back in the second act,
+  // room.js moves everything on this layer into the main pass, and a black slab
+  // the width of the doorway appeared above it. Painted as what it is instead:
+  // a steel hood the shutter winds up into.
   const pocket = new THREE.Mesh(
     new THREE.BoxGeometry(DOOR.width + 0.6, TRAVEL + 0.5, 0.4),
-    new THREE.MeshStandardMaterial({ color: '#101014', roughness: 0.9 })
+    new THREE.MeshStandardMaterial({ color: '#42474a', roughness: 0.62, metalness: 0.5 })
   );
   pocket.position.set(0, DOOR.height + (TRAVEL + 0.5) / 2 - 0.15, DOOR.z - 0.62);
   pocket.layers.set(LAYER.DARK);

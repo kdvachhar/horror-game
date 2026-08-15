@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MEDICAL, BACK_ROOM, DOOR } from './config.js';
+import { MEDICAL, BACK_ROOM, BACK_DOOR, DOOR } from './config.js';
 import {
   makeWallSurface,
   makeFloorSurface,
@@ -102,16 +102,21 @@ const STORE = {
 };
 
 /**
- * The room across the corridor from the green door.
+ * The room across the corridor from the green door — which is the dark room.
  *
- * It is the room you were knocked out in — same floor, same walls, the same
- * sixteen by eighteen by eight the dark one has — reached from its other end
- * and with the lights on. Coming back into it lit is the point; it is the only
- * place in the game you have already been.
+ * Not a copy of it any more. This block used to stand seventy metres away with
+ * its own sixteen-by-eighteen replica bolted to the end, and the replica was
+ * the problem: it could match the dark room's dimensions, materials, doorway
+ * and lamp and still only ever be a room that resembled it. Now MEDICAL.center
+ * puts this block where the corridor's far wall *is* the dark room's, and
+ * walking through that door puts you in the room itself.
+ *
+ * So these are not the bounds of anything built here. room.js builds that room;
+ * this is where it lies in local coordinates, for the wire that crosses it and
+ * for the checks below. It falls out of the arithmetic rather than being
+ * chosen, which is the point — get MEDICAL.center wrong and it stops agreeing.
  */
 const LIT_ROOM = {
-  // Runs left from the corridor/store-room corner. Centring it on the doorway
-  // instead put sixteen metres of it straight through the store room.
   minX: STORE.minX - BACK_ROOM.width,
   maxX: STORE.minX,
   near: HALLWAY.far,
@@ -119,43 +124,58 @@ const LIT_ROOM = {
   height: BACK_ROOM.height,
 };
 
-/** The doorway into it, directly opposite the green one. */
-const LIT_DOOR = { x: WARD_DOOR.x, width: 1.2, height: 2.3 };
+/**
+ * The doorway into it: the hole room.js cuts in that wall, in local terms.
+ *
+ * Taken from BACK_DOOR rather than written again, because two files now have
+ * to agree about one opening — room.js cuts it, this file hangs the door in it
+ * — and the way that goes wrong is silent. You get a door standing in front of
+ * a wall, or a hole with nothing in it.
+ */
+const LIT_DOOR = {
+  x: BACK_DOOR.x - MEDICAL.center[0],
+  width: BACK_DOOR.width,
+  height: BACK_DOOR.height,
+};
 
 /**
- * And the opening in the far wall — the one you were dragged through.
+ * The two files' shared assumptions, checked out loud at import.
  *
- * Centred in the sixteen metre wall and sized off DOOR, because it *is* DOOR:
- * the same hole in the same wall of the same room, seen from the inside with
- * the lights on. Getting those two numbers to agree is most of what makes the
- * room recognisable, so they are taken rather than retyped.
- *
- * Shut, and staying shut. What is on the other side of it is the hall, and the
- * hall is seventy metres away in world space — this room is only the same room
- * in the fiction. A closed door is how that stays true.
+ * All of this is arithmetic that must come out exactly, and every way it can
+ * be wrong is invisible: a wall half a metre out reads as a wall, a doorway in
+ * the wrong wall reads as a doorway. Failing at startup with the numbers in
+ * hand beats finding it by walking into it.
  */
-const LIT_EXIT = {
-  x: (STORE.minX - BACK_ROOM.width + STORE.minX) / 2,
-  width: DOOR.width,
-  height: DOOR.height,
-};
+if (import.meta.env?.DEV) {
+  const [cx, , cz] = MEDICAL.center;
+  const complain = (what, got, want) => {
+    if (Math.abs(got - want) > 1e-6) {
+      console.error(`medical room misaligned: ${what} is ${got}, should be ${want}`);
+    }
+  };
+  complain('the lit room’s left edge', cx + LIT_ROOM.minX, -BACK_ROOM.width / 2);
+  complain('the lit room’s right edge', cx + LIT_ROOM.maxX, BACK_ROOM.width / 2);
+  complain('the corridor’s far wall', cz + LIT_ROOM.near, DOOR.z - BACK_ROOM.depth);
+  complain('the lit room’s far wall', cz + LIT_ROOM.far, DOOR.z);
+  complain('the corridor doorway', cx + LIT_DOOR.x, BACK_DOOR.x);
+}
 
 /**
  * The black wire, and the route it takes.
  *
  * It leaves the television, crosses the ward floor, goes under the ward door,
- * over the corridor, under the second door and the length of the lit room, to
- * a port in the far wall beside the shut one. It is the thing you follow: the
- * television tells you to, and from here on the level is wherever this goes.
+ * over the corridor, under the second door and the length of the dark room, to
+ * a port beside the doorway you were carried through. It is the thing you
+ * follow: the television tells you to, and from here on the level is wherever
+ * this goes.
  *
  * It used to turn the other way at the corridor and end in the store room,
  * which was the wrong room to send you to — that one is a cupboard you reach
  * by throwing a bucket through a window, and it is finished with once the
- * button in it is pressed. Ending against the shut door instead says the two
- * things the wire is for at once: this way, and through there.
+ * button in it is pressed.
  *
  * Declared below the rooms so the points can be taken from them. Written above
- * and it reads STORE and LIT_EXIT before either exists, which is a temporal
+ * and it reads STORE and LIT_ROOM before either exists, which is a temporal
  * dead zone error at import and a blank screen.
  *
  * The points thread between the beds rather than through them — this lies on
@@ -194,10 +214,12 @@ const WIRE_PATH = [
   [0.8, WIRE_RADIUS, 19.2],
   [0.1, WIRE_RADIUS, 22.4],
   [0.45, WIRE_RADIUS, 24.6],
-  // Up into the wall beside the shut door — clear of its reveal, which stands
-  // half a metre out either side of the opening.
-  [LIT_EXIT.x + LIT_EXIT.width / 2 + 0.9, 0.35, LIT_ROOM.far - 0.15],
-  [LIT_EXIT.x + LIT_EXIT.width / 2 + 0.9, 0.95, LIT_ROOM.far - 0.04],
+  // Up into the wall beside the hall doorway — clear of its reveal, which
+  // stands half a metre out either side of the opening. That doorway is the
+  // one you were carried through, and the far wall is DOOR's wall, so the port
+  // is placed off DOOR rather than off a number that happens to match it.
+  [DOOR.width / 2 + 0.5 + 0.9 - MEDICAL.center[0], 0.35, LIT_ROOM.far - 0.15],
+  [DOOR.width / 2 + 0.5 + 0.9 - MEDICAL.center[0], 0.95, LIT_ROOM.far - 0.04],
 ];
 
 
@@ -660,255 +682,6 @@ function buildButton() {
 }
 
 /**
- * The room you woke up next to, from the other side and with the lights on.
- *
- * Built to the dark room's dimensions off BACK_ROOM rather than to numbers of
- * its own, so if that one is ever resized this follows. Deliberately bare —
- * the whole of it is that you have stood in here before and could not see it.
- */
-function buildLitRoom() {
-  const group = new THREE.Group();
-  const w = LIT_ROOM.maxX - LIT_ROOM.minX;
-  const d = LIT_ROOM.far - LIT_ROOM.near;
-  const H = LIT_ROOM.height;
-  const midX = (LIT_ROOM.minX + LIT_ROOM.maxX) / 2;
-  const midZ = (LIT_ROOM.near + LIT_ROOM.far) / 2;
-
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(w, d),
-    new THREE.MeshStandardMaterial({ ...makeFloorSurface(...worldRepeat(w, d)), metalness: 0.02 })
-  );
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.set(midX, 0, midZ);
-  floor.receiveShadow = true;
-  group.add(floor);
-
-  const ceiling = new THREE.Mesh(
-    new THREE.PlaneGeometry(w, d),
-    new THREE.MeshStandardMaterial({ ...makeCeilingSurface(...worldRepeat(w, d)) })
-  );
-  ceiling.rotation.x = Math.PI / 2;
-  ceiling.position.set(midX, H, midZ);
-  group.add(ceiling);
-
-  const surface = makeWallSurface(...worldRepeat(w, H));
-  const sides = cloneSurface(surface, ...worldRepeat(d, H));
-  const wallOf = (spec) =>
-    new THREE.MeshStandardMaterial({ ...spec, metalness: 0, side: THREE.DoubleSide });
-
-  for (const [pw, spec, px, pz, rot] of [
-    [d, sides, LIT_ROOM.minX, midZ, Math.PI / 2],
-    [d, sides, LIT_ROOM.maxX, midZ, -Math.PI / 2],
-  ]) {
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(pw, H), wallOf(spec));
-    wall.position.set(px, H / 2, pz);
-    wall.rotation.y = rot;
-    wall.receiveShadow = true;
-    group.add(wall);
-  }
-
-  // Near wall, in pieces round the doorway.
-  const doorLeft = LIT_DOOR.x - LIT_DOOR.width / 2;
-  const doorRight = LIT_DOOR.x + LIT_DOOR.width / 2;
-  for (const [pw, ph, pcx, pcy] of [
-    [doorLeft - LIT_ROOM.minX, H, (LIT_ROOM.minX + doorLeft) / 2, H / 2],
-    [LIT_ROOM.maxX - doorRight, H, (doorRight + LIT_ROOM.maxX) / 2, H / 2],
-    [LIT_DOOR.width, H - LIT_DOOR.height, LIT_DOOR.x, (H + LIT_DOOR.height) / 2],
-  ]) {
-    if (pw <= 0 || ph <= 0) continue;
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), wallOf(surface));
-    wall.position.set(pcx, pcy, LIT_ROOM.near);
-    wall.rotation.y = Math.PI;
-    wall.receiveShadow = true;
-    group.add(wall);
-  }
-
-  // Far wall, in pieces round the opening you came in through the first time.
-  const exitLeft = LIT_EXIT.x - LIT_EXIT.width / 2;
-  const exitRight = LIT_EXIT.x + LIT_EXIT.width / 2;
-  for (const [pw, ph, pcx, pcy] of [
-    [exitLeft - LIT_ROOM.minX, H, (LIT_ROOM.minX + exitLeft) / 2, H / 2],
-    [LIT_ROOM.maxX - exitRight, H, (exitRight + LIT_ROOM.maxX) / 2, H / 2],
-    [LIT_EXIT.width, H - LIT_EXIT.height, LIT_EXIT.x, (H + LIT_EXIT.height) / 2],
-  ]) {
-    if (pw <= 0 || ph <= 0) continue;
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), wallOf(surface));
-    wall.position.set(pcx, pcy, LIT_ROOM.far);
-    wall.receiveShadow = true;
-    group.add(wall);
-  }
-
-  // The reveals round it, half a metre deep in bare trim. This is the detail
-  // that does the recognising: from inside the dark room the doorway is a
-  // black slot with a thick pale lining, and it is the only thing in there the
-  // one light picks out. Same jamb, same depth, same colour as the hall's.
-  const revealMaterial = new THREE.MeshStandardMaterial({ color: PALETTE.trim, roughness: 0.85 });
-  const jamb = 0.5;
-  for (const [rw, rh, rx, ry] of [
-    [jamb, LIT_EXIT.height, exitLeft - jamb / 2 + 0.01, LIT_EXIT.height / 2],
-    [jamb, LIT_EXIT.height, exitRight + jamb / 2 - 0.01, LIT_EXIT.height / 2],
-    [LIT_EXIT.width + jamb * 2, jamb, LIT_EXIT.x, LIT_EXIT.height + jamb / 2 - 0.01],
-  ]) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(rw, rh, 0.75), revealMaterial);
-    // Mirrored: the room lies on the -z side of this wall, where the hall lies
-    // on the +z side of the one this is a copy of.
-    mesh.position.set(rx, ry, LIT_ROOM.far + 0.1);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    group.add(mesh);
-  }
-
-  // The lamp that used to be the whole of it: one shaded bulb on a flex, hung
-  // just inside the door and aimed at the floor. Still here, still on, and now
-  // the least of six — which is the difference between the two rooms stated in
-  // one object. Offset taken from BACK_ROOM so it hangs where it always did.
-  const lampZ = LIT_ROOM.far - BACK_ROOM.lightOffset;
-
-  // 300 in the dark, where it was competing with nothing; less than half that
-  // here, where it is landing on a wall the ceiling has already lit and at full
-  // strength blew the door out to white.
-  const spot = new THREE.SpotLight(0xfff4e2, 130, 18, Math.PI / 7, 0.35, 1.6);
-  spot.position.set(midX, H - 0.35, lampZ);
-  spot.target.position.set(midX, 0, lampZ);
-  // No shadow map on this one. In the dark it was the only caster and every
-  // shadow in the room was its doing; in here the six fittings fill them all
-  // back in, so it would cost a 1024 map to render nothing you could see.
-  group.add(spot);
-  group.add(spot.target);
-
-  const shade = new THREE.Mesh(
-    new THREE.ConeGeometry(0.42, 0.4, 16, 1, true),
-    new THREE.MeshStandardMaterial({
-      color: PALETTE.metalDark,
-      roughness: 0.5,
-      metalness: 0.6,
-      side: THREE.DoubleSide,
-    })
-  );
-  shade.position.set(midX, H - 0.3, lampZ);
-  group.add(shade);
-
-  const bulb = new THREE.Mesh(
-    new THREE.SphereGeometry(0.08, 10, 10),
-    new THREE.MeshBasicMaterial({ color: 0xfff4e2, toneMapped: false })
-  );
-  bulb.position.set(midX, H - 0.46, lampZ);
-  group.add(bulb);
-
-  const flex = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.015, 0.015, 0.3),
-    new THREE.MeshStandardMaterial({ color: PALETTE.trim, roughness: 0.8 })
-  );
-  flex.position.set(midX, H - 0.15, lampZ);
-  group.add(flex);
-
-  // Lights. It has a ceiling eight metres up, so these hang on chains the way
-  // the first room's do — flush to that ceiling nothing would reach the floor.
-  // Six of them, in two rows. The whole point of this room is that it is lit,
-  // so it wants enough fittings to actually read as a working ceiling rather
-  // than as the dark one with a couple of lamps found in it.
-  for (const [lx, lz] of [
-    [midX - 4.5, midZ - 6], [midX + 4.5, midZ - 6],
-    [midX - 4.5, midZ], [midX + 4.5, midZ],
-    [midX - 4.5, midZ + 6], [midX + 4.5, midZ + 6],
-  ]) {
-    const chain = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.02, 0.02, H - 4.2, 6),
-      clinicalMaterial('#3d4143', 0.6)
-    );
-    chain.position.set(lx, H - (H - 4.2) / 2, lz);
-    group.add(chain);
-
-    const housing = new THREE.Mesh(
-      new THREE.BoxGeometry(2.2, 0.16, 0.55),
-      clinicalMaterial('#4a4f51', 0.5)
-    );
-    housing.position.set(lx, 4.2, lz);
-    housing.castShadow = true;
-    group.add(housing);
-
-    const tube = new THREE.Mesh(
-      new THREE.BoxGeometry(2.0, 0.05, 0.32),
-      new THREE.MeshBasicMaterial({ color: '#e8f2ea', toneMapped: false })
-    );
-    tube.position.set(lx, 4.11, lz);
-    group.add(tube);
-
-    // Bright enough to read as a working ceiling, dim enough that the walls
-    // keep the grey they have in the dark. At 72 the concrete washed to white
-    // and the room stopped looking like the one you woke up next to, which is
-    // the only thing this room has to do.
-    const lamp = new THREE.PointLight(0xdfe9e2, 48, 20, 1.25);
-    lamp.position.set(lx, 4.0, lz);
-    group.add(lamp);
-  }
-
-  return group;
-}
-
-/**
- * The double door hung in that opening. Shut, and nothing works it.
- *
- * No frame of its own: it is set back inside the reveals, and those are the
- * frame. Giving it a second one stacked a jamb on a jamb and put the two
- * within a couple of centimetres of each other, which is where z-fighting
- * comes from. Two leaves, a rail across each, and a stripe along the bottom of
- * the kind that gets painted on anything a trolley hits.
- */
-function buildClosedExit() {
-  const group = new THREE.Group();
-  const { width, height } = LIT_EXIT;
-  const half = width / 2;
-
-  const leafMat = clinicalMaterial('#5b625f', 0.66);
-  const trim = clinicalMaterial('#3f4644', 0.5);
-  const hazard = clinicalMaterial('#8d7a2e', 0.7);
-
-  for (const side of [-1, 1]) {
-    const leaf = new THREE.Mesh(
-      new THREE.BoxGeometry(half - 0.02, height - 0.06, 0.07),
-      leafMat
-    );
-    leaf.position.set(side * (half / 2), (height - 0.06) / 2, 0.035);
-    leaf.castShadow = true;
-    leaf.receiveShadow = true;
-    group.add(leaf);
-
-    // Rail across the middle, and the stripe along the foot.
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(half - 0.1, 0.1, 0.03), trim);
-    rail.position.set(side * (half / 2), 1.35, 0.078);
-    group.add(rail);
-
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(half - 0.06, 0.26, 0.012), hazard);
-    stripe.position.set(side * (half / 2), 0.22, 0.078);
-    group.add(stripe);
-
-    // Push bar, running most of the leaf.
-    const bar = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.032, 0.032, half - 0.24, 10),
-      clinicalMaterial('#9aa09c', 0.4)
-    );
-    bar.rotation.z = Math.PI / 2;
-    bar.position.set(side * (half / 2), 1.05, 0.13);
-    bar.castShadow = true;
-    group.add(bar);
-
-    for (const bx of [-1, 1]) {
-      const mount = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.1), trim);
-      mount.position.set(side * (half / 2) + bx * ((half - 0.26) / 2), 1.05, 0.09);
-      group.add(mount);
-    }
-  }
-
-  // The seam where the two meet.
-  const seam = new THREE.Mesh(new THREE.BoxGeometry(0.035, height - 0.06, 0.09), trim);
-  seam.position.set(0, (height - 0.06) / 2, 0.045);
-  group.add(seam);
-
-  return group;
-}
-
-/**
  * The doorway across the corridor, and the door in it. Shut until the green one
  * opens; the two go together, off the same swing.
  */
@@ -1178,8 +951,11 @@ function buildStoreRoom() {
     [STORE.maxX - STORE.minX, (STORE.minX + STORE.maxX) / 2, STORE.near, Math.PI],
     [STORE.maxX - STORE.minX, (STORE.minX + STORE.maxX) / 2, STORE.far, 0],
     [STORE.far - STORE.near, STORE.maxX, (STORE.near + STORE.far) / 2, -Math.PI / 2],
-    // And the stub of shared wall past the corner, below the opening.
-    [STORE.far - HALLWAY.far, STORE.minX, (HALLWAY.far + STORE.far) / 2, Math.PI / 2],
+    // And the stub of shared wall past the corner, below the opening. Nudged
+    // into the store room for the same reason as the corridor's far wall: past
+    // the corner this is up against the dark room's right-hand wall, and two
+    // planes at x = 8 z-fight into stripes.
+    [STORE.far - HALLWAY.far, STORE.minX + 0.03, (HALLWAY.far + STORE.far) / 2, Math.PI / 2],
   ]) {
     const wall = new THREE.Mesh(new THREE.PlaneGeometry(width, H), shell);
     wall.position.set(px, H / 2, pz);
@@ -1189,6 +965,19 @@ function buildStoreRoom() {
   }
 
   // The corridor's far side, round the opening opposite the green door.
+  //
+  // This wall has the dark room on the other side of it, and room.js builds
+  // that room's face of it — sixteen metres wide, eight tall, round the same
+  // opening. So there are two walls here, one per side, and they have to be
+  // held apart: sat in the same plane they z-fought, and the far end of the
+  // corridor came out as a panel of horizontal stripes that changed with every
+  // step. Three centimetres into the corridor is enough to settle it and is not
+  // a gap anything can see, let alone get through.
+  //
+  // Two one-sided walls rather than one shared double-sided one, because they
+  // are in different render passes until the second act: this face is lit by
+  // the medical block's lights and the other by whatever the dark room has.
+  const SHARED_WALL_GAP = 0.03;
   {
     const litLeft = LIT_DOOR.x - LIT_DOOR.width / 2;
     const litRight = LIT_DOOR.x + LIT_DOOR.width / 2;
@@ -1199,7 +988,7 @@ function buildStoreRoom() {
     ]) {
       if (pw <= 0 || ph <= 0) continue;
       const wall = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), shell);
-      wall.position.set(pcx, pcy, HALLWAY.far);
+      wall.position.set(pcx, pcy, HALLWAY.far - SHARED_WALL_GAP);
       wall.receiveShadow = true;
       group.add(wall);
     }
@@ -1674,15 +1463,10 @@ export function createMedicalRoom(scene) {
   // In the corner of the wall behind you: sitting up on the bed you face
   // straight down it, so this is ahead and to your right, and the television
   // is the other way.
-  group.add(buildLitRoom());
-
-  // Set back into the reveal rather than flat on the wall, so the doorway has
-  // the depth it had when it was a black slot you were carried through.
-  const litExit = buildClosedExit();
-  litExit.position.set(LIT_EXIT.x, 0, LIT_ROOM.far + 0.25);
-  litExit.rotation.y = Math.PI;
-  group.add(litExit);
-
+  //
+  // Nothing is built past this door. The other side of it is the dark room,
+  // which room.js has been building since the first scene, and which this block
+  // is positioned to meet — see LIT_ROOM. There used to be a replica here.
   const litDoorway = buildCorridorDoor();
   litDoorway.group.position.set(LIT_DOOR.x, 0, HALLWAY.far);
   group.add(litDoorway.group);
@@ -1823,16 +1607,16 @@ export function createMedicalRoom(scene) {
   // between corridor and store room exists only past the corner.
   const s0 = 0.8;
   colliders.push(
-    // The wall between the corridor and the lit room, in two pieces round the
-    // way on. One set, not two — it is a single plane with a room on each side,
-    // and it is thin and centred on it so neither side is stopped short of a
-    // wall it can see.
-    { minX: cx + LIT_ROOM.minX - s0, maxX: cx + LIT_DOOR.x - LIT_DOOR.width / 2, minZ: cz + HALLWAY.far - 0.25, maxZ: cz + HALLWAY.far + 0.25 },
-    { minX: cx + LIT_DOOR.x + LIT_DOOR.width / 2, maxX: cx + HALLWAY.maxX, minZ: cz + HALLWAY.far - 0.25, maxZ: cz + HALLWAY.far + 0.25 },
-    // Stops at the corridor's far wall — past that is the lit room, which is
-    // open at this end and had 0.8m of corridor wall standing in it.
+    // The corridor's far wall is the dark room's, and room.js owns it — both
+    // its solid halves and the hole between them. There were boxes for it here
+    // as well when there was a replica on the other side; two sets of walls in
+    // one plane is how you get stopped by a wall you have already walked past.
+    //
+    // Stops at that wall — past it is the dark room, which is open at this end
+    // and had 0.8m of corridor wall standing in it.
     { minX: cx + HALLWAY.minX - s0, maxX: cx + HALLWAY.minX, minZ: cz + HALLWAY.near, maxZ: cz + HALLWAY.far },
-    // The way on, solid while that door is still shut.
+    // The way on, solid while that door is still shut. This one does belong to
+    // this file: the door is built here, so what it blocks is built here too.
     {
       minX: cx + LIT_DOOR.x - LIT_DOOR.width / 2,
       maxX: cx + LIT_DOOR.x + LIT_DOOR.width / 2,
@@ -1840,10 +1624,6 @@ export function createMedicalRoom(scene) {
       maxZ: cz + HALLWAY.far + 0.25,
       enabled: () => litSwing < 0.35,
     },
-    // The lit room across from it.
-    { minX: cx + LIT_ROOM.minX - s0, maxX: cx + LIT_ROOM.minX, minZ: cz + LIT_ROOM.near - s0, maxZ: cz + LIT_ROOM.far + s0 },
-    { minX: cx + LIT_ROOM.maxX, maxX: cx + LIT_ROOM.maxX + s0, minZ: cz + LIT_ROOM.near - s0, maxZ: cz + LIT_ROOM.far + s0 },
-    { minX: cx + LIT_ROOM.minX - s0, maxX: cx + LIT_ROOM.maxX + s0, minZ: cz + LIT_ROOM.far, maxZ: cz + LIT_ROOM.far + s0 },
 
     // Store room: near side, far side, right side.
     { minX: cx + STORE.minX, maxX: cx + STORE.maxX + s0, minZ: cz + STORE.near - s0, maxZ: cz + STORE.near },

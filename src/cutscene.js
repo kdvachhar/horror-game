@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BACK_ROOM, DOOR, LAYER } from './config.js';
+import { BACK_ROOM, DOOR, LAYER, insideBackRoom } from './config.js';
 import { playKnockout } from './audio.js';
 import { buildHand } from './glove.js';
 import { speak, hideSubtitle, stopSpeaking } from './voice.js';
@@ -55,7 +55,9 @@ export function createCutscene({ camera, player, onFinished }) {
    * whenever the scene fires in the other room.
    */
   function matchLayerToRoom() {
-    const layer = camera.position.z < DOOR.z ? LAYER.DARK : LAYER.MAIN;
+    const layer = insideBackRoom(camera.position.x, camera.position.z)
+      ? LAYER.DARK
+      : LAYER.MAIN;
     hand.traverse((object) => object.layers.set(layer));
   }
 

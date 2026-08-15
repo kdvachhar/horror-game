@@ -20,10 +20,26 @@ export const DOOR = {
   z: -ROOM.depth / 2,
 };
 
-// The room you wake up in. Set well away from the main building so nothing
-// overlaps; you are moved here rather than walking.
+// The room you wake up in.
+//
+// It used to sit at [70, 0, 0] — parked well away from the main building so
+// nothing could overlap, with a copy of the dark room built next to it to walk
+// back into. It is joined on properly now: the corridor past the ward opens
+// through the dark room's far wall, and the room you come out into is that
+// room, not a replica of it.
+//
+// The centre is what makes the two line up, and it is arithmetic, not taste.
+// The medical block's own back room runs from z 8 to 26 in local coordinates
+// and is sixteen wide about local x -1.5; putting that on top of BACK_ROOM,
+// which runs from DOOR.z - depth to DOOR.z and is sixteen wide about x 0, is
+// the only pair of numbers that works:
+//
+//   x:  0 - (-1.5)              =   1.5
+//   z:  (DOOR.z - depth) - 8    = -21 - 18 - 8  = -47
+//
+// medicalRoom.js checks this at import and says so if it drifts.
 export const MEDICAL = {
-  center: [70, 0, 0],
+  center: [1.5, 0, -47],
   // Low ceilinged, and wide enough for a row of beds down each wall with the
   // wrecked ones dragged into the middle.
   width: 13,
@@ -40,7 +56,8 @@ export const MEDICAL = {
  */
 export const LAYER = { MAIN: 0, DARK: 1 };
 
-// The room through that door. Small, low and bare — one light and nothing else.
+// The room through that door. Small, low and bare — one light and nothing else,
+// until you come back into it from the far end with the power on.
 export const BACK_ROOM = {
   width: 16,
   depth: 18,
@@ -48,6 +65,44 @@ export const BACK_ROOM = {
   /** Distance past the doorway that the single spotlight stands. */
   lightOffset: 3.2,
 };
+
+/**
+ * The second way into the back room: the corridor past the medical ward, in
+ * its far wall.
+ *
+ * Shared between the two files that have to agree about it — room.js cuts the
+ * hole and medicalRoom.js puts the door in it — so the wall and the door
+ * cannot end up in different places. Its z is the far wall, derived rather
+ * than written down, because DOOR.z moves when the editor resizes the hall and
+ * this has to move with it.
+ *
+ * Off to one side rather than centred: opposite the hall doorway you would be
+ * looking straight down the room at where you were taken, which gives the
+ * whole thing away before you have crossed the floor. In the corner you come
+ * out along the wall and have to turn.
+ */
+export const BACK_DOOR = {
+  x: 6.9,
+  width: 1.2,
+  height: 2.3,
+  get z() {
+    return DOOR.z - BACK_ROOM.depth;
+  },
+};
+
+/**
+ * Whether a world position is standing in the back room.
+ *
+ * The test used to be `z < DOOR.z` — everything past the hall's far wall was
+ * the dark room, because nothing else was back there. The medical block is now,
+ * all of it, so that test claims the ward, the corridor and the store room too
+ * and would put anything standing in them into the dark pass, where the only
+ * light is a spotlight eighteen metres away through a wall.
+ */
+export function insideBackRoom(x, z) {
+  const half = BACK_ROOM.width / 2;
+  return x > -half && x < half && z > DOOR.z - BACK_ROOM.depth && z < DOOR.z;
+}
 
 export const PLAYER = {
   eyeHeight: 1.68,

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ROOM, FIXTURE_HEIGHT, MACHINE, DOOR, BACK_ROOM, LAYER } from './config.js';
+import { ROOM, FIXTURE_HEIGHT, MACHINE, DOOR, BACK_DOOR, BACK_ROOM, LAYER } from './config.js';
 import {
   makeWallSurface,
   makeFloorSurface,
@@ -57,6 +57,11 @@ const colliders = [];
 // and torn down as a unit. Props, lights and debris are built once and stay.
 let shellGroup = null;
 const shellColliders = [];
+
+// Everything the back room is made of, so `lightUp()` can find it again. It is
+// replaced wholesale by buildBackRoom, which is what keeps it from holding
+// meshes the editor has already disposed.
+let backRoom = null;
 
 // `top` is the surface the player can land on. Omitting it marks the box as
 // unclimbable — it blocks at any height, which is what walls and pillars want.
@@ -333,11 +338,26 @@ function buildShell(scene) {
 /**
  * The room through the door: bare, low-ceilinged, and lit by exactly one
  * spotlight standing just inside the threshold.
+ *
+ * It has a second doorway now, in the far wall, and the medical block is on
+ * the other side of it. So this is both the room you are taken in at the end
+ * of the first act and the room you walk back into at the end of the second —
+ * and it is the same room, not two that look alike. Everything it is built
+ * from goes on `backRoom` so that `lightUp()` can move the lot into the main
+ * pass and switch a working ceiling on.
  */
 function buildBackRoom(scene) {
   // `scene` here is the shell group; see rebuildShell().
   const { width, depth, height, lightOffset } = BACK_ROOM;
   const centreZ = DOOR.z - depth / 2;
+
+  // Everything in here goes onto the dark layer, which is both what keeps it
+  // out of the main pass and how lightUpBackRoom finds it again later.
+  const place = (mesh) => {
+    mesh.layers.set(LAYER.DARK);
+    scene.add(mesh);
+    return mesh;
+  };
 
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(width, depth),
@@ -349,8 +369,7 @@ function buildBackRoom(scene) {
   floor.rotation.x = -Math.PI / 2;
   floor.position.z = centreZ;
   floor.receiveShadow = true;
-  floor.layers.set(LAYER.DARK);
-  scene.add(floor);
+  place(floor);
 
   const ceiling = new THREE.Mesh(
     new THREE.PlaneGeometry(width, depth),
@@ -358,19 +377,17 @@ function buildBackRoom(scene) {
   );
   ceiling.rotation.x = Math.PI / 2;
   ceiling.position.set(0, height, centreZ);
-  ceiling.layers.set(LAYER.DARK);
-  scene.add(ceiling);
+  place(ceiling);
 
   const surface = makeWallSurface(...worldRepeat(width, height));
   const sides = cloneSurface(surface, ...worldRepeat(depth, height));
 
-  const walls = [
-    { size: [width, height], pos: [0, height / 2, DOOR.z - depth], rot: 0, s: surface },
+  // Sides whole. The far wall is not — the medical corridor comes in through
+  // it — so it is built in pieces below.
+  for (const wall of [
     { size: [depth, height], pos: [-width / 2, height / 2, centreZ], rot: Math.PI / 2, s: sides },
     { size: [depth, height], pos: [width / 2, height / 2, centreZ], rot: -Math.PI / 2, s: sides },
-  ];
-
-  for (const wall of walls) {
+  ]) {
     const mesh = new THREE.Mesh(
       new THREE.PlaneGeometry(...wall.size),
       new THREE.MeshStandardMaterial({ ...wall.s, metalness: 0 })
@@ -378,12 +395,53 @@ function buildBackRoom(scene) {
     mesh.position.set(...wall.pos);
     mesh.rotation.y = wall.rot;
     mesh.receiveShadow = true;
-    mesh.layers.set(LAYER.DARK);
-    scene.add(mesh);
+    place(mesh);
   }
 
-  // The one light. Hung just inside the door, aimed straight down, so it puts
-  // a hard pool on the floor and leaves the rest of the room to the dark.
+  // The far wall, round the corridor doorway. Each piece's texture is offset by
+  // where it sits in the wall, the same as the hall's door panels, or the
+  // boards restart at every join and the wall reads as slabs bolted together.
+  const farLeft = BACK_DOOR.x - BACK_DOOR.width / 2;
+  const farRight = BACK_DOOR.x + BACK_DOOR.width / 2;
+  for (const [pw, ph, px, py] of [
+    [farLeft + width / 2, height, (-width / 2 + farLeft) / 2, height / 2],
+    [width / 2 - farRight, height, (farRight + width / 2) / 2, height / 2],
+    [BACK_DOOR.width, height - BACK_DOOR.height, BACK_DOOR.x, (height + BACK_DOOR.height) / 2],
+  ]) {
+    if (pw <= 0 || ph <= 0) continue;
+    const panel = cloneSurface(surface, ...worldRepeat(pw, ph));
+    for (const map of surfaceTextures(panel)) {
+      map.offset.set((px - pw / 2 + width / 2) / UNITS_PER_TILE, (py - ph / 2) / UNITS_PER_TILE);
+    }
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(pw, ph),
+      new THREE.MeshStandardMaterial({ ...panel, metalness: 0 })
+    );
+    mesh.position.set(px, py, BACK_DOOR.z);
+    mesh.receiveShadow = true;
+    place(mesh);
+  }
+
+  // Its reveals. A 0.4 jamb rather than the hall's 0.5 — this doorway is 0.5
+  // off the right-hand wall and at 0.5 the lining would run into the corner.
+  const backReveal = new THREE.MeshStandardMaterial({ color: PALETTE.trim, roughness: 0.85 });
+  const backJamb = 0.4;
+  for (const [rw, rh, rx, ry] of [
+    [backJamb, BACK_DOOR.height, farLeft - backJamb / 2 + 0.01, BACK_DOOR.height / 2],
+    [backJamb, BACK_DOOR.height, farRight + backJamb / 2 - 0.01, BACK_DOOR.height / 2],
+    [BACK_DOOR.width + backJamb * 2, backJamb, BACK_DOOR.x, BACK_DOOR.height + backJamb / 2 - 0.01],
+  ]) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(rw, rh, 0.6), backReveal);
+    // Mostly on the corridor side, a little proud on this one — the mirror of
+    // how the hall's doorway sits, because you arrive through this one.
+    mesh.position.set(rx, ry, BACK_DOOR.z - 0.1);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    place(mesh);
+  }
+
+  // The one light. Hung just inside the hall door, aimed straight down, so it
+  // puts a hard pool on the floor and leaves the rest of the room to the dark.
   const lightZ = DOOR.z - lightOffset;
 
   const spot = new THREE.SpotLight(0xfff4e2, 300, 18, Math.PI / 7, 0.35, 1.6);
@@ -398,6 +456,7 @@ function buildBackRoom(scene) {
   spot.layers.set(LAYER.DARK);
   scene.add(spot);
   scene.add(spot.target);
+  backRoom.spot = spot;
 
   // The fitting it hangs from.
   const shade = new THREE.Mesh(
@@ -410,24 +469,106 @@ function buildBackRoom(scene) {
     })
   );
   shade.position.set(0, height - 0.3, lightZ);
-  shade.layers.set(LAYER.DARK);
-  scene.add(shade);
+  place(shade);
 
   const bulb = new THREE.Mesh(
     new THREE.SphereGeometry(0.08, 10, 10),
     new THREE.MeshBasicMaterial({ color: 0xfff4e2 })
   );
   bulb.position.set(0, height - 0.46, lightZ);
-  bulb.layers.set(LAYER.DARK);
-  scene.add(bulb);
+  place(bulb);
 
   const flex = new THREE.Mesh(
     new THREE.CylinderGeometry(0.015, 0.015, 0.3),
     new THREE.MeshStandardMaterial({ color: PALETTE.trim, roughness: 0.8 })
   );
   flex.position.set(0, height - 0.15, lightZ);
-  flex.layers.set(LAYER.DARK);
-  scene.add(flex);
+  place(flex);
+
+  // The ceiling this room has always had and has never had power to. Six
+  // fittings in two rows, hung on chains — at eight metres, flush to the
+  // ceiling nothing would reach the floor. Built dead: the tubes are grey and
+  // the lamps are at zero until lightUp() puts the power back on.
+  for (const lx of [-4.5, 4.5]) {
+    for (const lz of [centreZ - 6, centreZ, centreZ + 6]) {
+      const drop = height - 4.2;
+      const chain = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.02, 0.02, drop, 6),
+        metalMaterial(PALETTE.trim)
+      );
+      chain.position.set(lx, height - drop / 2, lz);
+      place(chain);
+
+      const housing = new THREE.Mesh(
+        new THREE.BoxGeometry(2.2, 0.16, 0.55),
+        metalMaterial(PALETTE.metalDark)
+      );
+      housing.position.set(lx, 4.2, lz);
+      housing.castShadow = true;
+      place(housing);
+
+      const tube = new THREE.Mesh(
+        new THREE.BoxGeometry(2.0, 0.05, 0.32),
+        new THREE.MeshBasicMaterial({ color: 0x33383a, toneMapped: false })
+      );
+      tube.position.set(lx, 4.11, lz);
+      place(tube);
+
+      const light = new THREE.PointLight(0xdfe9e2, 0, 20, 1.25);
+      light.position.set(lx, 4.0, lz);
+      light.layers.set(LAYER.DARK);
+      scene.add(light);
+      backRoom.fittings.push({ light, tube });
+    }
+  }
+}
+
+/**
+ * Puts the power back on in the back room, for good.
+ *
+ * Two things at once, and they have to happen together. The ceiling comes on,
+ * and the whole room moves out of the dark pass and into the main one — which
+ * is the part that matters, because the passes are split by *camera* layer, so
+ * a room on LAYER.DARK is lit by the dark pass's lights and nothing else however
+ * many lamps you hang in it. Left on DARK it would keep the hall's ambient out
+ * and stay a black box with six bright tubes floating in it.
+ *
+ * What moves is everything wearing that layer, found by walking the scene,
+ * rather than a list kept as the room was built. The layer *means* "in the back
+ * room" — that is the entire reason it exists — so a list would only ever be a
+ * second, worse answer to a question the layer already answers, and it would
+ * miss the pieces other files put in there. Two of them, both found by lighting
+ * the room and seeing a black hole: the far wall's inward face, which room.js
+ * builds with the hall, and the housing the hall's door retracts into, which
+ * door.js builds and which was black on purpose because nothing could see it.
+ *
+ * Anything transient on the dark layer — the friend, the cutscene's hand — is
+ * put back where it belongs on the next frame by the code that owns it.
+ *
+ * One way only. This is the second act starting, not a light switch.
+ */
+function lightUpBackRoom(scene) {
+  if (!backRoom || backRoom.lit) return;
+  backRoom.lit = true;
+
+  const darkOnly = 1 << LAYER.DARK;
+  scene.traverse((object) => {
+    if (object.layers.mask === darkOnly) object.layers.set(LAYER.MAIN);
+  });
+
+  for (const fitting of backRoom.fittings) {
+    fitting.light.layers.set(LAYER.MAIN);
+    fitting.light.intensity = 48;
+    fitting.tube.material.color.set(0xe8f2ea);
+  }
+
+  // The lamp stays, and stays on — it is the thing you saw last before the
+  // lights went out, and leaving it lit is what says this is that room. Well
+  // down from 300 though: that was it against a black room, and at full
+  // strength against a lit one it blows the floor under it out to white.
+  backRoom.spot.layers.set(LAYER.MAIN);
+  backRoom.spot.target.layers.set(LAYER.MAIN);
+  backRoom.spot.intensity = 130;
 }
 
 /**
@@ -446,20 +587,39 @@ function buildWallColliders() {
     shellColliders.push(box);
   };
 
+  // A wall with a room on both sides gets its thickness straddling the wall
+  // plane, not stacked on one side of it. The full `t` is fine for an outside
+  // wall, where the far side is nowhere; put it on a shared wall and the room
+  // that does not own it is stopped a metre and a half short of a wall it can
+  // see. That went unnoticed for as long as the far side of this one was a dark
+  // room nobody could see across.
+  const share = 0.3;
+
   // Main room.
   add(-width / 2 - t, -width / 2, -depth / 2 - t, depth / 2 + t);
   add(width / 2, width / 2 + t, -depth / 2 - t, depth / 2 + t);
   add(-width / 2 - t, width / 2 + t, depth / 2, depth / 2 + t);
-  // Far wall, split around the doorway.
-  add(-width / 2 - t, -halfDoor, DOOR.z - t, DOOR.z);
-  add(halfDoor, width / 2 + t, DOOR.z - t, DOOR.z);
+  // Far wall, split around the doorway. Shared with the back room.
+  add(-width / 2 - t, -halfDoor, DOOR.z - share, DOOR.z + share);
+  add(halfDoor, width / 2 + t, DOOR.z - share, DOOR.z + share);
 
-  // Back room.
+  // Back room. Its right-hand wall is thin and its overhangs are trimmed to it,
+  // because the medical block's store room is now hard against that side and a
+  // metre of thickness pushed a slab of invisible wall two and a half metres
+  // into it. The left wall keeps the full thickness — there is nothing over
+  // there to intrude on.
   const bw = BACK_ROOM.width / 2;
   const far = DOOR.z - BACK_ROOM.depth;
+  const thin = 0.3;
+  const halfBack = BACK_DOOR.width / 2;
   add(-bw - t, -bw, far - t, DOOR.z);
-  add(bw, bw + t, far - t, DOOR.z);
-  add(-bw - t, bw + t, far - t, far);
+  add(bw, bw + thin, far, DOOR.z);
+  // Far wall, split around the corridor doorway the way the hall's is split
+  // around its own, and straddling the plane for the same reason — the medical
+  // corridor is on the other side of it. Cutting the hole in the mesh and not
+  // in the collider is a mistake this project has now made twice.
+  add(-bw - t, BACK_DOOR.x - halfBack, far - share, far + share);
+  add(BACK_DOOR.x + halfBack, bw + thin, far - share, far + share);
 }
 
 /**
@@ -720,6 +880,8 @@ function rebuildShell(scene) {
 
   DOOR.z = -ROOM.depth / 2;
 
+  backRoom = { spot: null, fittings: [], lit: false };
+
   shellGroup = new THREE.Group();
   scene.add(shellGroup);
   buildShell(shellGroup);
@@ -739,6 +901,18 @@ export function createRoom(scene) {
     colliders,
     /** Rebuild both rooms after the editor changes their dimensions. */
     rebuildShell: () => rebuildShell(scene),
+    /**
+     * Power to the back room. Called when the console in the store room opens
+     * the doors — by then you are on your way back to it.
+     *
+     * Not preserved across an editor rebuild, which throws the room away and
+     * builds a dark one. That only affects the editor, and re-running it there
+     * is a keypress.
+     */
+    lightUpBackRoom: () => lightUpBackRoom(scene),
+    get backRoomIsLit() {
+      return backRoom?.lit === true;
+    },
     update(delta) {
       updateDust(delta);
       updateLights(delta);

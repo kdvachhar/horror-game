@@ -6,7 +6,7 @@ import { createFriend } from './friend.js';
 import { createDoor } from './door.js';
 import { createPlayerBody } from './playerBody.js';
 import { createMedicalRoom } from './medicalRoom.js';
-import { MACHINE, DOOR, LAYER, SPAWN, MEDICAL } from './config.js';
+import { MACHINE, DOOR, LAYER, SPAWN, MEDICAL, insideBackRoom } from './config.js';
 import { createPlayer } from './player.js';
 import { createWallText } from './wallText.js';
 import { createInteractions } from './interaction.js';
@@ -156,7 +156,10 @@ function deliverFriend() {
  */
 let friendLayer = null;
 function updateFriendLayer() {
-  const layer = friend.position.z < DOOR.z ? LAYER.DARK : LAYER.MAIN;
+  // Once the back room's power is on it is drawn in the main pass like anywhere
+  // else, and nothing standing in it should be moved out of that pass.
+  const inDark = !room.backRoomIsLit && insideBackRoom(friend.position.x, friend.position.z);
+  const layer = inDark ? LAYER.DARK : LAYER.MAIN;
   if (layer === friendLayer) return;
   friendLayer = layer;
   friend.mesh.traverse((object) => object.layers.set(layer));
@@ -478,6 +481,12 @@ renderer.setAnimationLoop((time) => {
     medical.speak(BUTTON_LINES, () => {
       // It said the door would open. It opens, and it talks over the swing.
       medical.openDoor();
+      // And the room past it comes back on. That room is the one you were
+      // taken in — it is the same room, not one built to look like it — so
+      // this is the ward's power reaching the far side of the building, and
+      // the reason you can walk back into somewhere you have only ever seen
+      // one lit circle of.
+      room.lightUpBackRoom();
       setObjective('Press F to return to your body');
       medical.speak(DOOR_LINES, () => {
         // Then it goes dark and takes its arms back, and the wire is all that

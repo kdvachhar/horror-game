@@ -45,6 +45,76 @@ const FIXTURE_POSITIONS = [
  */
 const ENTRANCE = { width: 2.6, height: 3.2, recess: 1.1 };
 
+/**
+ * The door in the back room's left-hand wall — the one the sign points at.
+ *
+ * Shut, and nothing works it. There is no room on the other side of it yet, so
+ * this is a way on that has not been built rather than one that is locked, and
+ * the honest way to show that is a door that does not open. It is at least a
+ * door in the wall the arrow indicates, which is what the arrow was missing.
+ *
+ * `inset` is measured from the far wall, so it sits a few metres along from the
+ * corner you arrive at rather than jammed into it — you come out of the
+ * corridor, read the sign, walk that way, and it is in front of you.
+ */
+const SIDE_DOOR = { width: 1.9, height: 2.6, inset: 3.6 };
+
+/**
+ * A shut double door: two leaves, a rail across each, a kick stripe, and push
+ * bars. No frame of its own — it hangs inside the wall's reveals, and a second
+ * jamb a couple of centimetres off the first is where z-fighting comes from.
+ * Built facing +z and turned into place by the caller.
+ */
+function buildSideDoor() {
+  const group = new THREE.Group();
+  const { width, height } = SIDE_DOOR;
+  const half = width / 2;
+
+  const leafMat = new THREE.MeshStandardMaterial({ color: '#55605c', roughness: 0.66, metalness: 0.08 });
+  const trim = new THREE.MeshStandardMaterial({ color: '#3b4240', roughness: 0.5, metalness: 0.2 });
+  const hazard = new THREE.MeshStandardMaterial({ color: '#8d7a2e', roughness: 0.7 });
+
+  for (const side of [-1, 1]) {
+    const leaf = new THREE.Mesh(
+      new THREE.BoxGeometry(half - 0.02, height - 0.06, 0.07),
+      leafMat
+    );
+    leaf.position.set(side * (half / 2), (height - 0.06) / 2, 0.035);
+    leaf.castShadow = true;
+    leaf.receiveShadow = true;
+    group.add(leaf);
+
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(half - 0.1, 0.1, 0.03), trim);
+    rail.position.set(side * (half / 2), 1.35, 0.078);
+    group.add(rail);
+
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(half - 0.06, 0.26, 0.012), hazard);
+    stripe.position.set(side * (half / 2), 0.22, 0.078);
+    group.add(stripe);
+
+    const bar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.032, 0.032, half - 0.24, 10),
+      metalMaterial(PALETTE.metal)
+    );
+    bar.rotation.z = Math.PI / 2;
+    bar.position.set(side * (half / 2), 1.05, 0.13);
+    bar.castShadow = true;
+    group.add(bar);
+
+    for (const bx of [-1, 1]) {
+      const mount = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.1), trim);
+      mount.position.set(side * (half / 2) + bx * ((half - 0.26) / 2), 1.05, 0.09);
+      group.add(mount);
+    }
+  }
+
+  const seam = new THREE.Mesh(new THREE.BoxGeometry(0.035, height - 0.06, 0.09), trim);
+  seam.position.set(0, (height - 0.06) / 2, 0.045);
+  group.add(seam);
+
+  return group;
+}
+
 // Fixtures still drawing power. One is left dead so the ceiling doesn't read
 // as a fully maintained room.
 const LIVE_FIXTURES = [0, 1, 2, 4];
@@ -383,21 +453,68 @@ function buildBackRoom(scene) {
   const surface = makeWallSurface(...worldRepeat(width, height));
   const sides = cloneSurface(surface, ...worldRepeat(depth, height));
 
-  // Sides whole. The far wall is not — the medical corridor comes in through
-  // it — so it is built in pieces below.
-  for (const wall of [
-    { size: [depth, height], pos: [-width / 2, height / 2, centreZ], rot: Math.PI / 2, s: sides },
-    { size: [depth, height], pos: [width / 2, height / 2, centreZ], rot: -Math.PI / 2, s: sides },
+  // Right-hand side whole. The other two both have a way out in them, so they
+  // are built in pieces: the far wall round the medical corridor, below, and
+  // this one round the door the sign sends you to.
+  const rightWall = new THREE.Mesh(
+    new THREE.PlaneGeometry(depth, height),
+    new THREE.MeshStandardMaterial({ ...sides, metalness: 0 })
+  );
+  rightWall.position.set(width / 2, height / 2, centreZ);
+  rightWall.rotation.y = -Math.PI / 2;
+  rightWall.receiveShadow = true;
+  place(rightWall);
+
+  // A plane turned a quarter about Y has its width running along -z, so these
+  // are laid out in z and the piece positions are z's, not x's.
+  const sideNear = DOOR.z - depth + SIDE_DOOR.inset;   // nearest the corridor
+  const sideLow = sideNear - SIDE_DOOR.width / 2;
+  const sideHigh = sideNear + SIDE_DOOR.width / 2;
+  for (const [pw, ph, pz, py] of [
+    [sideLow - (DOOR.z - depth), height, ((DOOR.z - depth) + sideLow) / 2, height / 2],
+    [DOOR.z - sideHigh, height, (sideHigh + DOOR.z) / 2, height / 2],
+    [SIDE_DOOR.width, height - SIDE_DOOR.height, sideNear, (height + SIDE_DOOR.height) / 2],
   ]) {
+    if (pw <= 0 || ph <= 0) continue;
+    const panel = cloneSurface(sides, ...worldRepeat(pw, ph));
+    for (const map of surfaceTextures(panel)) {
+      map.offset.set((pz - pw / 2 - (DOOR.z - depth)) / UNITS_PER_TILE, (py - ph / 2) / UNITS_PER_TILE);
+    }
     const mesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(...wall.size),
-      new THREE.MeshStandardMaterial({ ...wall.s, metalness: 0 })
+      new THREE.PlaneGeometry(pw, ph),
+      new THREE.MeshStandardMaterial({ ...panel, metalness: 0 })
     );
-    mesh.position.set(...wall.pos);
-    mesh.rotation.y = wall.rot;
+    mesh.position.set(-width / 2, py, pz);
+    mesh.rotation.y = Math.PI / 2;
     mesh.receiveShadow = true;
     place(mesh);
   }
+
+  // Its reveals, and the door hung in them. Same lining as the corridor
+  // doorway, turned to this wall.
+  const sideReveal = new THREE.MeshStandardMaterial({ color: PALETTE.trim, roughness: 0.85 });
+  const sideJamb = 0.4;
+  for (const [rw, rh, rz, ry] of [
+    [sideJamb, SIDE_DOOR.height, sideLow - sideJamb / 2 + 0.01, SIDE_DOOR.height / 2],
+    [sideJamb, SIDE_DOOR.height, sideHigh + sideJamb / 2 - 0.01, SIDE_DOOR.height / 2],
+    [SIDE_DOOR.width + sideJamb * 2, sideJamb, sideNear, SIDE_DOOR.height + sideJamb / 2 - 0.01],
+  ]) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.6, rh, rw), sideReveal);
+    mesh.position.set(-width / 2 - 0.1, ry, rz);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    place(mesh);
+  }
+
+  // Set into the lining rather than stuck on the face of the wall: its bars end
+  // barely proud of the reveal's inner lip. Standing it further out looks the
+  // same and lets you clip a shoulder through it, because the wall collider is
+  // at the wall plane and does not know the door is in front of it.
+  const sideDoor = buildSideDoor();
+  sideDoor.position.set(-width / 2 + 0.12, 0, sideNear);
+  sideDoor.rotation.y = Math.PI / 2;
+  place(sideDoor);
+  sideDoor.traverse((o) => o.layers.set(LAYER.DARK));
 
   // The far wall, round the corridor doorway. Each piece's texture is offset by
   // where it sits in the wall, the same as the hall's door panels, or the

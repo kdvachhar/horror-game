@@ -57,13 +57,27 @@ const ENTRANCE = { width: 2.6, height: 3.2, recess: 1.1 };
  * corner you arrive at rather than jammed into it — you come out of the
  * corridor, read the sign, walk that way, and it is in front of you.
  */
-const SIDE_DOOR = { width: 1.9, height: 2.6, inset: 3.6 };
+const SIDE_DOOR = {
+  width: 1.9,
+  height: 2.6,
+  inset: 3.6,
+  /** How far back the alcove goes. Must clear the swung leaves; see below. */
+  depth: 1.25,
+  /** Radians each leaf stands open. At 1.9 a 0.95m leaf reaches 0.90m back. */
+  swing: 1.9,
+};
 
 /**
- * A shut double door: two leaves, a rail across each, a kick stripe, and push
- * bars. No frame of its own — it hangs inside the wall's reveals, and a second
- * jamb a couple of centimetres off the first is where z-fighting comes from.
- * Built facing +z and turned into place by the caller.
+ * A double door standing open: two leaves, a rail across each, a kick stripe,
+ * and push bars. No frame of its own — it hangs inside the wall's reveals, and
+ * a second jamb a couple of centimetres off the first is where z-fighting comes
+ * from. Built facing +z and turned into place by the caller.
+ *
+ * Each leaf hangs off a hinge group at its outer jamb rather than being placed
+ * in the middle of the opening, because a door turns about its edge. Swinging
+ * them back needs somewhere for them to go, which is what the alcove behind is
+ * for — at SIDE_DOOR.swing the free edge reaches 0.9m back, so the alcove has
+ * to stay deeper than that or the leaves hang through its end wall.
  */
 function buildSideDoor() {
   const group = new THREE.Group();
@@ -78,42 +92,105 @@ function buildSideDoor() {
   const hazard = new THREE.MeshStandardMaterial({ color: '#8d7a2e', roughness: 0.7 });
 
   for (const side of [-1, 1]) {
+    // Hinged at the outer jamb. Turning the group by -side * swing sends both
+    // leaves back into the alcove: a point at local x = d lands at z = -d*sin,
+    // and the two leaves sit at opposite signs of d, so the sign of the angle
+    // has to follow the side or one of them swings out into the room instead.
+    const hinge = new THREE.Group();
+    hinge.position.set(side * half, 0, 0);
+    hinge.rotation.y = -side * SIDE_DOOR.swing;
+    group.add(hinge);
+
+    // Everything below is positioned relative to the hinge, so the leaf runs
+    // from the jamb back toward the middle of the opening.
+    const mid = -side * (half / 2);
+
     const leaf = new THREE.Mesh(
       new THREE.BoxGeometry(half - 0.02, height - 0.06, 0.07),
       leafMat
     );
-    leaf.position.set(side * (half / 2), (height - 0.06) / 2, 0.035);
+    leaf.position.set(mid, (height - 0.06) / 2, 0.035);
     leaf.castShadow = true;
     leaf.receiveShadow = true;
-    group.add(leaf);
+    hinge.add(leaf);
 
     const rail = new THREE.Mesh(new THREE.BoxGeometry(half - 0.1, 0.1, 0.03), trim);
-    rail.position.set(side * (half / 2), 1.35, 0.078);
-    group.add(rail);
+    rail.position.set(mid, 1.35, 0.078);
+    hinge.add(rail);
 
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(half - 0.06, 0.26, 0.012), hazard);
-    stripe.position.set(side * (half / 2), 0.22, 0.078);
-    group.add(stripe);
+    stripe.position.set(mid, 0.22, 0.078);
+    hinge.add(stripe);
 
     const bar = new THREE.Mesh(
       new THREE.CylinderGeometry(0.032, 0.032, half - 0.24, 10),
       metalMaterial(PALETTE.metal)
     );
     bar.rotation.z = Math.PI / 2;
-    bar.position.set(side * (half / 2), 1.05, 0.13);
+    bar.position.set(mid, 1.05, 0.13);
     bar.castShadow = true;
-    group.add(bar);
+    hinge.add(bar);
 
     for (const bx of [-1, 1]) {
       const mount = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.1), trim);
-      mount.position.set(side * (half / 2) + bx * ((half - 0.26) / 2), 1.05, 0.09);
-      group.add(mount);
+      mount.position.set(mid + bx * ((half - 0.26) / 2), 1.05, 0.09);
+      hinge.add(mount);
     }
   }
 
-  const seam = new THREE.Mesh(new THREE.BoxGeometry(0.035, height - 0.06, 0.09), trim);
-  seam.position.set(0, (height - 0.06) / 2, 0.045);
-  group.add(seam);
+  return group;
+}
+
+/**
+ * The space behind that door.
+ *
+ * There is still no room through there, and an open door onto nothing shows you
+ * the outside of the level. So it opens onto a shallow dead alcove: back wall,
+ * two cheeks, a soffit and a floor, lined in the same trim as the reveals.
+ *
+ * Deep enough to walk into rather than sealed off at the threshold. Sealing it
+ * would mean an invisible wall across an opening you can plainly see through,
+ * which is worse than the door having been shut in the first place. Walk in and
+ * it is obviously a dead end, which is honest — it is one.
+ */
+function buildSideAlcove() {
+  const group = new THREE.Group();
+  const { width, height, depth } = SIDE_DOOR;
+  const half = width / 2;
+  // Faintly emissive, which is standing in for bounce. Its soffit faces
+  // straight down and every light in the room is above it, so lit properly it
+  // is exactly black — physically right and reads as a hole in the top of the
+  // doorway. A real fix is a light in here, and this alcove is 1.25m of dead
+  // end that does not warrant one.
+  const skin = new THREE.MeshStandardMaterial({
+    color: '#33383a',
+    roughness: 0.93,
+    emissive: '#0e1112',
+  });
+
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(width, height), skin);
+  back.position.set(0, height / 2, -depth);
+  back.receiveShadow = true;
+  group.add(back);
+
+  for (const side of [-1, 1]) {
+    const cheek = new THREE.Mesh(new THREE.PlaneGeometry(depth, height), skin);
+    cheek.position.set(side * half, height / 2, -depth / 2);
+    cheek.rotation.y = side * -Math.PI / 2;
+    cheek.receiveShadow = true;
+    group.add(cheek);
+  }
+
+  const soffit = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), skin);
+  soffit.rotation.x = Math.PI / 2;
+  soffit.position.set(0, height, -depth / 2);
+  group.add(soffit);
+
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), skin);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(0, 0.002, -depth / 2);
+  floor.receiveShadow = true;
+  group.add(floor);
 
   return group;
 }
@@ -519,6 +596,13 @@ function buildBackRoom(scene) {
   place(sideDoor);
   sideDoor.traverse((o) => o.layers.set(LAYER.DARK));
 
+  // And the dead space the open leaves swing into, flush with the wall.
+  const sideAlcove = buildSideAlcove();
+  sideAlcove.position.set(-width / 2, 0, sideNear);
+  sideAlcove.rotation.y = Math.PI / 2;
+  place(sideAlcove);
+  sideAlcove.traverse((o) => o.layers.set(LAYER.DARK));
+
   // The far wall, round the corridor doorway. Each piece's texture is offset by
   // where it sits in the wall, the same as the hall's door panels, or the
   // boards restart at every join and the wall reads as slabs bolted together.
@@ -895,7 +979,20 @@ function buildWallColliders() {
   const far = DOOR.z - BACK_ROOM.depth;
   const thin = 0.3;
   const halfBack = BACK_DOOR.width / 2;
-  add(-bw - t, -bw, far - t, DOOR.z);
+
+  // Left wall, in two runs with the side doorway open between them, plus the
+  // alcove's own three walls. That door stands open, so the collision has to
+  // stand open with it — a hole you can see through and not walk into is the
+  // one thing worse than the door having stayed shut.
+  const sideAt = DOOR.z - BACK_ROOM.depth + SIDE_DOOR.inset;
+  const sideA = sideAt - SIDE_DOOR.width / 2;
+  const sideB = sideAt + SIDE_DOOR.width / 2;
+  const alcove = SIDE_DOOR.depth;
+  add(-bw - t, -bw, far - t, sideA);
+  add(-bw - t, -bw, sideB, DOOR.z);
+  add(-bw - alcove - t, -bw - alcove, sideA - t, sideB + t);
+  add(-bw - alcove, -bw, sideA - t, sideA);
+  add(-bw - alcove, -bw, sideB, sideB + t);
   add(bw, bw + thin, far, DOOR.z);
   // Far wall, split around the corridor doorway the way the hall's is split
   // around its own, and straddling the plane for the same reason — the medical

@@ -135,6 +135,9 @@ const LINEAR_DAMPING = 0.45;
 const STRANDED_SECONDS = 4;
 const STRANDED_DISTANCE = 6;
 
+/** Hops it may take without getting anywhere before it stops trying. */
+const HOPS_BEFORE_GIVING_UP = 3;
+
 const RECALL_DIR = new THREE.Vector3();
 const EYE_FORCE = new THREE.Vector3();
 const PUPIL_NORMAL = new THREE.Vector3();
@@ -279,6 +282,9 @@ export function createFriend(scene) {
   // resets whether or not the hop achieved anything.
   let strandedTimer = 0;
   let wantsRecall = false;
+  // Hops taken since it last covered any ground. Cleared by moving, not by
+  // hopping, or it would never reach the cap.
+  let hopsSinceProgress = 0;
   // Where it was last frame, for measuring ground covered rather than intent.
   let lastX = 0;
   let lastZ = 0;
@@ -502,11 +508,20 @@ export function createFriend(scene) {
     } else {
       stuckTimer = 0;
       strandedTimer = 0;
+      hopsSinceProgress = 0;
     }
     if (strandedTimer > STRANDED_SECONDS && distance > STRANDED_DISTANCE) wantsRecall = true;
-    if (stuckTimer > 0.7 && grounded) {
+
+    // The hop is for a lip it can clear. Capped, because when it cannot clear
+    // the thing in front of it the hop changes nothing and the next one is due
+    // 0.7s later, for ever — a bucket standing still and jumping on the spot
+    // until you come back for it. Three tries is enough for anything a hop was
+    // going to fix; after that it waits, and only covering ground earns it the
+    // right to try again.
+    if (stuckTimer > 0.7 && grounded && hopsSinceProgress < HOPS_BEFORE_GIVING_UP) {
       velocity.y = HOP_IMPULSE;
       stuckTimer = 0;
+      hopsSinceProgress++;
       // Same sound as a jump you asked for. Without this a following bucket
       // hops in silence and then thumps on the way down, which reads as the
       // landing having come from nowhere.
@@ -566,6 +581,7 @@ export function createFriend(scene) {
     velocity.set(0, 0, 0);
     stuckTimer = 0;
     strandedTimer = 0;
+    hopsSinceProgress = 0;
   }
 
   /** Turn the whole cube so its eye face points at whoever is watching. */
@@ -675,6 +691,15 @@ export function createFriend(scene) {
     spawn(at, initialVelocity) {
       active = true;
       following = false;
+      // A bucket that has just been put somewhere new has not been getting
+      // nowhere there. Carrying the old counters over meant one that had given
+      // up hopping stayed given up after being respawned across the level.
+      stuckTimer = 0;
+      strandedTimer = 0;
+      hopsSinceProgress = 0;
+      wantsRecall = false;
+      lastX = at.x;
+      lastZ = at.z;
       position.copy(at);
       velocity.copy(initialVelocity ?? new THREE.Vector3());
       prevVelocity.copy(velocity);
@@ -682,9 +707,13 @@ export function createFriend(scene) {
       mesh.visible = true;
     },
 
-    /** Start trailing the player. */
+    /** Start trailing the player. Same clean slate as being told to follow. */
     collect() {
       following = true;
+      stuckTimer = 0;
+      strandedTimer = 0;
+      hopsSinceProgress = 0;
+      wantsRecall = false;
     },
 
     /**
@@ -701,6 +730,7 @@ export function createFriend(scene) {
       following = on;
       stuckTimer = 0;
       strandedTimer = 0;
+      hopsSinceProgress = 0;
       wantsRecall = false;
     },
 

@@ -501,10 +501,11 @@ renderer.setAnimationLoop((time) => {
   possession.applyCamera();
 
   // Walking up to it is what "collecting" means — no prompt, it just notices
-  // you and starts trailing. That stops once you can possess it: from then on
-  // where it stands is your decision, and an unconditional follower would drag
-  // it straight back off anything you deliberately parked it on.
-  if (friend.isActive && !friend.isFollowing && !possession.isUnlocked) {
+  // you and starts trailing. It does not stop again: it used to be dropped as
+  // soon as you could possess it, on the reasoning that where it stands then
+  // becomes your decision, and the result was that every time you stepped out
+  // of it you left it behind and had to go back for it.
+  if (friend.isActive && !friend.isFollowing) {
     if (friend.position.distanceTo(camera.position) < 2.6) {
       friend.collect();
       setObjective('Your friend is following you');

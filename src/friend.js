@@ -113,6 +113,29 @@ const HOP_IMPULSE = 5.4;
 /** Stands in for air resistance and rolling losses. */
 const LINEAR_DAMPING = 0.45;
 
+/**
+ * When to give up steering it and simply put it back beside you.
+ *
+ * Following is a steering behaviour and nothing more: walk at the player, hop
+ * when something small is in the way. That handles furniture and it cannot
+ * handle a wall with a door in it two metres to the left — there is no path
+ * finding here to notice the door, and there should not be for one follower.
+ *
+ * Left alone it presses into that wall until the game ends. It is not academic:
+ * coming back out of the store room after the button, it crosses the room, hits
+ * the ward's back wall a couple of metres off the open door, and stays there.
+ * So "it follows you" quietly stops being true exactly when the room gets
+ * interesting.
+ *
+ * Four seconds of getting nowhere is well past the stuck-hop having tried and
+ * failed several times, and six metres is far enough that it is not in the
+ * shot. Both have to hold: a bucket wedged against a bed at your feet is in
+ * plain sight and should be shoved free by hand, not teleported.
+ */
+const STRANDED_SECONDS = 4;
+const STRANDED_DISTANCE = 6;
+
+const RECALL_DIR = new THREE.Vector3();
 const EYE_FORCE = new THREE.Vector3();
 const PUPIL_NORMAL = new THREE.Vector3();
 /** Which way a CircleGeometry faces before it is turned. */
@@ -252,6 +275,13 @@ export function createFriend(scene) {
   let following = false;
   let grounded = false;
   let stuckTimer = 0;
+  // Cleared only by actually covering ground, unlike stuckTimer, which a hop
+  // resets whether or not the hop achieved anything.
+  let strandedTimer = 0;
+  let wantsRecall = false;
+  // Where it was last frame, for measuring ground covered rather than intent.
+  let lastX = 0;
+  let lastZ = 0;
   let yaw = 0;
   let walkPhase = 0;
 
@@ -420,6 +450,17 @@ export function createFriend(scene) {
     const distance = Math.hypot(dx, dz);
     const speed = Math.hypot(velocity.x, velocity.z);
 
+    // Ground actually covered since the last frame, which is not the same thing
+    // as `speed` and is the only one of the two that can tell you it is stuck.
+    // resolveCollisions corrects position and never touches velocity, so a
+    // bucket jammed against a wall goes on accelerating into it and reports a
+    // brisk 6.5 m/s for ever while not moving at all. The stuck-hop has been
+    // testing the wrong number since it was written; it fired against things it
+    // was only leaning on, and never against a wall it was square-on to.
+    const covered = delta > 0 ? Math.hypot(position.x - lastX, position.z - lastZ) / delta : 0;
+    lastX = position.x;
+    lastZ = position.z;
+
     if (distance <= FOLLOW_DISTANCE) {
       stuckTimer = 0;
       // Brake rather than coast, or it drifts past you and oscillates.
@@ -450,8 +491,19 @@ export function createFriend(scene) {
 
     // Wanting to move but barely moving means something is in the way. A hop
     // clears small lips; anything bigger is meant to stop it, and will.
-    if (speed < 0.4) stuckTimer += delta;
-    else stuckTimer = 0;
+    //
+    // The second timer runs on the same test but is never cleared by hopping —
+    // only by actually getting somewhere. That is the difference between "there
+    // is a lip here" and "this is not working", and it is the second one that
+    // decides whether to give up and recall it.
+    if (covered < 0.4) {
+      stuckTimer += delta;
+      strandedTimer += delta;
+    } else {
+      stuckTimer = 0;
+      strandedTimer = 0;
+    }
+    if (strandedTimer > STRANDED_SECONDS && distance > STRANDED_DISTANCE) wantsRecall = true;
     if (stuckTimer > 0.7 && grounded) {
       velocity.y = HOP_IMPULSE;
       stuckTimer = 0;
@@ -461,6 +513,59 @@ export function createFriend(scene) {
       grounded = false;
       playBucketJump(listenerLevel);
     }
+  }
+
+  /** Would a bucket standing here be inside something? Same rules as resolveCollisions. */
+  function blockedAt(x, z, feetY, colliders) {
+    for (const box of colliders) {
+      if (box.enabled?.() === false) continue;
+      if (feetY >= (box.top ?? Infinity) - 0.02) continue;
+      if (FRIEND_HEIGHT <= (box.passHeight ?? -Infinity)) continue;
+      if (feetY + FRIEND_HEIGHT <= (box.bottom ?? -Infinity)) continue;
+      if (x > box.minX - R && x < box.maxX + R && z > box.minZ - R && z < box.maxZ + R) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Put it back beside you, having failed to walk there.
+   *
+   * Behind you by preference, so it does not pop into view in front of you —
+   * you turn round and it is there, which is how a thing that has been trailing
+   * you ought to appear. Then either side, and last your own feet, which need
+   * no check at all because you are standing in them.
+   */
+  function recall(targetPosition, camera, colliders) {
+    RECALL_DIR.set(0, 0, -1).applyQuaternion(camera.quaternion);
+    RECALL_DIR.y = 0;
+    if (RECALL_DIR.lengthSq() < 1e-6) RECALL_DIR.set(0, 0, -1);
+    RECALL_DIR.normalize();
+
+    // Feet, not eyes — targetPosition is the camera. A shade above the floor so
+    // it settles through the normal ground test rather than starting inside it.
+    const feetY = Math.max(0, targetPosition.y - PLAYER.eyeHeight) + 0.05;
+    const reach = FOLLOW_DISTANCE * 0.5;
+
+    let x = targetPosition.x;
+    let z = targetPosition.z;
+    for (const [ox, oz] of [
+      [-RECALL_DIR.x, -RECALL_DIR.z],
+      [-RECALL_DIR.z, RECALL_DIR.x],
+      [RECALL_DIR.z, -RECALL_DIR.x],
+    ]) {
+      const cx = targetPosition.x + ox * reach;
+      const cz = targetPosition.z + oz * reach;
+      if (!blockedAt(cx, cz, feetY, colliders)) {
+        x = cx;
+        z = cz;
+        break;
+      }
+    }
+
+    position.set(x, feetY, z);
+    velocity.set(0, 0, 0);
+    stuckTimer = 0;
+    strandedTimer = 0;
   }
 
   /** Turn the whole cube so its eye face points at whoever is watching. */
@@ -621,9 +726,11 @@ export function createFriend(scene) {
      */
     setDriven(on) {
       driven = on;
-      // Letting go parks it. An unconditional follower would drag it straight
-      // back off wherever you just carefully put it.
-      if (on) following = false;
+      // `following` is deliberately left alone. Taking control used to clear
+      // it, so letting go parked the bucket wherever you had driven it and you
+      // walked off without it. It trails you again the moment you step out —
+      // update() checks `driven` first, so the flag simply sits there unused
+      // while you are inside it.
       for (const key of Object.keys(driveInput)) driveInput[key] = false;
       mesh.traverse((object) => {
         const material = object.material;
@@ -655,6 +762,14 @@ export function createFriend(scene) {
 
       if (driven) drive(delta);
       else if (following) follow(delta, targetPosition);
+
+      // Steering has given up. Done here rather than inside follow() so the
+      // move happens before this frame's gravity and collision run on it,
+      // which is what settles it onto the floor wherever it has been put.
+      if (wantsRecall) {
+        wantsRecall = false;
+        recall(targetPosition, camera, colliders);
+      }
 
       // Captured before gravity moves it, so a surface counts as ground only
       // if the bucket was standing above it at the start of the frame.

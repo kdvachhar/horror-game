@@ -93,44 +93,6 @@ const HALLWAY = { minX: 0.5, maxX: 6.5, near: 5.5, far: 8.0 };
 /** The way out. Hoisted so the wall can be cut to fit it. */
 const WARD_DOOR = { x: 5.4, width: 1.1, height: 2.15 };
 
-/**
- * The black wire, and the route it takes.
- *
- * It leaves the television, crosses the ward floor, goes under the door and
- * on down the corridor into the store room, where it disappears into a port in
- * the far wall. It is the thing you follow: the television tells you to, and
- * from here on the level is wherever this goes.
- *
- * The points thread between the beds rather than through them — this lies on
- * the floor, and a cable running through a bed frame would give the game away
- * about how little is really here. Consoles are waypoints on it, so adding one
- * later means adding a point, not rerouting.
- */
-const WIRE_RADIUS = 0.055;
-const WIRE_PATH = [
-  // Out of the television, down the wall.
-  [0.45, 1.05, -5.15],
-  [0.55, 0.3, -5.05],
-  [0.6, WIRE_RADIUS, -4.85],
-  // Across the ward, threading the gap between the two rows of beds.
-  [2.2, WIRE_RADIUS, -4.35],
-  [3.6, WIRE_RADIUS, -3.3],
-  [4.0, WIRE_RADIUS, -1.8],
-  [3.9, WIRE_RADIUS, 0.6],
-  [4.2, WIRE_RADIUS, 2.4],
-  [4.85, WIRE_RADIUS, 4.0],
-  // Under the door, which is why the leaf hangs clear of the floor.
-  [WARD_DOOR.x, WIRE_RADIUS, 5.2],
-  [WARD_DOOR.x, WIRE_RADIUS, 5.9],
-  // Along the corridor and round the corner.
-  [5.6, WIRE_RADIUS, 6.9],
-  [6.8, WIRE_RADIUS, 7.3],
-  [8.4, WIRE_RADIUS, 8.0],
-  [9.8, WIRE_RADIUS, 8.7],
-  // And up into the far wall, on its way to wherever the next one is.
-  [10.5, 0.35, 9.35],
-  [10.6, 0.95, 9.56],
-];
 const STORE = {
   minX: 6.5,
   maxX: 12.4,
@@ -177,6 +139,66 @@ const LIT_EXIT = {
   width: DOOR.width,
   height: DOOR.height,
 };
+
+/**
+ * The black wire, and the route it takes.
+ *
+ * It leaves the television, crosses the ward floor, goes under the ward door,
+ * over the corridor, under the second door and the length of the lit room, to
+ * a port in the far wall beside the shut one. It is the thing you follow: the
+ * television tells you to, and from here on the level is wherever this goes.
+ *
+ * It used to turn the other way at the corridor and end in the store room,
+ * which was the wrong room to send you to — that one is a cupboard you reach
+ * by throwing a bucket through a window, and it is finished with once the
+ * button in it is pressed. Ending against the shut door instead says the two
+ * things the wire is for at once: this way, and through there.
+ *
+ * Declared below the rooms so the points can be taken from them. Written above
+ * and it reads STORE and LIT_EXIT before either exists, which is a temporal
+ * dead zone error at import and a blank screen.
+ *
+ * The points thread between the beds rather than through them — this lies on
+ * the floor, and a cable running through a bed frame would give the game away
+ * about how little is really here. Consoles are waypoints on it, so adding one
+ * later means adding a point, not rerouting.
+ */
+const WIRE_RADIUS = 0.055;
+const WIRE_PATH = [
+  // Out of the television, down the wall.
+  [0.45, 1.05, -5.15],
+  [0.55, 0.3, -5.05],
+  [0.6, WIRE_RADIUS, -4.85],
+  // Across the ward, threading the gap between the two rows of beds.
+  [2.2, WIRE_RADIUS, -4.35],
+  [3.6, WIRE_RADIUS, -3.3],
+  [4.0, WIRE_RADIUS, -1.8],
+  [3.9, WIRE_RADIUS, 0.6],
+  [4.2, WIRE_RADIUS, 2.4],
+  [4.85, WIRE_RADIUS, 4.0],
+  // Under the door, which is why the leaf hangs clear of the floor.
+  [WARD_DOOR.x, WIRE_RADIUS, 5.2],
+  [WARD_DOOR.x, WIRE_RADIUS, 5.9],
+  // Over the corridor and under the second door. The two are opposite each
+  // other, so left alone this is two and a half metres of dead straight cable;
+  // the lateral wander is slack, and the reason it reads as run by hand.
+  [5.15, WIRE_RADIUS, 6.6],
+  [5.3, WIRE_RADIUS, 7.35],
+  [LIT_DOOR.x, WIRE_RADIUS, HALLWAY.far],
+  // And the length of the lit room. Kept off the middle of the floor on the
+  // way down so it crosses in front of you rather than lying under your feet.
+  [5.2, WIRE_RADIUS, 8.7],
+  [4.5, WIRE_RADIUS, 10.4],
+  [3.4, WIRE_RADIUS, 13.0],
+  [2.0, WIRE_RADIUS, 16.0],
+  [0.8, WIRE_RADIUS, 19.2],
+  [0.1, WIRE_RADIUS, 22.4],
+  [0.45, WIRE_RADIUS, 24.6],
+  // Up into the wall beside the shut door — clear of its reveal, which stands
+  // half a metre out either side of the opening.
+  [LIT_EXIT.x + LIT_EXIT.width / 2 + 0.9, 0.35, LIT_ROOM.far - 0.15],
+  [LIT_EXIT.x + LIT_EXIT.width / 2 + 0.9, 0.95, LIT_ROOM.far - 0.04],
+];
 
 
 /**
@@ -908,7 +930,10 @@ function buildCorridorDoor() {
     group.add(piece);
   }
 
-  // Hinged at the jamb, hanging clear of the floor like the other one.
+  // Hinged at the jamb, hanging clear of the floor like the other one — and
+  // now for the same reason, since the black wire goes under this one too. The
+  // cable's top is at 0.11 and the leaf starts at 0.12, so that centimetre is
+  // load-bearing: drop the leaf to the floor and the wire runs through it.
   const hinge = new THREE.Group();
   hinge.position.set(-width / 2, 0.12, 0.09);
   group.add(hinge);
@@ -945,17 +970,21 @@ function buildBlackWire() {
     WIRE_PATH.map((p) => new THREE.Vector3(...p))
   );
   const wire = new THREE.Mesh(
-    new THREE.TubeGeometry(curve, 220, WIRE_RADIUS, 8, false),
+    new THREE.TubeGeometry(curve, 320, WIRE_RADIUS, 8, false),
     new THREE.MeshStandardMaterial({ color: '#141517', roughness: 0.75, metalness: 0.05 })
   );
   wire.castShadow = true;
   wire.receiveShadow = true;
   group.add(wire);
 
-  // Cable clips every so often, so it reads as run rather than dropped.
+  // Cable clips every so often, so it reads as run rather than dropped. Count
+  // scales with the route: eight of them was one every two and a half metres
+  // when the wire stopped at the store room and one every four once it ran the
+  // length of the lit room, which is far enough apart to stop reading as a run.
   const clip = clinicalMaterial('#3a3d3f', 0.6);
-  for (let i = 1; i < 9; i++) {
-    const at = curve.getPointAt(i / 9);
+  const clips = Math.round(curve.getLength() / 2.5);
+  for (let i = 1; i < clips; i++) {
+    const at = curve.getPointAt(i / clips);
     if (at.y > 0.2) continue;
     const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.06), clip);
     saddle.position.set(at.x, 0.015, at.z);

@@ -6,7 +6,7 @@ import { createFriend } from './friend.js';
 import { createDoor } from './door.js';
 import { createPlayerBody } from './playerBody.js';
 import { createMedicalRoom } from './medicalRoom.js';
-import { MACHINE, DOOR, LAYER, SPAWN, MEDICAL, insideBackRoom } from './config.js';
+import { MACHINE, DOOR, BACK_DOOR, LAYER, SPAWN, MEDICAL, insideBackRoom } from './config.js';
 import { createPlayer } from './player.js';
 import { createWallText } from './wallText.js';
 import { createInteractions } from './interaction.js';
@@ -329,6 +329,11 @@ function resetSequences() {
   wakeUp.reset();
   possession.reset();
   medical.stopSpeaking();
+  // The second act un-happens too, or every scene you jump to afterwards plays
+  // out with the doors open and the back room lit — including the ones whose
+  // whole point is that neither is true yet.
+  medical.reset();
+  room.darkenBackRoom();
   handoverSaid = false;
   // The loop fires the cutscene the moment a door that has been open closes.
   // Clearing this stops a jump from immediately retriggering it underneath you.
@@ -394,6 +399,37 @@ const SCENES = [
         yaw: medical.wake.facing,
         pitch: medical.wake.facingPitch * 0.4,
       });
+    },
+  },
+  {
+    label: '6 · Out the other side',
+    hint: 'Past the button: doors open, the console dead, back in the dark room with the lights on',
+    go() {
+      resetSequences();
+
+      // Everything the button sets off, without the button. Order matters only
+      // in that openDoor also marks the console pressed, so the shelf behind
+      // you is spent and cannot start the speech again.
+      medical.openDoor();
+      medical.shutDown();
+      room.lightUpBackRoom();
+
+      // You are back in your own body by this point, but still connected to the
+      // bucket — that never gets taken away — so the mechanic has to be live or
+      // it is simply missing from everything after here.
+      possession.unlock();
+
+      // Just inside the corridor doorway, facing down the room: the sign is on
+      // the wall behind your shoulder and the red door it points at is ahead
+      // and to your right. Right, not left — facing +z your right hand is -x,
+      // and the door is at x = -8. The sign's arrow points at the reader's left
+      // because you read it facing the other way. Same fact, two descriptions,
+      // and mixing them up is what put the door in the wrong wall the first time.
+      player.teleport({ position: [BACK_DOOR.x, 0, BACK_DOOR.z + 1.4], yaw: Math.PI, pitch: 0 });
+      friend.spawn(new THREE.Vector3(BACK_DOOR.x - 1.1, 0, BACK_DOOR.z + 1.9));
+      friend.collect();
+
+      setObjective('Follow the black wire');
     },
   },
 ];

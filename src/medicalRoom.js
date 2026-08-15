@@ -1897,12 +1897,34 @@ export function createMedicalRoom(scene) {
     openDoor() {
       if (doorOpen) return;
       doorOpen = true;
+      // The door only ever opens because the button was pressed, so opening it
+      // says so. Two facts that can disagree are one fact too many: the debug
+      // menu drops you past the button with the door already open, and without
+      // this the console would still be live behind you and could run the whole
+      // speech again if the bucket found its way back onto the shelf.
+      buttonPressed = true;
       playWardDoor();
     },
 
     /** Screen out, arms back into the wall. It has said its piece. */
     shutDown() {
       shutDown = true;
+    },
+
+    /**
+     * Back to how the room was when you woke up in it. For the debug menu,
+     * which has to be able to leave a scene as well as arrive at one.
+     *
+     * Only the flags need clearing. Everything you can see off them — the swing
+     * of both doors, the screen fading out, the arms drawing back into the wall
+     * — is an ease toward the flag's value rather than a state of its own, so
+     * unsetting them runs all of it backwards on its own.
+     */
+    reset() {
+      doorOpen = false;
+      shutDown = false;
+      buttonPressed = false;
+      speech.stop();
     },
     get isShutDown() {
       return shutDown;

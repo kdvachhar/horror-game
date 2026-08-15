@@ -794,9 +794,16 @@ function lightUpBackRoom(scene) {
   setDarkRoomFog(scene, true);
   backRoom.doorBlank.visible = false;
 
+  // Remembered on the way out, not on the way in: still found by layer, which
+  // is the point, but written down so darkenBackRoom can put back exactly what
+  // was moved. Once these are on MAIN there is nothing to tell them apart from
+  // the hall's own meshes, so the layer cannot answer the question twice.
   const darkOnly = 1 << LAYER.DARK;
+  backRoom.moved = [];
   scene.traverse((object) => {
-    if (object.layers.mask === darkOnly) object.layers.set(LAYER.MAIN);
+    if (object.layers.mask !== darkOnly) return;
+    object.layers.set(LAYER.MAIN);
+    backRoom.moved.push(object);
   });
 
   for (const fitting of backRoom.fittings) {
@@ -812,6 +819,39 @@ function lightUpBackRoom(scene) {
   backRoom.spot.layers.set(LAYER.MAIN);
   backRoom.spot.target.layers.set(LAYER.MAIN);
   backRoom.spot.intensity = 130;
+}
+
+/**
+ * The power off again, for the debug menu only.
+ *
+ * lightUpBackRoom is deliberately one way — in the game the second act does not
+ * un-happen. But the debug menu's whole job is to arrive at a scene *and leave
+ * it*, and without this, jumping to the corridor once relit the room for the
+ * rest of the session: every earlier scene then played out in a back room with
+ * the lights on, including the one whose entire point is that it is dark.
+ *
+ * Walks the list lightUpBackRoom wrote rather than the scene, because by now
+ * these are on MAIN and indistinguishable from the hall's own meshes.
+ */
+function darkenBackRoom(scene) {
+  if (!backRoom?.lit) return;
+  backRoom.lit = false;
+
+  for (const object of backRoom.moved ?? []) object.layers.set(LAYER.DARK);
+  backRoom.moved = null;
+
+  for (const fitting of backRoom.fittings) {
+    fitting.light.layers.set(LAYER.DARK);
+    fitting.light.intensity = 0;
+    fitting.tube.material.color.set(0x000000);
+  }
+
+  backRoom.spot.layers.set(LAYER.DARK);
+  backRoom.spot.target.layers.set(LAYER.DARK);
+  backRoom.spot.intensity = 300;
+
+  backRoom.doorBlank.visible = true;
+  setDarkRoomFog(scene, false);
 }
 
 /**
@@ -1156,6 +1196,8 @@ export function createRoom(scene) {
      * is a keypress.
      */
     lightUpBackRoom: () => lightUpBackRoom(scene),
+    /** Debug menu only — see darkenBackRoom. The game never calls this. */
+    darkenBackRoom: () => darkenBackRoom(scene),
     get backRoomIsLit() {
       return backRoom?.lit === true;
     },

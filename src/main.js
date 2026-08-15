@@ -10,7 +10,7 @@ import { MACHINE, DOOR, LAYER, SPAWN, MEDICAL, insideBackRoom } from './config.j
 import { createPlayer } from './player.js';
 import { createWallText } from './wallText.js';
 import { createInteractions } from './interaction.js';
-import { setObjective, showPrompt } from './hud.js';
+import { setObjective, showPrompt, showNote } from './hud.js';
 import {
   unlockAudio,
   playObjectiveBlip,
@@ -164,6 +164,43 @@ function updateFriendLayer() {
   friendLayer = layer;
   friend.mesh.traverse((object) => object.layers.set(layer));
 }
+
+/**
+ * Whether you want the bucket at your heels. G toggles it.
+ *
+ * A separate thing from whether it is following *right now*, which is what
+ * friend.isFollowing says. Being taken over stops it following without meaning
+ * you no longer want it to, and so does a respawn; this survives both, so
+ * stepping out of the bucket returns it to whichever you last asked for rather
+ * than to a default.
+ */
+let followWanted = true;
+
+window.addEventListener('keydown', (event) => {
+  if (event.code !== 'KeyG' || event.repeat) return;
+  if (/^(INPUT|TEXTAREA)$/.test(event.target?.tagName ?? '')) return;
+  // The map editor binds G to its own snap toggle, and it is open exactly when
+  // the pointer is not captured. Without this the two fire together.
+  if (!player.isLocked) return;
+  if (!friend.isActive) return;
+
+  followWanted = !followWanted;
+
+  // Set unconditionally, including mid-possession. Driving takes priority over
+  // following inside friend.update, so while you are in the bucket this changes
+  // nothing you can see — it is what it does when you step back out. Guarding
+  // it on `!isPossessing` meant telling it to wait from inside it did nothing
+  // at all, and it trailed off after you the moment you left.
+  friend.setFollowing(followWanted);
+
+  showNote(
+    followWanted
+      ? 'Your friend is following you'
+      : possession.isPossessing
+        ? 'Your friend will wait when you leave it'
+        : 'Your friend is waiting here'
+  );
+});
 
 /**
  * Your friend comes round in there with you.
@@ -501,11 +538,15 @@ renderer.setAnimationLoop((time) => {
   possession.applyCamera();
 
   // Walking up to it is what "collecting" means — no prompt, it just notices
-  // you and starts trailing. It does not stop again: it used to be dropped as
-  // soon as you could possess it, on the reasoning that where it stands then
-  // becomes your decision, and the result was that every time you stepped out
-  // of it you left it behind and had to go back for it.
-  if (friend.isActive && !friend.isFollowing) {
+  // you and starts trailing. It does not stop on its own again: it used to be
+  // dropped as soon as you could possess it, on the reasoning that where it
+  // stands then becomes your decision, and the result was that every time you
+  // stepped out of it you left it behind and had to go back for it.
+  //
+  // Making that decision is now G's job, and `followWanted` is what it sets.
+  // Without it this would pick the bucket straight back up the moment you told
+  // it to wait and then stood next to it.
+  if (friend.isActive && followWanted && !friend.isFollowing) {
     if (friend.position.distanceTo(camera.position) < 2.6) {
       friend.collect();
       setObjective('Your friend is following you');

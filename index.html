@@ -90,6 +90,29 @@
       }
       body.playing #objective { opacity: 1; }
 
+      /* Transient note, for a thing you just did rather than a thing to do.
+         Sits under the objective plate so the two never overlap, and it is the
+         objective's plate in a quieter key — same shape, no green, no blip. */
+      #note {
+        position: absolute;
+        top: 6.6rem;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 0.36rem 1.15rem 0.4rem;
+        background: rgba(7, 11, 9, 0.6);
+        border: 1px solid rgba(210, 226, 214, 0.22);
+        border-radius: 6px;
+        font-size: 0.92rem;
+        letter-spacing: 0.07em;
+        color: #dfe9e0;
+        text-shadow: 0 0 12px rgba(0, 0, 0, 0.95);
+        white-space: nowrap;
+        opacity: 0;
+        transition: opacity 0.45s;
+        pointer-events: none;
+      }
+      #note.visible { opacity: 1; transition: opacity 0.12s; }
+
       #objective .label {
         font-size: 0.6rem;
         /* The last letter's tracking would otherwise throw the centring out. */
@@ -185,6 +208,7 @@
         <div class="label">Objective</div>
         <div id="objective-text"></div>
       </div>
+      <div id="note"></div>
       <div id="prompt">
         <span class="key" id="prompt-key">E</span><span id="prompt-label"></span>
       </div>
@@ -197,7 +221,8 @@
         WASD / arrows &nbsp;—&nbsp; move<br />
         mouse &nbsp;—&nbsp; look &nbsp;&nbsp;·&nbsp;&nbsp; shift &nbsp;—&nbsp; run<br />
         space &nbsp;—&nbsp; jump &nbsp;&nbsp;·&nbsp;&nbsp; E &nbsp;—&nbsp; interact<br />
-        F &nbsp;—&nbsp; possess &nbsp;&nbsp;·&nbsp;&nbsp; esc &nbsp;—&nbsp; release cursor
+        F &nbsp;—&nbsp; possess &nbsp;&nbsp;·&nbsp;&nbsp; G &nbsp;—&nbsp; wait / follow<br />
+        esc &nbsp;—&nbsp; release cursor
       </p>
       <p class="prompt">click to enter the room</p>
     </div>

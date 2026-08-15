@@ -687,6 +687,23 @@ export function createFriend(scene) {
       following = true;
     },
 
+    /**
+     * Told to wait, or told to come along. The same switch either way, so the
+     * two can never disagree about which it is.
+     *
+     * Clearing the timers on the way back in matters: they are how long it has
+     * been getting nowhere, and a bucket that has stood still for a minute
+     * because you asked it to has been getting nowhere the whole time. Without
+     * this it would be recalled to your feet on the first frame after you told
+     * it to follow again, from wherever it had been waiting.
+     */
+    setFollowing(on) {
+      following = on;
+      stuckTimer = 0;
+      strandedTimer = 0;
+      wantsRecall = false;
+    },
+
     get isDriven() {
       return driven;
     },

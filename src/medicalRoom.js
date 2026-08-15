@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MEDICAL, BACK_ROOM } from './config.js';
+import { MEDICAL, BACK_ROOM, DOOR } from './config.js';
 import {
   makeWallSurface,
   makeFloorSurface,
@@ -161,17 +161,21 @@ const LIT_ROOM = {
 const LIT_DOOR = { x: WARD_DOOR.x, width: 1.2, height: 2.3 };
 
 /**
- * And the one out of it, in the far wall: shut, and staying shut for now.
+ * And the opening in the far wall — the one you were dragged through.
  *
- * Double, and taller than the others — this room has an eight metre ceiling
- * and a ward door in it would look like a hatch. Surface-mounted on a solid
- * wall, the way the green one started: there is nothing behind it yet, and
- * cutting the hole is the job for whenever there is.
+ * Centred in the sixteen metre wall and sized off DOOR, because it *is* DOOR:
+ * the same hole in the same wall of the same room, seen from the inside with
+ * the lights on. Getting those two numbers to agree is most of what makes the
+ * room recognisable, so they are taken rather than retyped.
+ *
+ * Shut, and staying shut. What is on the other side of it is the hall, and the
+ * hall is seventy metres away in world space — this room is only the same room
+ * in the fiction. A closed door is how that stays true.
  */
 const LIT_EXIT = {
   x: (STORE.minX - BACK_ROOM.width + STORE.minX) / 2,
-  width: 1.9,
-  height: 2.6,
+  width: DOOR.width,
+  height: DOOR.height,
 };
 
 
@@ -671,7 +675,6 @@ function buildLitRoom() {
     new THREE.MeshStandardMaterial({ ...spec, metalness: 0, side: THREE.DoubleSide });
 
   for (const [pw, spec, px, pz, rot] of [
-    [w, surface, midX, LIT_ROOM.far, 0],
     [d, sides, LIT_ROOM.minX, midZ, Math.PI / 2],
     [d, sides, LIT_ROOM.maxX, midZ, -Math.PI / 2],
   ]) {
@@ -697,6 +700,85 @@ function buildLitRoom() {
     wall.receiveShadow = true;
     group.add(wall);
   }
+
+  // Far wall, in pieces round the opening you came in through the first time.
+  const exitLeft = LIT_EXIT.x - LIT_EXIT.width / 2;
+  const exitRight = LIT_EXIT.x + LIT_EXIT.width / 2;
+  for (const [pw, ph, pcx, pcy] of [
+    [exitLeft - LIT_ROOM.minX, H, (LIT_ROOM.minX + exitLeft) / 2, H / 2],
+    [LIT_ROOM.maxX - exitRight, H, (exitRight + LIT_ROOM.maxX) / 2, H / 2],
+    [LIT_EXIT.width, H - LIT_EXIT.height, LIT_EXIT.x, (H + LIT_EXIT.height) / 2],
+  ]) {
+    if (pw <= 0 || ph <= 0) continue;
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), wallOf(surface));
+    wall.position.set(pcx, pcy, LIT_ROOM.far);
+    wall.receiveShadow = true;
+    group.add(wall);
+  }
+
+  // The reveals round it, half a metre deep in bare trim. This is the detail
+  // that does the recognising: from inside the dark room the doorway is a
+  // black slot with a thick pale lining, and it is the only thing in there the
+  // one light picks out. Same jamb, same depth, same colour as the hall's.
+  const revealMaterial = new THREE.MeshStandardMaterial({ color: PALETTE.trim, roughness: 0.85 });
+  const jamb = 0.5;
+  for (const [rw, rh, rx, ry] of [
+    [jamb, LIT_EXIT.height, exitLeft - jamb / 2 + 0.01, LIT_EXIT.height / 2],
+    [jamb, LIT_EXIT.height, exitRight + jamb / 2 - 0.01, LIT_EXIT.height / 2],
+    [LIT_EXIT.width + jamb * 2, jamb, LIT_EXIT.x, LIT_EXIT.height + jamb / 2 - 0.01],
+  ]) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(rw, rh, 0.75), revealMaterial);
+    // Mirrored: the room lies on the -z side of this wall, where the hall lies
+    // on the +z side of the one this is a copy of.
+    mesh.position.set(rx, ry, LIT_ROOM.far + 0.1);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+
+  // The lamp that used to be the whole of it: one shaded bulb on a flex, hung
+  // just inside the door and aimed at the floor. Still here, still on, and now
+  // the least of six — which is the difference between the two rooms stated in
+  // one object. Offset taken from BACK_ROOM so it hangs where it always did.
+  const lampZ = LIT_ROOM.far - BACK_ROOM.lightOffset;
+
+  // 300 in the dark, where it was competing with nothing; less than half that
+  // here, where it is landing on a wall the ceiling has already lit and at full
+  // strength blew the door out to white.
+  const spot = new THREE.SpotLight(0xfff4e2, 130, 18, Math.PI / 7, 0.35, 1.6);
+  spot.position.set(midX, H - 0.35, lampZ);
+  spot.target.position.set(midX, 0, lampZ);
+  // No shadow map on this one. In the dark it was the only caster and every
+  // shadow in the room was its doing; in here the six fittings fill them all
+  // back in, so it would cost a 1024 map to render nothing you could see.
+  group.add(spot);
+  group.add(spot.target);
+
+  const shade = new THREE.Mesh(
+    new THREE.ConeGeometry(0.42, 0.4, 16, 1, true),
+    new THREE.MeshStandardMaterial({
+      color: PALETTE.metalDark,
+      roughness: 0.5,
+      metalness: 0.6,
+      side: THREE.DoubleSide,
+    })
+  );
+  shade.position.set(midX, H - 0.3, lampZ);
+  group.add(shade);
+
+  const bulb = new THREE.Mesh(
+    new THREE.SphereGeometry(0.08, 10, 10),
+    new THREE.MeshBasicMaterial({ color: 0xfff4e2, toneMapped: false })
+  );
+  bulb.position.set(midX, H - 0.46, lampZ);
+  group.add(bulb);
+
+  const flex = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.015, 0.015, 0.3),
+    new THREE.MeshStandardMaterial({ color: PALETTE.trim, roughness: 0.8 })
+  );
+  flex.position.set(midX, H - 0.15, lampZ);
+  group.add(flex);
 
   // Lights. It has a ceiling eight metres up, so these hang on chains the way
   // the first room's do — flush to that ceiling nothing would reach the floor.
@@ -730,7 +812,11 @@ function buildLitRoom() {
     tube.position.set(lx, 4.11, lz);
     group.add(tube);
 
-    const lamp = new THREE.PointLight(0xdfe9e2, 72, 20, 1.25);
+    // Bright enough to read as a working ceiling, dim enough that the walls
+    // keep the grey they have in the dark. At 72 the concrete washed to white
+    // and the room stopped looking like the one you woke up next to, which is
+    // the only thing this room has to do.
+    const lamp = new THREE.PointLight(0xdfe9e2, 48, 20, 1.25);
     lamp.position.set(lx, 4.0, lz);
     group.add(lamp);
   }
@@ -739,28 +825,18 @@ function buildLitRoom() {
 }
 
 /**
- * The double door at the far end of the lit room. Shut, and nothing works it.
- * Heavier than the others: two leaves, a rail across each, and a stripe along
- * the bottom of the kind that gets painted on anything a trolley hits.
+ * The double door hung in that opening. Shut, and nothing works it.
+ *
+ * No frame of its own: it is set back inside the reveals, and those are the
+ * frame. Giving it a second one stacked a jamb on a jamb and put the two
+ * within a couple of centimetres of each other, which is where z-fighting
+ * comes from. Two leaves, a rail across each, and a stripe along the bottom of
+ * the kind that gets painted on anything a trolley hits.
  */
 function buildClosedExit() {
   const group = new THREE.Group();
   const { width, height } = LIT_EXIT;
   const half = width / 2;
-
-  const frameMat = clinicalMaterial('#6d726e', 0.55);
-  const jamb = 0.12;
-  for (const [w, h, x, y] of [
-    [jamb, height + jamb, -(width + jamb) / 2, (height + jamb) / 2],
-    [jamb, height + jamb, (width + jamb) / 2, (height + jamb) / 2],
-    [width + jamb * 2, jamb, 0, height + jamb / 2],
-  ]) {
-    const piece = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.18), frameMat);
-    piece.position.set(x, y, 0.09);
-    piece.castShadow = true;
-    piece.receiveShadow = true;
-    group.add(piece);
-  }
 
   const leafMat = clinicalMaterial('#5b625f', 0.66);
   const trim = clinicalMaterial('#3f4644', 0.5);
@@ -1571,8 +1647,10 @@ export function createMedicalRoom(scene) {
   // is the other way.
   group.add(buildLitRoom());
 
+  // Set back into the reveal rather than flat on the wall, so the doorway has
+  // the depth it had when it was a black slot you were carried through.
   const litExit = buildClosedExit();
-  litExit.position.set(LIT_EXIT.x, 0, LIT_ROOM.far - 0.02);
+  litExit.position.set(LIT_EXIT.x, 0, LIT_ROOM.far + 0.25);
   litExit.rotation.y = Math.PI;
   group.add(litExit);
 

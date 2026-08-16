@@ -69,15 +69,17 @@ const AXIS = SIDE_DOOR.z;
 const NEAR = SIDE_DOOR.x - 1;
 
 /**
- * Five metres, not the three and a half it opened at.
+ * Eight metres. It opened at 3.4 and went to 5 before this.
  *
- * Partly because the hall reads as a bigger, older piece of building at this
- * height, and partly because 3.4 was actively in the way: with a 1.8m player it
- * left about 1.6m of headroom, which is one jump up and no more, and that is
- * why the switches ended up on a flat gantry run rather than a climb. It also
- * gives the bucket's lane room for a stack it can get properly high on.
+ * The height is what the platforming is made of. A riser has to clear the
+ * player's 0.9m free step to be a jump at all and stay under their 1.31m peak
+ * to be possible, so a climb is a stack of one-metre risers and nothing else —
+ * and how many of them will fit is purely how much headroom there is. At 3.4
+ * there was room for one. At 5, two. At 8 the last station stacks four and
+ * finishes at 3.8 with its switch at 5.25, and there is still two metres of air
+ * over your head when you get there.
  */
-const HEIGHT = 5;
+const HEIGHT = 8;
 /** Half the full width of the hall, so both lanes and the divider fit inside it. */
 const HALF = 2.6;
 /** Half the divider's thickness. */
@@ -103,9 +105,9 @@ const FORK = NEAR - 5;
  * top of it would have ended up in the shared chamber where you could simply
  * walk over and stand on it yourself.
  */
-const DIVIDER_END = -38.5;
+const DIVIDER_END = -41.5;
 /** The end wall, with the last button on it. */
-const END = -45;
+const END = -48;
 
 /**
  * The three stations, at their shutters.
@@ -134,35 +136,47 @@ const SHUTTER_SECONDS = 1.1;
 /**
  * The climbs, one pair per station, and they get harder as you go.
  *
- * Each entry is `[how far back up the lane, how long, how high]`. The last of
- * each list is the one that matters — the pad the switch is over, and the deck
- * the plate sits on — and it always sits at `back: 0` from its own anchor so
- * the switch is over the middle of it.
+ * Each entry is `[how far back up the lane, how long, how high, how far off the
+ * wall]`. The last of each list is the one that matters — the pad the switch is
+ * over, and the deck the plate sits on — and it always sits at `back: 0` from
+ * its own anchor so the switch is over the middle of it. That last one also
+ * always comes back to the wall, because the switch is on the wall and the
+ * reach is measured from wherever you are standing when you try it.
  *
  * **Yours escalates upward.** The player steps up 0.9m without being asked and
  * jumps to 1.31, so the whole usable band for a riser is three tenths of a
- * metre wide and a stack of crates is a ramp, not a climb. The first station is
- * therefore a flat run at 1.0 with two easy gaps — it is the one teaching you
- * that the switch is out of reach at all. The second puts a 1.0m riser on the
- * last pad. The third makes it two, so you finish at 2.9 with the switch at
- * 4.35, which is a place the 3.4m ceiling could not have put it. The pads also
- * shorten, 1.1 to 0.8, and the gaps widen a little.
+ * metre wide: a climb is a stack of one-metre risers and there is no other
+ * shape it can take. Station one is a flat run of four at 1.0 with easy gaps —
+ * the one teaching you the switch is out of reach at all, so nothing about it
+ * should be in doubt. Station two adds two risers and finishes at 3.0. Station
+ * three adds three, finishes at 3.8 with its switch at 5.25, shortens the pads
+ * to 0.8, and stands every other one 0.8m off the wall so each jump is a step
+ * across the lane as well as up it.
  *
  * **The bucket's escalates in the risers.** It steps only 0.25 and clears 1.15,
  * so for it almost anything is a jump and the question is how much of its
- * ceiling each one spends. Station one is a contiguous staircase at 0.6/0.7/0.7
- * — no gaps, nothing to miss. By station three the risers are 0.8/0.95/0.95
- * with real gaps between the ledges, and 0.95 against a 1.145 peak leaves a
- * fifth of a metre. Deliberately not more: at a 1.05 riser with those gaps the
- * arc measured out at 0.94m over the gap, which is a jump that cannot be made
- * however well you time it.
+ * ceiling each one spends. Station one is a contiguous staircase at
+ * 0.6/0.7/0.7/0.6 — no gaps, nothing to miss. By station three it is
+ * 0.8/0.95/0.95/0.9 with real gaps between the ledges, and 0.95 against a 1.145
+ * peak leaves a fifth of a metre. Deliberately not more: at a 1.05 riser with
+ * those gaps the arc measured out at 0.94m over the gap, which is a jump that
+ * cannot be made however well you time it. Its lane is not staggered — it is
+ * driven, its air control is deliberately sluggish, and a diagonal jump on top
+ * of a 0.95 riser measured at seven centimetres of clearance.
  *
  * `SWITCH_RANGE` is what makes any of it necessary rather than decorative, and
  * it is a reach and not a rule. The verification sweeps every standable surface
  * at every station — the floor, and each pad below the top one — and checks
- * that the only place the switch comes inside that range is the top pad.
+ * that the only place the switch comes inside that range is the top pad. On a
+ * flat climb the pad before the top is the dangerous one, because it is at the
+ * same height and only the distance is keeping it out: station one's used to
+ * stand 2.1 back and reach to within 1.34 of a switch you are refused at 1.25,
+ * which is nine centimetres of margin. It stands 2.6 back now, and 1.74.
  */
 const SWITCH_RANGE = 1.25;
+/** The switch's own standby light, and what it goes to once it is thrown. */
+const SWITCH_IDLE = '#8e1a12';
+const SWITCH_DONE = '#2fd46a';
 /** How far above its pad a switch hangs. From up there it is 0.23 below eye level. */
 const SWITCH_LIFT = 1.45;
 const CLIMB_DEPTH = 1.15;
@@ -170,16 +184,28 @@ const BUCKET_CLIMB_DEPTH = 1.2;
 
 const STATION_CLIMBS = [
   {
-    player: [[4.4, 1.1, 1.0], [2.4, 1.0, 1.0], [0, 2.0, 1.0]],
-    bucket: [[1.5, 1.1, 0.6], [2.7, 1.1, 1.3], [4.0, 1.8, 2.0]],
+    // Flat, four pads, easy gaps. The one that teaches you the switch is up
+    // there at all, so nothing about it should be in doubt.
+    player: [[6.3, 1.0, 1.0], [4.2, 1.0, 1.0], [2.6, 1.0, 1.0], [0, 1.6, 1.0]],
+    bucket: [[1.5, 1.0, 0.6], [2.6, 1.0, 1.3], [3.7, 1.0, 2.0], [5.0, 1.7, 2.6]],
   },
   {
-    player: [[4.6, 0.9, 1.0], [2.5, 0.9, 1.0], [0, 1.9, 2.0]],
-    bucket: [[1.6, 1.0, 0.7], [3.0, 1.0, 1.55], [4.5, 1.7, 2.4]],
+    // Two risers and gaps that want a bit of pace.
+    player: [[6.6, 0.9, 1.0], [4.4, 0.9, 1.0], [2.2, 0.9, 2.0], [0, 1.9, 3.0]],
+    bucket: [[1.6, 0.9, 0.7], [3.0, 0.9, 1.55], [4.4, 0.9, 2.4], [5.9, 1.6, 3.2]],
   },
   {
-    player: [[4.4, 0.8, 1.0], [2.4, 0.8, 2.0], [0, 2.2, 2.9]],
-    bucket: [[1.7, 0.9, 0.8], [3.3, 0.9, 1.75], [5.0, 1.6, 2.7]],
+    // Three risers, short pads, and every jump diagonal: the pads alternate
+    // between the wall and 0.8 out into the lane, so each one is a step across
+    // as well as up. The top pad comes back to the wall, because the switch is
+    // on the wall and the reach is measured from where you land.
+    player: [
+      [6.4, 0.8, 1.0, 0.8],
+      [4.4, 0.8, 2.0, 0],
+      [2.4, 0.8, 2.9, 0.8],
+      [0, 1.8, 3.8, 0],
+    ],
+    bucket: [[1.7, 0.8, 0.8], [3.2, 0.8, 1.75], [4.7, 0.8, 2.7], [6.3, 1.5, 3.6]],
   },
 ];
 
@@ -299,8 +325,10 @@ function buildShutter() {
 
   // Ribs across it, so it reads as a shutter and not a slab, and so you can see
   // it moving. Without them a flat panel sliding up is almost impossible to
-  // read at a glance.
-  for (let y = 0.22; y < SHUTTER_HEIGHT - 0.1; y += 0.24) {
+  // read at a glance. Spaced wider than they were: these are seven metres tall
+  // now and there are six of them, and at the old pitch that was a hundred and
+  // eighty separate little boxes for a detail you read at a glance.
+  for (let y = 0.26; y < SHUTTER_HEIGHT - 0.1; y += 0.36) {
     const rib = new THREE.Mesh(
       new THREE.BoxGeometry(SHUTTER_THICK + 0.035, 0.05, LANE_WIDTH - 0.1),
       housingMat
@@ -374,7 +402,19 @@ function buildSwitch() {
   lamp.position.set(0, -0.16, 0.047);
   group.add(lamp);
 
-  return { group, button, lampMat };
+  // A ring of standby light around the button, so the switch is findable from
+  // the floor. The climbs finish above the lamps now — station three's top pad
+  // is at 3.8 and its switch at 5.25, both of them over the line the hall's
+  // fittings hang on — and a black panel on a black wall five metres up is not
+  // something you can plan a jump toward.
+  const halo = new THREE.Mesh(
+    new THREE.RingGeometry(0.15, 0.2, 20),
+    new THREE.MeshBasicMaterial({ color: SWITCH_IDLE, toneMapped: false })
+  );
+  halo.position.set(0, 0.09, 0.05);
+  group.add(halo);
+
+  return { group, button, lampMat, halo };
 }
 
 /**
@@ -392,7 +432,13 @@ function buildStep(length, depth, top) {
     roughness: 0.55,
     metalness: 0.55,
   });
-  const edge = new THREE.MeshStandardMaterial({ color: '#8d7a2e', roughness: 0.7 });
+  // Faintly lit, not merely painted. These are the only things in the hall you
+  // have to judge a jump against, and half of them are above the lamps.
+  const edge = new THREE.MeshStandardMaterial({
+    color: '#8d7a2e',
+    roughness: 0.7,
+    emissive: '#4a3c10',
+  });
 
   const deck = new THREE.Mesh(new THREE.BoxGeometry(length, 0.09, depth), steel);
   deck.position.y = top - 0.045;
@@ -494,21 +540,25 @@ function buildSpikeWall() {
     // Fewer and longer than the first pass, which used 0.055 x 0.42 at a 0.42
     // pitch and read down the hall as a studded door rather than as something
     // with points on it. At this distance the silhouette is the whole message.
-    const across = Math.max(2, Math.round(width / 0.55));
-    const up = 6;
+    const across = Math.max(2, Math.round(width / 0.62));
+    // Scaled to the wall's height rather than a fixed count, so it stays a bed
+    // of spikes at seven metres instead of six rows a metre and a half apart.
+    // Kept coarse on purpose: this is 96 separate cones as it is, and it is the
+    // one object in the hall that is on screen while you are being chased.
+    const up = Math.max(4, Math.round(SPIKE_HEIGHT / 0.85));
     for (let row = 0; row < up; row++) {
-      const y = 0.26 + row * ((SPIKE_HEIGHT - 0.55) / (up - 1));
+      const y = 0.3 + row * ((SPIKE_HEIGHT - 0.6) / (up - 1));
       for (let i = 0; i < across; i++) {
         const stagger = row % 2 ? 0.5 : 0;
         const t = (i + 0.5 + stagger) / across;
         if (t > 1) continue;
-        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.6, 7), spikeMat);
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.085, 0.68, 7), spikeMat);
         // A cone points +y; turned a quarter about z the other way it points
         // -x, which is where it is going and where you are. Rotating it +PI/2
         // rather than -PI/2 is the whole difference between a wall of spikes
         // and a wall with spikes on the back of it.
         spike.rotation.z = Math.PI / 2;
-        spike.position.set(-0.47, y, (t - 0.5) * width);
+        spike.position.set(-0.51, y, (t - 0.5) * width);
         piece.add(spike);
       }
     }
@@ -564,15 +614,17 @@ export function createGauntlet({ scene, onCaught }) {
   function buildClimb(pads, anchor, side, depth, sense = 1) {
     const inward = -side;
     const face = laneFar(side);
-    const pz = face + inward * depth / 2;
-    for (const [back, length, top] of pads) {
+    for (const [back, length, top, shift = 0] of pads) {
       const px = anchor + sense * back;
+      // `shift` stands the pad off the wall, so a run of them can zig-zag
+      // across the lane and every jump becomes a step sideways as well as up.
+      const near = face + inward * shift;
+      const far = near + inward * depth;
       const pad = buildStep(length, depth, top);
-      pad.position.set(px, 0, pz);
+      pad.position.set(px, 0, (near + far) / 2);
       pad.rotation.y = inward > 0 ? 0 : Math.PI;
       group.add(pad);
-      const edge = face + inward * depth;
-      solid(px - length / 2, px + length / 2, Math.min(face, edge), Math.max(face, edge), {
+      solid(px - length / 2, px + length / 2, Math.min(near, far), Math.max(near, far), {
         top,
       });
     }
@@ -809,19 +861,34 @@ export function createGauntlet({ scene, onCaught }) {
     emissive: '#000000',
   });
   const deadTubeMat = new THREE.MeshStandardMaterial({ color: '#2a0d0c', roughness: 0.5 });
+  // Hung well below the ceiling on a drop, not flush to it. At eight metres a
+  // fitting on the slab lights the top of the walls and leaves the floor —
+  // where the jumping happens — in the dark. The main hall's fixtures hang for
+  // the same reason and it is 22m tall.
+  const LAMP_Y = 5;
+  const stemMat = new THREE.MeshStandardMaterial({ color: '#2a1614', roughness: 0.8 });
   for (let i = 0; i < 6; i++) {
     const x = NEAR - 2.6 - i * ((length - 4.5) / 5);
+    const z = AXIS + (i % 2 ? 1.4 : -1.4);
     const live = i % 2 === 0;
+
+    const stem = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.025, 0.025, HEIGHT - LAMP_Y, 6),
+      stemMat
+    );
+    stem.position.set(x, (HEIGHT + LAMP_Y) / 2, z);
+    group.add(stem);
+
     const tube = new THREE.Mesh(
       new THREE.BoxGeometry(0.7, 0.07, 0.16),
       live ? tubeMat : deadTubeMat
     );
-    tube.position.set(x, HEIGHT - 0.11, AXIS + (i % 2 ? 1.4 : -1.4));
+    tube.position.set(x, LAMP_Y, z);
     group.add(tube);
     if (!live) continue;
 
-    const light = new THREE.PointLight(0xff3521, 0, 17, 2);
-    light.position.set(tube.position.x, HEIGHT - 0.35, tube.position.z);
+    const light = new THREE.PointLight(0xff3521, 0, 24, 2);
+    light.position.set(x, LAMP_Y - 0.22, z);
     group.add(light);
     lamps.push(light);
   }
@@ -939,7 +1006,8 @@ export function createGauntlet({ scene, onCaught }) {
         station.switchOn = true;
         playButtonPress();
         playWardDoor(0.7);
-        station.wallSwitch.lampMat.emissive.set('#2fd46a');
+        station.wallSwitch.lampMat.emissive.set(SWITCH_DONE);
+        station.wallSwitch.halo.material.color.set(SWITCH_DONE);
         setObjective(
           'Take control of your friend and stand it on the plate'
         );
@@ -1038,7 +1106,8 @@ export function createGauntlet({ scene, onCaught }) {
       armed = false;
       playButtonPress();
       playWardDoor();
-      finalPanel.lampMat.emissive.set('#2fd46a');
+      finalPanel.lampMat.emissive.set(SWITCH_DONE);
+      finalPanel.halo.material.color.set(SWITCH_DONE);
       setObjective('Go through');
       showNote('The wall stops.', 2.6);
     },
@@ -1064,6 +1133,7 @@ export function createGauntlet({ scene, onCaught }) {
       station.switchOn = false;
       station.plateOn = false;
       station.wallSwitch.lampMat.emissive.set('#000000');
+      station.wallSwitch.halo.material.color.set(SWITCH_IDLE);
       for (const side of [PLAYER_SIDE, FRIEND_SIDE]) {
         const shutter = station.shutters[side];
         shutter.lift = 0;
@@ -1072,6 +1142,7 @@ export function createGauntlet({ scene, onCaught }) {
       station.plate.lid.position.y = 0.105;
     }
     finalPanel.lampMat.emissive.set('#000000');
+    finalPanel.halo.material.color.set(SWITCH_IDLE);
     exitDoor.position.y = exitShut;
   }
 
@@ -1086,7 +1157,7 @@ export function createGauntlet({ scene, onCaught }) {
       powered = true;
       group.visible = true;
       blank.visible = false;
-      for (const light of lamps) light.intensity = 26;
+      for (const light of lamps) light.intensity = 40;
       tubeMat.emissive.set('#7d1410');
     },
 

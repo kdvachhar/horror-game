@@ -234,15 +234,25 @@ const SPIKE_LIMIT = END + 0.9;
 /**
  * How fast the wall comes, in metres per second.
  *
- * It opened at 0.24, which never lost. The budget is worth writing down: the
- * trap arms with the wall 9.5m behind you, you cover 24.8m of hall at a walk of
- * 3.1 and gain on it the whole way, so what you actually have is about a minute
- * of standing still before it arrives — and standing still is all the room asks
- * of you. Two stations at roughly eighteen seconds each and the climb at the
- * end come to about forty of that. Raise this much past 0.45 and the margin
- * goes, along with any room to fumble a jump.
+ * It opened at 0.24, which never lost, then 0.45, then this. The budget is
+ * worth writing down because it is the only thing that decides whether the room
+ * is a chase or a formality, and it is all measured rather than felt:
+ *
+ *   - the trap arms with the wall 9.5m behind you, and the wall has 36.3m to
+ *     cover between there and the switch at the end of the hall;
+ *   - at 0.65 that is 56s, less the 26.8m of walking the route needs (8.6s at
+ *     a walk of 3.1, 4.8s at a run), so call it 47s of standing still;
+ *   - the mechanical work in those 47s is small: each of the bucket's three
+ *     climbs is 2.3–3.4s driven perfectly, and each of your own is a handful of
+ *     hops. Twenty seconds of the budget is doing, and the rest is deciding.
+ *
+ * So the gap oscillates: you lose ground at every station and take it back on
+ * every walk between them, and at this speed it sits at three to eight metres
+ * rather than five to eleven. It is over your shoulder the whole way, and one
+ * fumbled bucket climb costs about a third of what is left. That is the point
+ * of it. If it proves too much, this constant is the only thing to turn back.
  */
-const SPIKE_SPEED = 0.45;
+const SPIKE_SPEED = 0.65;
 const SPIKE_HEIGHT = HEIGHT - 0.7;
 /**
  * Past this and the trap arms. Deliberately *past the first station*, not at

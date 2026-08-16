@@ -25,9 +25,10 @@ import { playButtonPress, playWardDoor, playKnockout, playSpikeGrind } from './a
  * far side. The plate opens the shutter on this one. So the only order that
  * works is: climb to the switch and throw it, take the bucket over, drive it
  * through the gate you just opened and up its own climb onto the plate, come
- * back to your own body, and go through. Then the next station has you doing it again with the sides swapped
- * over — which is the whole rhythm of the place, and why the divider never
- * opens.
+ * back to your own body, and go through. Then the next station has you doing it
+ * again with the sides swapped over — which is the whole rhythm of the place,
+ * and why the divider never opens. Both climbs get harder each time; see
+ * STATION_CLIMBS.
  *
  * The bucket puts *itself* in the left-hand lane the moment you are both
  * through the red door, and paces you down it through the bars. See
@@ -41,10 +42,10 @@ import { playButtonPress, playWardDoor, playKnockout, playSpikeGrind } from './a
  *
  * **The chase.** A wall of spikes starts down the hall once you are through the
  * first station, and never stops. It is slower than you — 0.45 m/s against a
- * walk of 3.1 — so it never wins a race. What it does is charge you for standing
- * still, and the
- * whole puzzle is made of standing still: every second spent inside the bucket
- * is a second your own body is stood in the lane doing nothing. That is the
+ * walk of 3.1 — so it never wins a race. What it does is charge you for
+ * standing still, and the whole puzzle is made of standing still: every second
+ * spent inside the bucket is a second your own body is stood in the lane doing
+ * nothing. That is the
  * point of it, and it is why the divider is bars above waist height rather than
  * a solid wall. You have to be able to see what is happening to the body you
  * left behind.
@@ -117,31 +118,6 @@ const STATIONS = [-18, -25, -32];
 /** How far back up the lane from its shutter the wall switch is. */
 const SWITCH_OFFSET = 1.6;
 /**
- * And how far past its shutter the plate is. Past, so the gate has to open
- * first; and four metres rather than one and a half, because the climb up to it
- * goes in between.
- */
-const PLATE_OFFSET = 4;
-
-/**
- * The bucket's way up to the plate: [how far past the shutter, how long, how
- * high], the last of them being the deck the plate sits on.
- *
- * Vertical, where the player's is horizontal, and for the same reason in
- * reverse. The bucket steps up only 0.25 without being asked — against the
- * player's 0.9 — so for it almost any riser is a jump, and it clears 1.15, so
- * 0.6 and 0.7 are climbs it has to mean. It is 0.82 tall and ends up standing
- * at 2.0, which is a place the old ceiling had no room for.
- *
- * Against the outer wall of its lane, 1.2 deep out of a 2.4 lane, so there is
- * always a clear metre of floor along the divider for it to walk when it is
- * simply following you past.
- */
-const BUCKET_CLIMB_DEPTH = 1.2;
-const BUCKET_CLIMB = [[1.5, 1.0, 0.6], [2.7, 1.0, 1.3], [PLATE_OFFSET, 1.8, 2.0]];
-/** The top of the last of those, which is what the plate stands on. */
-const PLATE_DECK = BUCKET_CLIMB[BUCKET_CLIMB.length - 1][2];
-/**
  * The strip of its lane the bucket walks when it is simply following you.
  *
  * Along the divider rather than down the middle: the middle is where the climb
@@ -156,32 +132,62 @@ const SHUTTER_THICK = 0.14;
 const SHUTTER_SECONDS = 1.1;
 
 /**
- * The switches are up out of reach, on a run of gantries with gaps in it.
+ * The climbs, one pair per station, and they get harder as you go.
  *
- * Horizontal, where the bucket's is vertical, because the player steps up 0.9m
- * without being asked and jumps to 1.31. Only a riser over 0.9 is a jump at all,
- * and the band between "not a step" and "cannot be jumped" is three tenths of a
- * metre wide — so a stack of crates is not a climb for the player, it is a ramp.
- * (It was also a ceiling problem when this was written and the hall was 3.4
- * tall; it is 5 now and that half of the reason has gone. The step height has
- * not, and it is the half that mattered.)
+ * Each entry is `[how far back up the lane, how long, how high]`. The last of
+ * each list is the one that matters — the pad the switch is over, and the deck
+ * the plate sits on — and it always sits at `back: 0` from its own anchor so
+ * the switch is over the middle of it.
  *
- * So the platforming is horizontal. One hop up onto a gantry at 1.0, then two
- * gaps to clear along it, and the switch at the far end. Falling off costs you
- * the climb again, which is the only currency this room deals in.
+ * **Yours escalates upward.** The player steps up 0.9m without being asked and
+ * jumps to 1.31, so the whole usable band for a riser is three tenths of a
+ * metre wide and a stack of crates is a ramp, not a climb. The first station is
+ * therefore a flat run at 1.0 with two easy gaps — it is the one teaching you
+ * that the switch is out of reach at all. The second puts a 1.0m riser on the
+ * last pad. The third makes it two, so you finish at 2.9 with the switch at
+ * 4.35, which is a place the 3.4m ceiling could not have put it. The pads also
+ * shorten, 1.1 to 0.8, and the gaps widen a little.
  *
- * `SWITCH_RANGE` is what makes the gantry necessary rather than decorative, and
- * it is a reach and not a rule: from up there the switch is 0.44m from your
- * face, and from the floor beside the gantry it is 1.57 — or 1.47 at the top of
- * a jump, which is the number that actually has to fail. The verification walks
- * the floor of the lane and checks every point.
+ * **The bucket's escalates in the risers.** It steps only 0.25 and clears 1.15,
+ * so for it almost anything is a jump and the question is how much of its
+ * ceiling each one spends. Station one is a contiguous staircase at 0.6/0.7/0.7
+ * — no gaps, nothing to miss. By station three the risers are 0.8/0.95/0.95
+ * with real gaps between the ledges, and 0.95 against a 1.145 peak leaves a
+ * fifth of a metre. Deliberately not more: at a 1.05 riser with those gaps the
+ * arc measured out at 0.94m over the gap, which is a jump that cannot be made
+ * however well you time it.
+ *
+ * `SWITCH_RANGE` is what makes any of it necessary rather than decorative, and
+ * it is a reach and not a rule. The verification sweeps every standable surface
+ * at every station — the floor, and each pad below the top one — and checks
+ * that the only place the switch comes inside that range is the top pad.
  */
-const SWITCH_HEIGHT = 2.45;
 const SWITCH_RANGE = 1.25;
-const CLIMB_TOP = 1.0;
+/** How far above its pad a switch hangs. From up there it is 0.23 below eye level. */
+const SWITCH_LIFT = 1.45;
 const CLIMB_DEPTH = 1.15;
-/** [how far up-lane of the switch, how long] — three pads, two gaps. */
-const CLIMB = [[4.4, 0.9], [2.4, 0.9], [0, 2.0]];
+const BUCKET_CLIMB_DEPTH = 1.2;
+
+const STATION_CLIMBS = [
+  {
+    player: [[4.4, 1.1, 1.0], [2.4, 1.0, 1.0], [0, 2.0, 1.0]],
+    bucket: [[1.5, 1.1, 0.6], [2.7, 1.1, 1.3], [4.0, 1.8, 2.0]],
+  },
+  {
+    player: [[4.6, 0.9, 1.0], [2.5, 0.9, 1.0], [0, 1.9, 2.0]],
+    bucket: [[1.6, 1.0, 0.7], [3.0, 1.0, 1.55], [4.5, 1.7, 2.4]],
+  },
+  {
+    player: [[4.4, 0.8, 1.0], [2.4, 0.8, 2.0], [0, 2.2, 2.9]],
+    bucket: [[1.7, 0.9, 0.8], [3.3, 0.9, 1.75], [5.0, 1.6, 2.7]],
+  },
+];
+
+/** The last button gets the hardest of them, since it is the last thing asked. */
+const FINAL_CLIMB = STATION_CLIMBS[STATION_CLIMBS.length - 1].player;
+
+/** The top of a climb: how high its last pad is. */
+const topOf = (climb) => climb[climb.length - 1][2];
 
 const PLATE_SIZE = 1.15;
 /** How far the plate sinks under the bucket. Small: it is a switch, not a lift. */
@@ -542,6 +548,36 @@ export function createGauntlet({ scene, onCaught }) {
   const solid = (minX, maxX, minZ, maxZ, extra) =>
     colliders.push({ minX, maxX, minZ, maxZ, ...extra });
 
+  /**
+   * A run of pads against the outer wall of a lane, with a collider apiece.
+   *
+   * `anchor` is the x the run is measured from and `sense` which way `back`
+   * counts: yours runs back up the lane from the switch (+1), the bucket's runs
+   * on down the lane away from the shutter (-1).
+   *
+   * The z of the pads is worked out from the lane's side rather than written
+   * down, so the same list builds a run against either wall — and the collider's
+   * bounds are sorted, because which of the wall face and the inner edge is the
+   * smaller z depends on which side that is. Written straight through once
+   * before, and it made an empty box you walked through.
+   */
+  function buildClimb(pads, anchor, side, depth, sense = 1) {
+    const inward = -side;
+    const face = laneFar(side);
+    const pz = face + inward * depth / 2;
+    for (const [back, length, top] of pads) {
+      const px = anchor + sense * back;
+      const pad = buildStep(length, depth, top);
+      pad.position.set(px, 0, pz);
+      pad.rotation.y = inward > 0 ? 0 : Math.PI;
+      group.add(pad);
+      const edge = face + inward * depth;
+      solid(px - length / 2, px + length / 2, Math.min(face, edge), Math.max(face, edge), {
+        top,
+      });
+    }
+  }
+
   // ---------------------------------------------------------------- shell ---
 
   const length = NEAR - END;
@@ -829,11 +865,16 @@ export function createGauntlet({ scene, onCaught }) {
       });
     }
 
+    // This station's pair of climbs. They get harder with `index`.
+    const climbs = STATION_CLIMBS[index];
+    const switchY = topOf(climbs.player) + SWITCH_LIFT;
+    station.switchY = switchY;
+
     const wallSwitch = buildSwitch();
     // On the outer wall of your lane, facing in, and up out of reach. Not on
     // the divider: the solid part of that stops at the waist and a switch
     // mounted this high on it would be floating between two bars.
-    wallSwitch.group.position.set(x + SWITCH_OFFSET, SWITCH_HEIGHT, laneFar(PLAYER_SIDE) + 0.06);
+    wallSwitch.group.position.set(x + SWITCH_OFFSET, switchY, laneFar(PLAYER_SIDE) + 0.06);
     wallSwitch.group.rotation.y = 0;
     group.add(wallSwitch.group);
     station.wallSwitch = wallSwitch;
@@ -841,43 +882,35 @@ export function createGauntlet({ scene, onCaught }) {
     // And the climb to it, running back up the lane against the same wall. The
     // inward direction is -PLAYER_SIDE, so this reads the same whichever side
     // of the divider the lane is on rather than only working for -z.
-    const inward = -PLAYER_SIDE;
-    for (const [back, length] of CLIMB) {
-      const px = x + SWITCH_OFFSET + back;
-      const pz = laneFar(PLAYER_SIDE) + inward * CLIMB_DEPTH / 2;
-      const pad = buildStep(length, CLIMB_DEPTH, CLIMB_TOP);
-      pad.position.set(px, 0, pz);
-      pad.rotation.y = inward > 0 ? 0 : Math.PI;
-      group.add(pad);
-      const a = laneFar(PLAYER_SIDE);
-      const c = a + inward * CLIMB_DEPTH;
-      solid(px - length / 2, px + length / 2, Math.min(a, c), Math.max(a, c), {
-        top: CLIMB_TOP,
-      });
-    }
+    buildClimb(climbs.player, x + SWITCH_OFFSET, PLAYER_SIDE, CLIMB_DEPTH);
 
-    // The bucket's climb, in its own lane against the outer wall, with the
-    // plate on the deck at the top of it.
-    const bucketIn = -FRIEND_SIDE;
-    const bz = laneFar(FRIEND_SIDE) + bucketIn * BUCKET_CLIMB_DEPTH / 2;
-    for (const [back, length, top] of BUCKET_CLIMB) {
-      const px = x - back;
-      const ledge = buildStep(length, BUCKET_CLIMB_DEPTH, top);
-      ledge.position.set(px, 0, bz);
-      ledge.rotation.y = bucketIn > 0 ? 0 : Math.PI;
-      group.add(ledge);
-      const a = laneFar(FRIEND_SIDE);
-      const c = a + bucketIn * BUCKET_CLIMB_DEPTH;
-      solid(px - length / 2, px + length / 2, Math.min(a, c), Math.max(a, c), { top });
-    }
+    // The bucket's climb, in its own lane against the outer wall. Anchored at
+    // the shutter and running away from it, so `back` counts forward down the
+    // lane rather than up it the way yours does.
+    //
+    // The last deck is sunk by the plate's own thickness, so the height written
+    // in the table is the height of the thing you actually land on. The plate
+    // is 0.145 proud and the deck is only 0.225 wider than it, which is inside
+    // the bucket's radius — so it is always the plate holding the bucket up, not
+    // the deck, and building the deck at the listed height quietly added 0.145
+    // to the last jump of every climb. Measured, that left station three's last
+    // riser 1.1 against a peak of 1.145: three centimetres, and unmakeable.
+    const bucketPads = climbs.bucket.map(([back, length, top], i) =>
+      i === climbs.bucket.length - 1 ? [back, length, top - PLATE_TOP] : [back, length, top]
+    );
+    buildClimb(bucketPads, x, FRIEND_SIDE, BUCKET_CLIMB_DEPTH, -1);
 
+    // And the plate on the deck at the top of it.
+    const deck = climbs.bucket[climbs.bucket.length - 1];
     const plate = buildPlate();
-    const plateX = x - PLATE_OFFSET;
-    const plateZ = bz;
-    plate.group.position.set(plateX, PLATE_DECK, plateZ);
+    const plateX = x - deck[0];
+    const plateZ = laneFar(FRIEND_SIDE) - FRIEND_SIDE * BUCKET_CLIMB_DEPTH / 2;
+    const plateY = deck[2] - PLATE_TOP;
+    plate.group.position.set(plateX, plateY, plateZ);
     group.add(plate.group);
     station.plate = plate;
-    station.plateAt = new THREE.Vector3(plateX, PLATE_DECK, plateZ);
+    station.plateAt = new THREE.Vector3(plateX, plateY, plateZ);
+    station.plateTop = deck[2];
     // A `top` and nothing else, so it is a low step up off the deck rather than
     // a box in the way. The bucket has to actually stand on it — the test below
     // reads its feet, and reading a plate it is walking through would fire from
@@ -885,13 +918,13 @@ export function createGauntlet({ scene, onCaught }) {
     solid(
       plateX - PLATE_SIZE / 2, plateX + PLATE_SIZE / 2,
       plateZ - PLATE_SIZE / 2, plateZ + PLATE_SIZE / 2,
-      { top: PLATE_DECK + PLATE_TOP }
+      { top: station.plateTop }
     );
 
     interactions.push({
       position: new THREE.Vector3(
         x + SWITCH_OFFSET,
-        SWITCH_HEIGHT,
+        switchY,
         laneFar(PLAYER_SIDE) - PLAYER_SIDE * 0.2
       ),
       label: 'Throw the switch',
@@ -923,29 +956,16 @@ export function createGauntlet({ scene, onCaught }) {
   // the button inside the door. Up there for the same reason the others are:
   // arriving in the chamber is not the last thing the hall asks of you.
   const FINAL_Z = laneFar(PLAYER_SIDE) - PLAYER_SIDE * 0.4;
+  const FINAL_Y = topOf(FINAL_CLIMB) + SWITCH_LIFT;
   const finalPanel = buildSwitch();
   finalPanel.group.scale.setScalar(1.5);
-  finalPanel.group.position.set(END + 0.14, SWITCH_HEIGHT, FINAL_Z);
+  finalPanel.group.position.set(END + 0.14, FINAL_Y, FINAL_Z);
   finalPanel.group.rotation.y = Math.PI / 2;
   group.add(finalPanel.group);
 
-  // Its climb runs back into the chamber off the end wall rather than along a
-  // side wall, so the pads are laid out in x and their length is in x too.
-  {
-    const inward = -PLAYER_SIDE;
-    const pz = laneFar(PLAYER_SIDE) + inward * CLIMB_DEPTH / 2;
-    const a = laneFar(PLAYER_SIDE);
-    const c = a + inward * CLIMB_DEPTH;
-    for (const [px, length] of [[END + 4.6, 0.9], [END + 2.7, 0.9], [END + 0.9, 1.8]]) {
-      const pad = buildStep(length, CLIMB_DEPTH, CLIMB_TOP);
-      pad.position.set(px, 0, pz);
-      pad.rotation.y = inward > 0 ? 0 : Math.PI;
-      group.add(pad);
-      solid(px - length / 2, px + length / 2, Math.min(a, c), Math.max(a, c), {
-        top: CLIMB_TOP,
-      });
-    }
-  }
+  // Its climb runs back into the chamber off the end wall, which is the same
+  // arrangement as a station's with the anchor at the wall instead of a switch.
+  buildClimb(FINAL_CLIMB, END + 1.1, PLAYER_SIDE, CLIMB_DEPTH);
 
   // The way out, held shut by the same button.
   const exitDoor = new THREE.Mesh(
@@ -1007,7 +1027,7 @@ export function createGauntlet({ scene, onCaught }) {
   spikes.group.visible = false;
 
   interactions.push({
-    position: new THREE.Vector3(END + 0.6, SWITCH_HEIGHT, laneFar(PLAYER_SIDE) - PLAYER_SIDE * 0.25),
+    position: new THREE.Vector3(END + 1.1, FINAL_Y, laneFar(PLAYER_SIDE) - PLAYER_SIDE * 0.25),
     label: 'Press the button',
     range: SWITCH_RANGE,
     once: false,
@@ -1238,7 +1258,7 @@ export function createGauntlet({ scene, onCaught }) {
           const near =
             Math.abs(friend.position.x - station.plateAt.x) < PLATE_SIZE / 2 + 0.45 &&
             Math.abs(friend.position.z - station.plateAt.z) < PLATE_SIZE / 2 + 0.45;
-          if (near && Math.abs(friend.position.y - (PLATE_DECK + PLATE_TOP)) < 0.07) {
+          if (near && Math.abs(friend.position.y - station.plateTop) < 0.07) {
             station.plateOn = true;
             playButtonPress(0.8);
             playWardDoor(0.7);

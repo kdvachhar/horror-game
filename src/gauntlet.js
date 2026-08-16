@@ -21,11 +21,11 @@ import { playButtonPress, playWardDoor, playKnockout, playSpikeGrind } from './a
  * **The puzzle.** You cannot get down your own lane and your friend cannot get
  * down its one; each of you holds the key to the other's. Every station has a
  * shutter across both lanes, a switch up on a gantry in *your* lane, and a
- * floor plate in *its* lane. The switch opens the shutter on the far side. The
- * plate opens the shutter on this one. So the only order that works is: climb
- * to the switch and throw it, take the bucket over, walk it through the gate
- * you just opened and stand it on the plate, come back to your own body, and go
- * through. Then the next station has you doing it again with the sides swapped
+ * plate up a stack of ledges in *its* lane. The switch opens the shutter on the
+ * far side. The plate opens the shutter on this one. So the only order that
+ * works is: climb to the switch and throw it, take the bucket over, drive it
+ * through the gate you just opened and up its own climb onto the plate, come
+ * back to your own body, and go through. Then the next station has you doing it again with the sides swapped
  * over — which is the whole rhythm of the place, and why the divider never
  * opens.
  *
@@ -40,8 +40,9 @@ import { playButtonPress, playWardDoor, playKnockout, playSpikeGrind } from './a
  * for this room.
  *
  * **The chase.** A wall of spikes starts down the hall once you are through the
- * first station, and never stops. It is slow — 0.24 m/s against a walk of 3.1 —
- * so it never wins a race. What it does is charge you for standing still, and the
+ * first station, and never stops. It is slower than you — 0.45 m/s against a
+ * walk of 3.1 — so it never wins a race. What it does is charge you for standing
+ * still, and the
  * whole puzzle is made of standing still: every second spent inside the bucket
  * is a second your own body is stood in the lane doing nothing. That is the
  * point of it, and it is why the divider is bars above waist height rather than
@@ -66,7 +67,16 @@ const AXIS = SIDE_DOOR.z;
 /** The face of the back room's left-hand wall, on this side. Its collider ends here. */
 const NEAR = SIDE_DOOR.x - 1;
 
-const HEIGHT = 3.4;
+/**
+ * Five metres, not the three and a half it opened at.
+ *
+ * Partly because the hall reads as a bigger, older piece of building at this
+ * height, and partly because 3.4 was actively in the way: with a 1.8m player it
+ * left about 1.6m of headroom, which is one jump up and no more, and that is
+ * why the switches ended up on a flat gantry run rather than a climb. It also
+ * gives the bucket's lane room for a stack it can get properly high on.
+ */
+const HEIGHT = 5;
 /** Half the full width of the hall, so both lanes and the divider fit inside it. */
 const HALF = 2.6;
 /** Half the divider's thickness. */
@@ -84,10 +94,17 @@ const laneFar = (side) => AXIS + side * HALF;
 
 /** Where the divider starts and the hall becomes two halls. */
 const FORK = NEAR - 5;
-/** And where it stops, so the two lanes run back into one room at the end. */
-const DIVIDER_END = -35;
+/**
+ * And where the divider stops, so the two lanes run back into one room.
+ *
+ * It used to be -35, which left three metres of divided lane past the last
+ * station — not enough for the bucket's climb to fit in, and the plate at the
+ * top of it would have ended up in the shared chamber where you could simply
+ * walk over and stand on it yourself.
+ */
+const DIVIDER_END = -38.5;
 /** The end wall, with the last button on it. */
-const END = -41;
+const END = -45;
 
 /**
  * The three stations, at their shutters.
@@ -99,10 +116,41 @@ const END = -41;
 const STATIONS = [-18, -25, -32];
 /** How far back up the lane from its shutter the wall switch is. */
 const SWITCH_OFFSET = 1.6;
-/** And how far past its shutter the floor plate is. Past, so the gate has to open first. */
-const PLATE_OFFSET = 1.5;
+/**
+ * And how far past its shutter the plate is. Past, so the gate has to open
+ * first; and four metres rather than one and a half, because the climb up to it
+ * goes in between.
+ */
+const PLATE_OFFSET = 4;
 
-const SHUTTER_HEIGHT = 2.95;
+/**
+ * The bucket's way up to the plate: [how far past the shutter, how long, how
+ * high], the last of them being the deck the plate sits on.
+ *
+ * Vertical, where the player's is horizontal, and for the same reason in
+ * reverse. The bucket steps up only 0.25 without being asked — against the
+ * player's 0.9 — so for it almost any riser is a jump, and it clears 1.15, so
+ * 0.6 and 0.7 are climbs it has to mean. It is 0.82 tall and ends up standing
+ * at 2.0, which is a place the old ceiling had no room for.
+ *
+ * Against the outer wall of its lane, 1.2 deep out of a 2.4 lane, so there is
+ * always a clear metre of floor along the divider for it to walk when it is
+ * simply following you past.
+ */
+const BUCKET_CLIMB_DEPTH = 1.2;
+const BUCKET_CLIMB = [[1.5, 1.0, 0.6], [2.7, 1.0, 1.3], [PLATE_OFFSET, 1.8, 2.0]];
+/** The top of the last of those, which is what the plate stands on. */
+const PLATE_DECK = BUCKET_CLIMB[BUCKET_CLIMB.length - 1][2];
+/**
+ * The strip of its lane the bucket walks when it is simply following you.
+ *
+ * Along the divider rather than down the middle: the middle is where the climb
+ * stands now, and a leash pointed at it would walk the bucket into the first
+ * ledge every time you went past one.
+ */
+const LANE_WALK = laneNear(FRIEND_SIDE) + FRIEND_SIDE * 0.6;
+
+const SHUTTER_HEIGHT = HEIGHT - 0.6;
 const SHUTTER_THICK = 0.14;
 /** How long a shutter takes to roll up. */
 const SHUTTER_SECONDS = 1.1;
@@ -110,11 +158,13 @@ const SHUTTER_SECONDS = 1.1;
 /**
  * The switches are up out of reach, on a run of gantries with gaps in it.
  *
- * The shape of this is dictated by two numbers that were already fixed. The
- * player steps up 0.9m without being asked and jumps to 1.31 — so a stack of
- * crates is not a climb, it is a ramp, and only a riser over 0.9 is a jump at
- * all. And the hall is 3.4 tall, which with a 1.8m player leaves about 1.6m of
- * headroom to stand in. One jump up. There is no room for a second.
+ * Horizontal, where the bucket's is vertical, because the player steps up 0.9m
+ * without being asked and jumps to 1.31. Only a riser over 0.9 is a jump at all,
+ * and the band between "not a step" and "cannot be jumped" is three tenths of a
+ * metre wide — so a stack of crates is not a climb for the player, it is a ramp.
+ * (It was also a ceiling problem when this was written and the hall was 3.4
+ * tall; it is 5 now and that half of the reason has gone. The step height has
+ * not, and it is the half that mattered.)
  *
  * So the platforming is horizontal. One hop up onto a gantry at 1.0, then two
  * gaps to clear along it, and the switch at the far end. Falling off costs you
@@ -143,8 +193,19 @@ const PLATE_TOP = 0.145;
 const SPIKE_HOME = NEAR - 0.7;
 /** And where it gives up, hard against the end wall. */
 const SPIKE_LIMIT = END + 0.9;
-const SPIKE_SPEED = 0.24;
-const SPIKE_HEIGHT = 2.9;
+/**
+ * How fast the wall comes, in metres per second.
+ *
+ * It opened at 0.24, which never lost. The budget is worth writing down: the
+ * trap arms with the wall 9.5m behind you, you cover 24.8m of hall at a walk of
+ * 3.1 and gain on it the whole way, so what you actually have is about a minute
+ * of standing still before it arrives — and standing still is all the room asks
+ * of you. Two stations at roughly eighteen seconds each and the climb at the
+ * end come to about forty of that. Raise this much past 0.45 and the margin
+ * goes, along with any room to fumble a jump.
+ */
+const SPIKE_SPEED = 0.45;
+const SPIKE_HEIGHT = HEIGHT - 0.7;
 /**
  * Past this and the trap arms. Deliberately *past the first station*, not at
  * the fork.
@@ -654,7 +715,7 @@ export function createGauntlet({ scene, onCaught }) {
       roughness: 0.5,
       metalness: 0.6,
     });
-    for (let x = FORK - 0.25; x > DIVIDER_END; x -= 0.5) {
+    for (let x = FORK - 0.3; x > DIVIDER_END; x -= 0.6) {
       const bar = new THREE.Mesh(
         new THREE.CylinderGeometry(0.032, 0.032, HEIGHT - SOLID_TO, 6),
         barMat
@@ -795,21 +856,36 @@ export function createGauntlet({ scene, onCaught }) {
       });
     }
 
+    // The bucket's climb, in its own lane against the outer wall, with the
+    // plate on the deck at the top of it.
+    const bucketIn = -FRIEND_SIDE;
+    const bz = laneFar(FRIEND_SIDE) + bucketIn * BUCKET_CLIMB_DEPTH / 2;
+    for (const [back, length, top] of BUCKET_CLIMB) {
+      const px = x - back;
+      const ledge = buildStep(length, BUCKET_CLIMB_DEPTH, top);
+      ledge.position.set(px, 0, bz);
+      ledge.rotation.y = bucketIn > 0 ? 0 : Math.PI;
+      group.add(ledge);
+      const a = laneFar(FRIEND_SIDE);
+      const c = a + bucketIn * BUCKET_CLIMB_DEPTH;
+      solid(px - length / 2, px + length / 2, Math.min(a, c), Math.max(a, c), { top });
+    }
+
     const plate = buildPlate();
     const plateX = x - PLATE_OFFSET;
-    const plateZ = laneCentre(FRIEND_SIDE);
-    plate.group.position.set(plateX, 0, plateZ);
+    const plateZ = bz;
+    plate.group.position.set(plateX, PLATE_DECK, plateZ);
     group.add(plate.group);
     station.plate = plate;
-    station.plateAt = new THREE.Vector3(plateX, 0, plateZ);
-    // A `top` and nothing else, so it is a low step both of you can walk onto
-    // rather than a box in the way. The bucket has to actually stand on it —
-    // the test below reads its feet, and reading a plate it is walking through
-    // would fire from a metre up in the air on the way past.
+    station.plateAt = new THREE.Vector3(plateX, PLATE_DECK, plateZ);
+    // A `top` and nothing else, so it is a low step up off the deck rather than
+    // a box in the way. The bucket has to actually stand on it — the test below
+    // reads its feet, and reading a plate it is walking through would fire from
+    // a metre up in the air on the way past.
     solid(
       plateX - PLATE_SIZE / 2, plateX + PLATE_SIZE / 2,
       plateZ - PLATE_SIZE / 2, plateZ + PLATE_SIZE / 2,
-      { top: PLATE_TOP }
+      { top: PLATE_DECK + PLATE_TOP }
     );
 
     interactions.push({
@@ -1070,7 +1146,7 @@ export function createGauntlet({ scene, onCaught }) {
       // opening, and stood there. Until it is through, it follows you through.
       if (!inHall(bodyPosition.x, bodyPosition.z)) return null;
       if (!inHall(friendPosition.x, friendPosition.z)) return null;
-      leash.set(bodyPosition.x, bodyPosition.y, laneCentre(FRIEND_SIDE));
+      leash.set(bodyPosition.x, bodyPosition.y, LANE_WALK);
       for (const station of stations) {
         if (!station.shutters[FRIEND_SIDE].open && leash.x < station.x + 1.2) {
           leash.x = station.x + 1.2;
@@ -1162,7 +1238,7 @@ export function createGauntlet({ scene, onCaught }) {
           const near =
             Math.abs(friend.position.x - station.plateAt.x) < PLATE_SIZE / 2 + 0.45 &&
             Math.abs(friend.position.z - station.plateAt.z) < PLATE_SIZE / 2 + 0.45;
-          if (near && Math.abs(friend.position.y - PLATE_TOP) < 0.07) {
+          if (near && Math.abs(friend.position.y - (PLATE_DECK + PLATE_TOP)) < 0.07) {
             station.plateOn = true;
             playButtonPress(0.8);
             playWardDoor(0.7);
@@ -1190,6 +1266,8 @@ export function createGauntlet({ scene, onCaught }) {
         // And the lid of the plate sinks under whatever is on it.
         const sunk = station.plateOn ? PLATE_TRAVEL : 0;
         station.plate.lid.position.y += (0.105 - sunk - station.plate.lid.position.y) * Math.min(1, delta * 8);
+        // The lid's y is local to the plate group, which now sits on the deck,
+        // so the numbers above are unchanged by the plate having gone up.
       }
 
       // The first switch is the only one that needs saying out loud. After that

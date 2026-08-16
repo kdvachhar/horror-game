@@ -290,6 +290,17 @@ export function createFriend(scene) {
   // the middle — and in those, "give up and go to the player" is not a rescue,
   // it is the puzzle solving itself.
   let recallAllowed = true;
+  /**
+   * How close it tries to get to whatever it is following.
+   *
+   * Normally the constant: two and a half metres behind you is out of your way
+   * and still obviously with you. The red hall sets it much shorter, because
+   * there it is not following *you* — it is following a point in its own lane
+   * beside you, and the two lanes are only 2.8m apart. At the usual radius it
+   * would count itself as having arrived while still standing in your lane,
+   * which is the one place the whole room needs it not to be.
+   */
+  let followDistance = FOLLOW_DISTANCE;
   // Hops taken since it last covered any ground. Cleared by moving, not by
   // hopping, or it would never reach the cap.
   let hopsSinceProgress = 0;
@@ -475,7 +486,7 @@ export function createFriend(scene) {
     lastX = position.x;
     lastZ = position.z;
 
-    if (distance <= FOLLOW_DISTANCE) {
+    if (distance <= followDistance) {
       stuckTimer = 0;
       // Brake rather than coast, or it drifts past you and oscillates.
       if (grounded && speed > 0.05) {
@@ -488,7 +499,7 @@ export function createFriend(scene) {
 
     // Ease the target speed down as it closes, so it settles instead of
     // hunting back and forth around the stop radius.
-    const approach = Math.min(1, (distance - FOLLOW_DISTANCE) / 1.5);
+    const approach = Math.min(1, (distance - followDistance) / 1.5);
     const want = FOLLOW_SPEED * approach;
 
     let dvx = (dx / distance) * want - velocity.x;
@@ -742,6 +753,11 @@ export function createFriend(scene) {
       strandedTimer = 0;
       hopsSinceProgress = 0;
       wantsRecall = false;
+    },
+
+    /** Falsy restores the default. See followDistance. */
+    setFollowDistance(metres) {
+      followDistance = metres || FOLLOW_DISTANCE;
     },
 
     /** See recallAllowed. Set every frame from wherever it is standing. */

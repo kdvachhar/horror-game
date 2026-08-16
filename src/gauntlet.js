@@ -20,13 +20,19 @@ import { playButtonPress, playWardDoor, playKnockout, playSpikeGrind } from './a
  *
  * **The puzzle.** You cannot get down your own lane and your friend cannot get
  * down its one; each of you holds the key to the other's. Every station has a
- * shutter across both lanes, a switch on the wall of *your* lane, and a floor
- * plate in *its* lane. The switch opens the shutter on the far side. The plate
- * opens the shutter on this one. So the only order that works is: throw the
- * switch, take the bucket over, walk it through the gate you just opened and
- * stand it on the plate, come back to your own body, and go through. Then the
- * next station has you doing it again with the sides swapped over — which is
- * the whole rhythm of the place, and why the divider never opens.
+ * shutter across both lanes, a switch up on a gantry in *your* lane, and a
+ * floor plate in *its* lane. The switch opens the shutter on the far side. The
+ * plate opens the shutter on this one. So the only order that works is: climb
+ * to the switch and throw it, take the bucket over, walk it through the gate
+ * you just opened and stand it on the plate, come back to your own body, and go
+ * through. Then the next station has you doing it again with the sides swapped
+ * over — which is the whole rhythm of the place, and why the divider never
+ * opens.
+ *
+ * The bucket puts *itself* in the left-hand lane the moment you are both
+ * through the red door, and paces you down it through the bars. See
+ * friendTarget: getting it across by hand was the first thing the room used to
+ * ask of you and the least interesting thing in it.
  *
  * That it needs the bucket at all is a consequence of two facts already true
  * elsewhere in this game: the plates take weight and nothing else, and the
@@ -101,6 +107,32 @@ const SHUTTER_THICK = 0.14;
 /** How long a shutter takes to roll up. */
 const SHUTTER_SECONDS = 1.1;
 
+/**
+ * The switches are up out of reach, on a run of gantries with gaps in it.
+ *
+ * The shape of this is dictated by two numbers that were already fixed. The
+ * player steps up 0.9m without being asked and jumps to 1.31 — so a stack of
+ * crates is not a climb, it is a ramp, and only a riser over 0.9 is a jump at
+ * all. And the hall is 3.4 tall, which with a 1.8m player leaves about 1.6m of
+ * headroom to stand in. One jump up. There is no room for a second.
+ *
+ * So the platforming is horizontal. One hop up onto a gantry at 1.0, then two
+ * gaps to clear along it, and the switch at the far end. Falling off costs you
+ * the climb again, which is the only currency this room deals in.
+ *
+ * `SWITCH_RANGE` is what makes the gantry necessary rather than decorative, and
+ * it is a reach and not a rule: from up there the switch is 0.44m from your
+ * face, and from the floor beside the gantry it is 1.57 — or 1.47 at the top of
+ * a jump, which is the number that actually has to fail. The verification walks
+ * the floor of the lane and checks every point.
+ */
+const SWITCH_HEIGHT = 2.45;
+const SWITCH_RANGE = 1.25;
+const CLIMB_TOP = 1.0;
+const CLIMB_DEPTH = 1.15;
+/** [how far up-lane of the switch, how long] — three pads, two gaps. */
+const CLIMB = [[4.4, 0.9], [2.4, 0.9], [0, 2.0]];
+
 const PLATE_SIZE = 1.15;
 /** How far the plate sinks under the bucket. Small: it is a switch, not a lift. */
 const PLATE_TRAVEL = 0.045;
@@ -117,18 +149,21 @@ const SPIKE_HEIGHT = 2.9;
  * Past this and the trap arms. Deliberately *past the first station*, not at
  * the fork.
  *
- * The bucket walks in at your heels, which puts it in your lane, and the only
- * way to get it into its own is to take it back out to the fork and round the
- * nose. Armed at the fork, the wall is between you and that crossing within a
- * few seconds of your arriving at the first shutter — measured: the bucket got
- * as far as -10.9 on its way back out and was caught there. The room was
- * unsolvable from the moment it started.
+ * Originally because the room was otherwise unsolvable. The bucket used to walk
+ * in at your heels, which put it in your lane, and the only way to get it into
+ * its own was to take it back out to the fork and round the nose — with the
+ * wall between you and that crossing within seconds of your reaching the first
+ * shutter. Measured: the bucket got as far as -10.9 on its way back out and was
+ * ground up there.
  *
- * So the first station is untimed, and it is where the transfer happens. Once
- * you are through it you are both committed to a lane apiece for the rest of
- * the hall, every remaining station is forwards-only, and *that* is when the
- * wall starts. Which also makes the first one a place to work out what the
- * room wants before it starts charging you for thinking.
+ * That reason is gone — see friendTarget, the bucket takes its own lane now —
+ * and this stays where it is for a better one. The first station is where the
+ * room explains itself: a switch you cannot reach, a gantry to get up to it, a
+ * gate that opens on the wrong side of the wall, and a plate only the bucket
+ * can stand on. That is four things at once, and none of them are worth
+ * teaching under a clock. Get through it and you are both committed to a lane
+ * for the rest of the hall, every station after it is forwards-only, and that
+ * is when the wall starts.
  */
 const ARM_X = STATIONS[0] - 1.2;
 /** How close the front of the spikes has to get to count as having got you. */
@@ -273,6 +308,46 @@ function buildSwitch() {
   group.add(lamp);
 
   return { group, button, lampMat };
+}
+
+/**
+ * One pad of the gantry run: a deck on two brackets, bolted to the wall.
+ *
+ * Built as something you would find in a service corridor rather than as a
+ * platform, so the run reads as a cable tray you are abusing and not as a
+ * staircase someone left for you.
+ */
+function buildStep(length, depth, top) {
+  const group = new THREE.Group();
+
+  const steel = new THREE.MeshStandardMaterial({
+    color: '#4a4d4c',
+    roughness: 0.55,
+    metalness: 0.55,
+  });
+  const edge = new THREE.MeshStandardMaterial({ color: '#8d7a2e', roughness: 0.7 });
+
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(length, 0.09, depth), steel);
+  deck.position.y = top - 0.045;
+  deck.receiveShadow = true;
+  group.add(deck);
+
+  // A painted lip along the open edge, which is the one you fall off.
+  const lip = new THREE.Mesh(new THREE.BoxGeometry(length, 0.05, 0.07), edge);
+  lip.position.set(0, top + 0.015, depth / 2 - 0.035);
+  group.add(lip);
+
+  // Brackets down to the wall, set in from the ends so the deck overhangs them.
+  for (const s of [-1, 1]) {
+    const bracket = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, top - 0.09, depth * 0.75),
+      steel
+    );
+    bracket.position.set(s * (length / 2 - 0.22), (top - 0.09) / 2, -depth * 0.1);
+    group.add(bracket);
+  }
+
+  return group;
 }
 
 /**
@@ -694,13 +769,31 @@ export function createGauntlet({ scene, onCaught }) {
     }
 
     const wallSwitch = buildSwitch();
-    // On the outer wall of your lane, facing in. Not on the divider: the solid
-    // part of that stops at the waist and a switch mounted at chest height on
-    // it would be floating between two bars.
-    wallSwitch.group.position.set(x + SWITCH_OFFSET, 1.28, laneFar(PLAYER_SIDE) + 0.06);
+    // On the outer wall of your lane, facing in, and up out of reach. Not on
+    // the divider: the solid part of that stops at the waist and a switch
+    // mounted this high on it would be floating between two bars.
+    wallSwitch.group.position.set(x + SWITCH_OFFSET, SWITCH_HEIGHT, laneFar(PLAYER_SIDE) + 0.06);
     wallSwitch.group.rotation.y = 0;
     group.add(wallSwitch.group);
     station.wallSwitch = wallSwitch;
+
+    // And the climb to it, running back up the lane against the same wall. The
+    // inward direction is -PLAYER_SIDE, so this reads the same whichever side
+    // of the divider the lane is on rather than only working for -z.
+    const inward = -PLAYER_SIDE;
+    for (const [back, length] of CLIMB) {
+      const px = x + SWITCH_OFFSET + back;
+      const pz = laneFar(PLAYER_SIDE) + inward * CLIMB_DEPTH / 2;
+      const pad = buildStep(length, CLIMB_DEPTH, CLIMB_TOP);
+      pad.position.set(px, 0, pz);
+      pad.rotation.y = inward > 0 ? 0 : Math.PI;
+      group.add(pad);
+      const a = laneFar(PLAYER_SIDE);
+      const c = a + inward * CLIMB_DEPTH;
+      solid(px - length / 2, px + length / 2, Math.min(a, c), Math.max(a, c), {
+        top: CLIMB_TOP,
+      });
+    }
 
     const plate = buildPlate();
     const plateX = x - PLATE_OFFSET;
@@ -722,11 +815,11 @@ export function createGauntlet({ scene, onCaught }) {
     interactions.push({
       position: new THREE.Vector3(
         x + SWITCH_OFFSET,
-        1.28,
-        laneFar(PLAYER_SIDE) + 0.2
+        SWITCH_HEIGHT,
+        laneFar(PLAYER_SIDE) - PLAYER_SIDE * 0.2
       ),
       label: 'Throw the switch',
-      range: 2.4,
+      range: SWITCH_RANGE,
       once: false,
       // Not `once`, so a run that ends under the spikes can be started again.
       // The interaction list has no way to un-spend a target, and reaching in
@@ -749,14 +842,34 @@ export function createGauntlet({ scene, onCaught }) {
 
   // ---------------------------------------------------------- last button ---
 
-  // Beside the way out rather than on it — the two were both on the centre line
-  // to begin with, which put the button inside the door.
-  const FINAL_Z = AXIS + 1.6;
+  // In the corner of the end chamber, up on a gantry of its own, and away from
+  // the way out — the two were both on the centre line to begin with, which put
+  // the button inside the door. Up there for the same reason the others are:
+  // arriving in the chamber is not the last thing the hall asks of you.
+  const FINAL_Z = laneFar(PLAYER_SIDE) - PLAYER_SIDE * 0.4;
   const finalPanel = buildSwitch();
   finalPanel.group.scale.setScalar(1.5);
-  finalPanel.group.position.set(END + 0.1, 1.35, FINAL_Z);
+  finalPanel.group.position.set(END + 0.14, SWITCH_HEIGHT, FINAL_Z);
   finalPanel.group.rotation.y = Math.PI / 2;
   group.add(finalPanel.group);
+
+  // Its climb runs back into the chamber off the end wall rather than along a
+  // side wall, so the pads are laid out in x and their length is in x too.
+  {
+    const inward = -PLAYER_SIDE;
+    const pz = laneFar(PLAYER_SIDE) + inward * CLIMB_DEPTH / 2;
+    const a = laneFar(PLAYER_SIDE);
+    const c = a + inward * CLIMB_DEPTH;
+    for (const [px, length] of [[END + 4.6, 0.9], [END + 2.7, 0.9], [END + 0.9, 1.8]]) {
+      const pad = buildStep(length, CLIMB_DEPTH, CLIMB_TOP);
+      pad.position.set(px, 0, pz);
+      pad.rotation.y = inward > 0 ? 0 : Math.PI;
+      group.add(pad);
+      solid(px - length / 2, px + length / 2, Math.min(a, c), Math.max(a, c), {
+        top: CLIMB_TOP,
+      });
+    }
+  }
 
   // The way out, held shut by the same button.
   const exitDoor = new THREE.Mesh(
@@ -806,6 +919,9 @@ export function createGauntlet({ scene, onCaught }) {
   let solved = false;
   let spikeX = SPIKE_HOME;
   let grindTimer = 0;
+  // Mutated rather than replaced, so nothing downstream is holding a stale one.
+  const leash = new THREE.Vector3();
+
   /** So the first station's instruction is only given once per run. */
   let coached = false;
   /** And so walking in only sets the objective once. */
@@ -815,9 +931,9 @@ export function createGauntlet({ scene, onCaught }) {
   spikes.group.visible = false;
 
   interactions.push({
-    position: new THREE.Vector3(END + 0.6, 1.35, FINAL_Z),
+    position: new THREE.Vector3(END + 0.6, SWITCH_HEIGHT, laneFar(PLAYER_SIDE) - PLAYER_SIDE * 0.25),
     label: 'Press the button',
-    range: 2.6,
+    range: SWITCH_RANGE,
     once: false,
     enabled: () => powered && !solved,
     onInteract() {
@@ -921,6 +1037,46 @@ export function createGauntlet({ scene, onCaught }) {
         // the doorway looking back the way you came.
         yaw: Math.PI / 2,
       };
+    },
+
+    /**
+     * Where the bucket should be walking, while you are both in here.
+     *
+     * Not at you. It is a point in *its* lane, level with you — so the moment
+     * you step through the red door it peels off into the left-hand hall and
+     * paces you down it through the bars, which is where the room needs it and
+     * where it would otherwise never go on its own.
+     *
+     * It used to just follow you, which meant it came through the door at your
+     * heels into your lane, and getting it across was a chore you had to do by
+     * hand at the fork before anything else could happen. That was the least
+     * interesting thing in the room and it was the first thing the room asked
+     * of you.
+     *
+     * Clamped short of any shutter of its own that is still down, because a
+     * leash that pulls it into steel it cannot pass just makes it stand there
+     * hopping — the stuck-hop reads "something is in the way" and tries to get
+     * over it, forever. Stopped a metre short instead, it waits.
+     *
+     * Returns null when this is none of our business, and the caller follows
+     * you the ordinary way.
+     */
+    friendTarget(bodyPosition, friendPosition) {
+      if (!powered) return null;
+      // Both of you, not just you. The doorway is 1.9m of a 5.2m wall, and a
+      // leash into the left-hand lane pulls anything still on the other side of
+      // it sideways into the wall *beside* the door — measured: the bucket got
+      // as far as x -7.6, level with its lane and a metre and a half from the
+      // opening, and stood there. Until it is through, it follows you through.
+      if (!inHall(bodyPosition.x, bodyPosition.z)) return null;
+      if (!inHall(friendPosition.x, friendPosition.z)) return null;
+      leash.set(bodyPosition.x, bodyPosition.y, laneCentre(FRIEND_SIDE));
+      for (const station of stations) {
+        if (!station.shutters[FRIEND_SIDE].open && leash.x < station.x + 1.2) {
+          leash.x = station.x + 1.2;
+        }
+      }
+      return leash;
     },
 
     /**

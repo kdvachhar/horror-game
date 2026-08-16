@@ -705,7 +705,14 @@ renderer.setAnimationLoop((time) => {
   // rescuing. In the red hall it means the room is working, so the rescue is
   // switched off while it is in there.
   friend.setRecallAllowed(!gauntlet.contains(friend.position.x, friend.position.z));
-  friend.update(delta, camera, camera.position, room.colliders);
+  // In the red hall the bucket follows a point in its own lane rather than
+  // following you, so it takes the left-hand hall on its own. It has to want to
+  // get much closer to that point than it does to you: the two lanes are 2.8m
+  // apart and its usual standoff is 2.6, so at the normal radius it would call
+  // itself arrived without ever leaving your side of the divider.
+  const leash = gauntlet.friendTarget(player.position, friend.position);
+  friend.setFollowDistance(leash ? 0.9 : 0);
+  friend.update(delta, camera, leash ?? camera.position, room.colliders);
   // After the friend has moved, so the plates read where it is now, and given
   // the *body's* position rather than the camera's — while you are driving the
   // bucket the camera is in the other lane and the thing the spikes are walking

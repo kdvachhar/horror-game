@@ -192,7 +192,6 @@ function buildShutter() {
     slat
   );
   face.position.y = SHUTTER_HEIGHT / 2;
-  face.castShadow = true;
   face.receiveShadow = true;
   curtain.add(face);
 
@@ -221,7 +220,6 @@ function buildShutter() {
     housingMat
   );
   housing.position.y = (HEIGHT + SHUTTER_HEIGHT) / 2;
-  housing.castShadow = true;
   group.add(housing);
 
   // Guide rails either side, which is what stops the opening reading as a hole
@@ -232,7 +230,6 @@ function buildShutter() {
       housingMat
     );
     rail.position.set(0, SHUTTER_HEIGHT / 2, side * (LANE_WIDTH / 2 - 0.05));
-    rail.castShadow = true;
     group.add(rail);
   }
 
@@ -254,7 +251,6 @@ function buildSwitch() {
     new THREE.BoxGeometry(0.5, 0.62, 0.09),
     new THREE.MeshStandardMaterial({ color: '#2b2f31', roughness: 0.7, metalness: 0.3 })
   );
-  plate.castShadow = true;
   group.add(plate);
 
   const button = new THREE.Mesh(
@@ -263,7 +259,6 @@ function buildSwitch() {
   );
   button.rotation.x = Math.PI / 2;
   button.position.set(0, 0.09, 0.08);
-  button.castShadow = true;
   group.add(button);
 
   // Starts black. Emissive is self-lit whatever the lighting is doing, so a
@@ -303,7 +298,6 @@ function buildPlate() {
     new THREE.MeshStandardMaterial({ color: '#7a3029', roughness: 0.55, metalness: 0.35 })
   );
   lid.position.y = 0.105;
-  lid.castShadow = true;
   lid.receiveShadow = true;
   group.add(lid);
 
@@ -351,7 +345,6 @@ function buildSpikeWall() {
 
     const back = new THREE.Mesh(new THREE.BoxGeometry(0.34, SPIKE_HEIGHT, width), frameMat);
     back.position.y = SPIKE_HEIGHT / 2;
-    back.castShadow = true;
     piece.add(back);
 
     // Rows offset by half a pitch, so it is a bed of nails rather than a grid.
@@ -374,7 +367,6 @@ function buildSpikeWall() {
         // and a wall with spikes on the back of it.
         spike.rotation.z = Math.PI / 2;
         spike.position.set(-0.47, y, (t - 0.5) * width);
-        spike.castShadow = true;
         piece.add(spike);
       }
     }
@@ -389,6 +381,15 @@ function buildSpikeWall() {
 
   return { group, filler };
 }
+
+/*
+ * Nothing in this hall casts a shadow, deliberately.
+ *
+ * Its own lamps do not cast — they are six-render cube maps apiece and there
+ * are three of them — so a `castShadow` on anything in here could only ever be
+ * paid to some *other* room's light, which is thirty metres away through two
+ * walls and cannot see any of it. It would be pure cost for no pixel.
+ */
 
 export function createGauntlet({ scene, onCaught }) {
   const group = new THREE.Group();
@@ -570,7 +571,6 @@ export function createGauntlet({ scene, onCaught }) {
       new THREE.MeshStandardMaterial({ color: '#3b1815', roughness: 0.9 })
     );
     kerb.position.set(dividerMid, SOLID_TO / 2, AXIS);
-    kerb.castShadow = true;
     kerb.receiveShadow = true;
     group.add(kerb);
 
@@ -585,7 +585,6 @@ export function createGauntlet({ scene, onCaught }) {
         barMat
       );
       bar.position.set(x, (HEIGHT + SOLID_TO) / 2, AXIS);
-      bar.castShadow = true;
       group.add(bar);
     }
     // A rail top and bottom, or the bars read as loose sticks.
@@ -605,7 +604,6 @@ export function createGauntlet({ scene, onCaught }) {
       new THREE.MeshStandardMaterial({ color: '#5e2622', roughness: 0.85 })
     );
     nose.position.set(FORK, SOLID_TO / 2, AXIS);
-    nose.castShadow = true;
     group.add(nose);
 
     solid(DIVIDER_END, FORK + DIV, AXIS - DIV, AXIS + DIV, {});
@@ -616,10 +614,21 @@ export function createGauntlet({ scene, onCaught }) {
   /**
    * Red service lighting, and not much of it.
    *
-   * Five lamps over thirty metres, which leaves the middle of every span dim.
-   * The hall is meant to be somewhere you can see the next station and not the
-   * one after it. Emissives start black for the same reason the switch lamps
-   * do — they do not care whether the room has power, so they have to be told.
+   * Three lamps over thirty metres, which leaves most of every span dim. The
+   * hall is meant to be somewhere you can see the next station and not the one
+   * after it.
+   *
+   * It was six. Six point lights in a scene that already had twenty-eight cost
+   * 95ms of a 504ms frame — nineteen per cent of the game's whole frame for one
+   * corridor's ceiling — because a forward renderer evaluates every light on
+   * every fragment of every surface anywhere in the world. Three at a longer
+   * reach light the same hall for half of that.
+   *
+   * The fittings are still hung in sixes, so the ceiling reads the way it did;
+   * every other one is a dead tube, which this building is full of anyway.
+   *
+   * Emissives start black for the same reason the switch lamps do — they do not
+   * care whether the room has power, so they have to be told.
    */
   const lamps = [];
   const tubeMat = new THREE.MeshStandardMaterial({
@@ -627,13 +636,19 @@ export function createGauntlet({ scene, onCaught }) {
     roughness: 0.5,
     emissive: '#000000',
   });
+  const deadTubeMat = new THREE.MeshStandardMaterial({ color: '#2a0d0c', roughness: 0.5 });
   for (let i = 0; i < 6; i++) {
     const x = NEAR - 2.6 - i * ((length - 4.5) / 5);
-    const tube = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.07, 0.16), tubeMat);
+    const live = i % 2 === 0;
+    const tube = new THREE.Mesh(
+      new THREE.BoxGeometry(0.7, 0.07, 0.16),
+      live ? tubeMat : deadTubeMat
+    );
     tube.position.set(x, HEIGHT - 0.11, AXIS + (i % 2 ? 1.4 : -1.4));
     group.add(tube);
+    if (!live) continue;
 
-    const light = new THREE.PointLight(0xff3521, 0, 11, 2);
+    const light = new THREE.PointLight(0xff3521, 0, 17, 2);
     light.position.set(tube.position.x, HEIGHT - 0.35, tube.position.z);
     group.add(light);
     lamps.push(light);
@@ -750,7 +765,6 @@ export function createGauntlet({ scene, onCaught }) {
   );
   const exitShut = (EXIT.height - 0.04) / 2;
   exitDoor.position.set(END + 0.08, exitShut, AXIS);
-  exitDoor.castShadow = true;
   group.add(exitDoor);
   // Gated on where the door actually is rather than on the flag, so it stops
   // being solid as it clears your head and not two seconds before.
@@ -860,7 +874,7 @@ export function createGauntlet({ scene, onCaught }) {
       powered = true;
       group.visible = true;
       blank.visible = false;
-      for (const light of lamps) light.intensity = 13;
+      for (const light of lamps) light.intensity = 26;
       tubeMat.emissive.set('#7d1410');
     },
 

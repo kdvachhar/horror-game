@@ -30,8 +30,33 @@ import { createPainter } from './painter.js';
 import { createSpeechRunner } from './voice.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
+
+/**
+ * How many pixels to actually draw, decided by how fast the machine is drawing
+ * them.
+ *
+ * This used to be `min(devicePixelRatio, 2)` and left there. On a Retina screen
+ * that is 2, which is four times the pixels of 1 — and this renderer is fill
+ * bound, because it draws the world twice and shades every fragment against
+ * every light in it. Four times the pixels is very nearly four times the frame.
+ *
+ * A fixed number cannot be right, though: 2 is free on one machine and hopeless
+ * on the next, and there is no way to know which from here. So it is measured.
+ * The loop keeps the last two seconds of frame times and walks this up or down
+ * a step at a time to hold 60fps, and the steps are spaced far enough apart —
+ * and the thresholds far enough apart from each other — that it settles rather
+ * than oscillating between two of them.
+ */
+const PIXEL_STEPS = [0.6, 0.75, 0.9, 1, 1.25, 1.5, 1.75, 2];
+let pixelStep = PIXEL_STEPS.indexOf(1);
+const applyPixelRatio = () => {
+  // A pixel ratio above the display's own buys nothing but pixels.
+  renderer.setPixelRatio(Math.min(PIXEL_STEPS[pixelStep], window.devicePixelRatio));
+  // setPixelRatio does not resize the buffer on its own; setSize is what makes
+  // it take effect, so the two always go together.
+  renderer.setSize(window.innerWidth, window.innerHeight);
+};
+applyPixelRatio();
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -571,7 +596,9 @@ overlay.addEventListener('click', () => {
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  // Through applyPixelRatio rather than setSize directly, or a resize quietly
+  // undoes whatever the tuner had settled on.
+  applyPixelRatio();
 });
 
 // Dev-only readout in the corner: whether audio is alive, and whether sounds
@@ -579,6 +606,52 @@ window.addEventListener('resize', () => {
 const updateAudioIndicator = import.meta.env.DEV ? mountAudioIndicator() : null;
 
 let lastTime = performance.now();
+
+/**
+ * Walks the pixel ratio toward whatever this machine can hold at 60fps.
+ *
+ * Judged on a two-second average rather than on single frames, because one slow
+ * frame is a shader compiling or a garbage collection and is no evidence about
+ * anything. The two thresholds are far apart on purpose: it steps down above
+ * 20ms a frame and up only below 12, so the ratio it settles on is comfortably
+ * inside both and there is no value that is simultaneously too slow to keep and
+ * fast enough to go back to.
+ *
+ * Frames are also thrown away for a moment after a change, so the resize itself
+ * — which reallocates every buffer — is never the thing being measured.
+ */
+const TUNE_WINDOW = 2;
+let tuneClock = 0;
+let tuneFrames = 0;
+let tuneSettle = 0;
+
+function tuneResolution(delta) {
+  if (tuneSettle > 0) {
+    tuneSettle -= delta;
+    tuneClock = 0;
+    tuneFrames = 0;
+    return;
+  }
+  tuneClock += delta;
+  tuneFrames++;
+  if (tuneClock < TUNE_WINDOW) return;
+
+  const ms = (tuneClock * 1000) / tuneFrames;
+  tuneClock = 0;
+  tuneFrames = 0;
+
+  const want = ms > 20 ? -1 : ms < 12 ? 1 : 0;
+  if (want === 0) return;
+  const next = Math.max(0, Math.min(PIXEL_STEPS.length - 1, pixelStep + want));
+  // Already at the end of what it can do, or at the display's own ratio, in
+  // which case going up would allocate more pixels than the screen has.
+  if (next === pixelStep) return;
+  if (want > 0 && PIXEL_STEPS[pixelStep] >= window.devicePixelRatio) return;
+
+  pixelStep = next;
+  applyPixelRatio();
+  tuneSettle = 0.7;
+}
 
 renderer.setAnimationLoop((time) => {
   // Clamped at both ends.
@@ -593,6 +666,8 @@ renderer.setAnimationLoop((time) => {
   // television's mouth to a scale of 1e55 for the first few seconds.
   const delta = Math.min(Math.max((time - lastTime) / 1000, 0), 0.05);
   lastTime = time;
+
+  tuneResolution(delta);
 
   debugMenu.update(delta);
   monologue.update(delta);
@@ -702,6 +777,13 @@ if (import.meta.env.DEV) {
   window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, wakeUp, possession, painter, monologue };
   window.game.__tvLines = TV_LINES;
   // Console handles for diagnosing silence: game.audio.state() / .test()
+  window.game.perf = () => ({
+    pixelRatio: renderer.getPixelRatio(),
+    step: `${pixelStep + 1} of ${PIXEL_STEPS.length}`,
+    calls: renderer.info.render.calls,
+    triangles: renderer.info.render.triangles,
+    programs: renderer.info.programs.length,
+  });
   window.game.audio = {
     played: audioPlayed,
     state: audioState,

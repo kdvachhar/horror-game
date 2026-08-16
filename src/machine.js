@@ -401,10 +401,17 @@ function buildConveyor(parent) {
   leak.position.set(0, beltHeight + 0.11, midZ);
   group.add(leak);
 
+  // One light under the belt, not three.
+  //
+  // Three of them were a graded wash along the underside; one at the middle
+  // with the reach of all three is very nearly the same picture, and the two it
+  // replaces were being evaluated on every fragment of every surface in the
+  // building. In a forward renderer a light is not local to the thing it lights
+  // — only its falloff is.
   const underLights = [];
-  for (let i = 0; i < 3; i++) {
-    const light = new THREE.PointLight(GOO, 14, 10, 1.7);
-    light.position.set(0, beltHeight - 0.15, -(conveyorLength * (i + 0.5)) / 3);
+  {
+    const light = new THREE.PointLight(GOO, 22, 16, 1.7);
+    light.position.set(0, beltHeight - 0.15, -conveyorLength / 2);
     group.add(light);
     underLights.push(light);
   }

@@ -1266,17 +1266,22 @@ function buildLights(scene) {
     const light = new THREE.PointLight(0xd8e2ff, 88, 40, 1.45);
     light.position.set(x, FIXTURE_HEIGHT - 0.12, z);
 
-    // Every live fixture casts. With only one caster the other three simply
-    // filled its shadows back in, so nothing in the room — the player included
-    // — appeared to have one at all. Maps are kept modest to pay for it.
-    light.castShadow = true;
-    light.shadow.mapSize.set(order === 0 ? 1024 : 512, order === 0 ? 1024 : 512);
-    light.shadow.camera.near = 0.5;
-    light.shadow.camera.far = 34;
-    // normalBias offsets along the surface normal, which clears the acne that
-    // was mottling the floor without the peter-panning a large depth bias causes.
-    light.shadow.normalBias = 0.06;
-    light.shadow.bias = -0.0004;
+    // None of these cast any more.
+    //
+    // All four used to, on the reasoning that with only one the other three
+    // fill its shadows back in and nothing appears to have a shadow at all.
+    // That reasoning is sound and the price was not: a point light's shadow is
+    // a cube map, so it is *six* renders of the whole scene per light per
+    // frame, and four of them came to twenty-four. Measured, switching all four
+    // off took 121ms off a 504ms frame — a quarter of it, for four lights out
+    // of thirty-four.
+    //
+    // Nothing is lost by it, because these were never the lights doing the
+    // work. They are eight metres up, and the machine's own glow already says
+    // why that matters: from up here a figure casts barely a foot of shadow,
+    // and from the tank at chest height the same figure stretches right across
+    // the floor. That one still casts. These are fill, and now they only fill.
+    light.castShadow = false;
     scene.add(light);
 
     const tube = new THREE.Mesh(tubeGeometry, tubeMaterial.clone());

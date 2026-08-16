@@ -1122,9 +1122,11 @@ function buildStoreRoom() {
 
   const lamp = new THREE.PointLight(0xdfeee4, 14, 9, 1.4);
   lamp.position.set(midX, STORE.height - 0.3, midZ - 0.4);
-  lamp.castShadow = true;
-  lamp.shadow.mapSize.set(512, 512);
-  lamp.shadow.normalBias = 0.05;
+  // Doesn't cast. It used to, and a point light's shadow is six renders of the
+  // whole scene every frame — a heavy price for a store room you are in for
+  // about a minute, and one paid on every frame of the game whether you are in
+  // there or not. The ward's own lamp still casts; that is the room this act is
+  // about and the one the arms reach into.
   group.add(lamp);
 
   // And one down the corridor. Dimmer and further gone than the store room's —

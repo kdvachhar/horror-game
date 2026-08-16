@@ -10,7 +10,13 @@ import {
   UNITS_PER_TILE,
 } from './textures.js';
 import { setObjective, showNote } from './hud.js';
-import { playButtonPress, playWardDoor, playKnockout, playSpikeGrind } from './audio.js';
+import {
+  playButtonPress,
+  playWardDoor,
+  playKnockout,
+  playSpikeGrind,
+  createChaseMusic,
+} from './audio.js';
 
 /**
  * The red hall behind the red door.
@@ -1055,6 +1061,17 @@ export function createGauntlet({ scene, onCaught }) {
   group.add(spikes.group);
 
   /**
+   * The music, which exists for exactly as long as the wall is moving.
+   *
+   * Driven off `armed` in update rather than started and stopped at each of the
+   * places that arms or disarms the trap — there are five of them by now (the
+   * arming line, the last button, backing out of the door, being caught, and
+   * the debug menu winding the room back) and any one of them forgotten leaves
+   * chase music playing in an empty corridor.
+   */
+  const music = createChaseMusic();
+
+  /**
    * A black plate across the doorway while there is no power.
    *
    * The hall is hidden until the ward's console reaches it, and a hidden hall
@@ -1163,6 +1180,7 @@ export function createGauntlet({ scene, onCaught }) {
 
     /** Debug only, and the inverse of the above in every particular. */
     powerDown() {
+      music.stop();
       powered = false;
       group.visible = false;
       blank.visible = true;
@@ -1187,6 +1205,9 @@ export function createGauntlet({ scene, onCaught }) {
       return solved;
     },
     /** Dev handles. */
+    get musicPlaying() {
+      return music.isPlaying;
+    },
     get spikeX() {
       return spikeX;
     },
@@ -1270,6 +1291,16 @@ export function createGauntlet({ scene, onCaught }) {
       } else if (armed && !bodyIn && bodyPosition.x > SIDE_DOOR.x) {
         rewind();
       }
+
+      // How close it is, as the music hears it: nothing at fifteen metres, all
+      // of it when the teeth are at your back. The same number the grind is
+      // scaled by, so the two say the same thing.
+      if (armed !== music.isPlaying) {
+        if (armed) music.start();
+        else music.stop();
+      }
+      music.setPressure(1 - Math.min(1, Math.abs(spikeX - bodyPosition.x) / 15));
+      music.update();
 
       if (armed) {
         spikeX = Math.max(SPIKE_LIMIT, spikeX - SPIKE_SPEED * delta);

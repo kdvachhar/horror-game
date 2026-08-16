@@ -622,6 +622,175 @@ export function playSpikeGrind(level = 1) {
 }
 
 /**
+ * The music for the red hall, for as long as the wall is coming.
+ *
+ * Written rather than played, like everything else that makes a noise in this
+ * project — there are no files, so there is no recording to fade in. It is a
+ * sixteenth-note grid with a handful of voices on it, and a scheduler that runs
+ * a fraction of a second ahead of the clock.
+ *
+ * **It is driven by how close the thing is.** `setPressure` takes 0 when the
+ * wall is far behind you and 1 when it is about to have you, and everything
+ * moves with it: the tempo from 96 to 152, the volume, how open the bass filter
+ * is, and which voices are playing at all. Far away it is a pulse and a
+ * heartbeat. Close, the semitone above the root comes in against it and a
+ * scrape rides the offbeat. That means the music is telling you the same thing
+ * the grind of the wall is, in a register you cannot mistake for the room.
+ *
+ * The scheduling is the standard Web Audio arrangement and worth stating
+ * because the naive version does not work: you cannot fire notes from the frame
+ * loop, because frames arrive whenever they arrive and the jitter is audible on
+ * anything with a pulse. Instead each `update` looks a fifth of a second into
+ * the future and books everything due before then at an exact `currentTime`.
+ * The frame loop only has to be more frequent than the lookahead, not regular.
+ */
+const CHASE_LOOKAHEAD = 0.2;
+/** Semitone ratios off the root, for the two notes the whole thing is built on. */
+const CHASE_ROOT = 43.65; // F1
+const CHASE_FLAT2 = CHASE_ROOT * 1.0595; // the semitone above it
+
+export function createChaseMusic() {
+  let running = false;
+  let bus = null;
+  /** When the next sixteenth falls due, on the audio clock. */
+  let nextStep = 0;
+  let step = 0;
+  let pressure = 0;
+
+  /** The bass pulse: a saw through a filter that opens as things get worse. */
+  function pulse(t, freq, dur, level) {
+    const osc = context.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.value = freq;
+    const tone = context.createBiquadFilter();
+    tone.type = 'lowpass';
+    tone.frequency.value = 190 + pressure * 900;
+    tone.Q.value = 6;
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(level, t + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(tone).connect(gain).connect(bus);
+    osc.start(t);
+    osc.stop(t + dur + 0.02);
+  }
+
+  /** The heartbeat under it. Sine, dropping fast — felt more than heard. */
+  function thud(t, level) {
+    const osc = context.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(96, t);
+    osc.frequency.exponentialRampToValueAtTime(38, t + 0.16);
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(level, t + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+    osc.connect(gain).connect(bus);
+    osc.start(t);
+    osc.stop(t + 0.3);
+  }
+
+  /** A metal scrape on the offbeat, once it is close. Noise, not a note. */
+  function scrape(t, level) {
+    const src = context.createBufferSource();
+    src.buffer = getNoise();
+    const band = context.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.setValueAtTime(1600, t);
+    band.frequency.exponentialRampToValueAtTime(4200, t + 0.13);
+    band.Q.value = 9;
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(level, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+    src.connect(band).connect(gain).connect(bus);
+    src.start(t, Math.random() * 1.5);
+    src.stop(t + 0.17);
+  }
+
+  /**
+   * One sixteenth. `step` counts within a bar of sixteen.
+   *
+   * The bass alternates between the root and the semitone above it every bar,
+   * which is the whole harmonic idea: a minor second has nowhere to resolve to,
+   * so it never stops sounding like a question.
+   */
+  function schedule(t, index) {
+    const bar = Math.floor(index / 16);
+    const beat = index % 16;
+    const level = 0.06 + pressure * 0.1;
+
+    // Eighths, always. This is the thing you hear first and last.
+    if (beat % 2 === 0) {
+      pulse(t, bar % 2 ? CHASE_FLAT2 : CHASE_ROOT, 0.17, level);
+    }
+    // And the semitone against it once it is close, which is where the sound
+    // stops being a pulse and starts being wrong.
+    if (pressure > 0.45 && beat % 8 === 4) {
+      pulse(t, bar % 2 ? CHASE_ROOT * 2 : CHASE_FLAT2 * 2, 0.22, level * 0.7);
+    }
+    if (beat === 0 || beat === 10) thud(t, 0.12 + pressure * 0.16);
+    if (pressure > 0.6 && (beat === 7 || beat === 15)) scrape(t, 0.03 + pressure * 0.05);
+  }
+
+  return {
+    get isPlaying() {
+      return running;
+    },
+
+    /** 0 when it is a long way back, 1 when it is on top of you. */
+    setPressure(value) {
+      pressure = Math.max(0, Math.min(1, value));
+    },
+
+    start() {
+      if (running || !ready()) return;
+      running = true;
+      bus = context.createGain();
+      // Up from silence over a bar or so, so it arrives with the wall rather
+      // than being switched on.
+      bus.gain.setValueAtTime(0.0001, context.currentTime);
+      bus.gain.exponentialRampToValueAtTime(1, context.currentTime + 2.5);
+      send(bus, 0.55);
+      nextStep = context.currentTime + 0.08;
+      step = 0;
+      playedCount++;
+    },
+
+    stop() {
+      if (!running) return;
+      running = false;
+      if (!bus || !context) return;
+      const t = context.currentTime;
+      const dying = bus;
+      bus = null;
+      // Ramped, not cut. Stopping dead on the frame the last button goes in
+      // reads as the game having crashed rather than as the trap giving up.
+      dying.gain.cancelScheduledValues(t);
+      dying.gain.setValueAtTime(Math.max(0.0001, dying.gain.value), t);
+      dying.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+      setTimeout(() => dying.disconnect(), 1500);
+    },
+
+    /** Books every step falling due inside the lookahead. Call it each frame. */
+    update() {
+      if (!running || !ready() || !bus) return;
+      // Tempo rides the pressure, so the room speeds up as it closes on you.
+      const sixteenth = 60 / ((96 + pressure * 56) * 4);
+      const horizon = context.currentTime + CHASE_LOOKAHEAD;
+      // Capped, so a tab that has been in the background for a minute schedules
+      // a handful of notes and catches up rather than booking four thousand.
+      for (let i = 0; i < 32 && nextStep < horizon; i++) {
+        schedule(nextStep, step);
+        nextStep += sixteenth;
+        step++;
+      }
+      if (nextStep < context.currentTime) nextStep = context.currentTime + 0.02;
+    },
+  };
+}
+
+/**
  * Diagnostics, for when the game is silent and it isn't clear whether the fault
  * is in here or in the browser. `game.audio.state()` from the console reports
  * what the graph thinks; `game.audio.test()` plays a deliberately loud tone

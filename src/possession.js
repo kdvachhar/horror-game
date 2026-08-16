@@ -48,6 +48,10 @@ export function createPossession({ camera, player, friend, playerBody, onTaken }
   window.addEventListener('keydown', (event) => {
     if (event.code !== 'KeyF' || event.repeat) return;
     if (/^(INPUT|TEXTAREA)$/.test(event.target?.tagName ?? '')) return;
+    // Nothing doing while the player has been switched off — a cutscene, the
+    // wake-up, or the paint GUI. Without this you could swap bodies from inside
+    // a menu, and come out of it looking through the bucket.
+    if (!player.isEnabled) return;
     if (!unlocked) return;
     if (possessing) give();
     // No aiming, no range: being connected to it is the point.

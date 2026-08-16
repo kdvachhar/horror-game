@@ -310,6 +310,9 @@ const shellColliders = [];
 // meshes the editor has already disposed.
 let backRoom = null;
 
+/** Where the paint tin's interact prompt hangs. Filled in by buildBackRoom. */
+const paintAnchor = new THREE.Vector3();
+
 // `top` is the surface the player can land on. Omitting it marks the box as
 // unclimbable — it blocks at any height, which is what walls and pillars want.
 function addCollider(x, z, sizeX, sizeZ, top) {
@@ -829,6 +832,12 @@ function buildBackRoom(scene) {
   tin.rotation.y = -0.5;
   place(tin);
   tin.traverse((o) => o.layers.set(LAYER.DARK));
+  // Where the interact prompt hangs. Above the rim rather than at the tin's
+  // origin, which is on the floor and reads as prompting the ground.
+  // Mutated, never replaced. The interaction system holds this vector by
+  // reference from the moment the game starts, so handing out a fresh one on an
+  // editor rebuild would leave the prompt anchored to where the tin used to be.
+  paintAnchor.set(tin.position.x, PAINT.height + 0.25, tin.position.z);
 
   // What you see instead of the corridor, while the door at the end of it is
   // shut — which is the whole of act one.
@@ -1451,6 +1460,8 @@ export function createRoom(scene) {
     get backRoomIsLit() {
       return backRoom?.lit === true;
     },
+    /** Where to hang the paint tin's interact prompt. Moves with the tin. */
+    paintAnchor,
     update(delta) {
       updateDust(delta);
       updateLights(delta);

@@ -25,6 +25,7 @@ import { createDebugMenu } from './debug.js';
 import { createCutscene } from './cutscene.js';
 import { createWakeUp } from './wakeUp.js';
 import { createPossession } from './possession.js';
+import { createPainter } from './painter.js';
 import { createSpeechRunner } from './voice.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -128,6 +129,25 @@ interactions.add({
     setObjective('Collect your friend');
     processing = PROCESS_SECONDS;
   },
+});
+
+const painter = createPainter({ player });
+
+/**
+ * The tin in the back room. Unlike everything else here this one is not spent
+ * by using it — you can come back and change your mind — so `once` is off.
+ *
+ * Gated on the room having its power back, which is also the only time you can
+ * see the tin. Offering it in act one would put a prompt on an object sitting
+ * in a room the whole point of which is that it is empty and black.
+ */
+interactions.add({
+  position: room.paintAnchor,
+  label: 'Paint your friend',
+  range: 2.4,
+  once: false,
+  enabled: () => room.backRoomIsLit && !painter.isOpen,
+  onInteract: () => painter.open(),
 });
 
 // How long the machine chews on the bucket before something comes out the far
@@ -609,7 +629,7 @@ renderer.setAnimationLoop((time) => {
 
 // Dev-only handle for poking at the scene from the console.
 if (import.meta.env.DEV) {
-  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, wakeUp, possession, monologue };
+  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, wakeUp, possession, painter, monologue };
   window.game.__tvLines = TV_LINES;
   // Console handles for diagnosing silence: game.audio.state() / .test()
   window.game.audio = {

@@ -6,6 +6,7 @@ import { createFriend } from './friend.js';
 import { createDoor } from './door.js';
 import { createPlayerBody } from './playerBody.js';
 import { createMedicalRoom } from './medicalRoom.js';
+import { createGauntlet } from './gauntlet.js';
 import { MACHINE, DOOR, BACK_DOOR, LAYER, SPAWN, MEDICAL, insideBackRoom } from './config.js';
 import { createPlayer } from './player.js';
 import { createWallText } from './wallText.js';
@@ -78,7 +79,37 @@ const playerBody = createPlayerBody(scene);
 const medical = createMedicalRoom(scene);
 room.colliders.push(...medical.colliders);
 
+/**
+ * The red hall behind the red door, and the thing in it.
+ *
+ * Given a way to put you both back at the start, because that is the one thing
+ * it cannot do for itself: it owns the room and the trap, not your body and not
+ * the bucket.
+ */
+const gauntlet = createGauntlet({
+  scene,
+  onCaught(who) {
+    // Out of the bucket first if you were in it — being ground up while driving
+    // it and then still driving it afterwards is not a state anything expects.
+    possession.reset();
+    possession.unlock();
+    const entry = gauntlet.entry;
+    player.teleport({ position: entry.player, yaw: entry.yaw, pitch: 0 });
+    friend.spawn(entry.friend);
+    friend.setFollowing(followWanted);
+    showNote(
+      who === 'you' ? 'The spikes caught you.' : 'The spikes caught your friend.',
+      2.6
+    );
+    // No objective set here. You have been put back inside the hall, so the
+    // room notices you are in it on the very next frame and says so itself —
+    // and it is the one that knows which of its lines is due.
+  },
+});
+room.colliders.push(...gauntlet.colliders);
+
 const interactions = createInteractions(camera, showPrompt);
+for (const target of gauntlet.interactions) interactions.add(target);
 
 /**
  * What you think, turning round and finding the way you came in is shut.
@@ -354,6 +385,10 @@ function resetSequences() {
   // whole point is that neither is true yet.
   medical.reset();
   room.darkenBackRoom();
+  // The hall through the red door is part of that same second act — it has no
+  // power until the ward's console gives the back room its own — so it winds
+  // back with it, shutters down and the wall parked by the door.
+  gauntlet.powerDown();
   handoverSaid = false;
   // The loop fires the cutscene the moment a door that has been open closes.
   // Clearing this stops a jump from immediately retriggering it underneath you.
@@ -433,6 +468,7 @@ const SCENES = [
       medical.openDoor();
       medical.shutDown();
       room.lightUpBackRoom();
+      gauntlet.powerUp();
 
       // You are back in your own body by this point, but still connected to the
       // bucket — that never gets taken away — so the mechanic has to be live or
@@ -450,6 +486,30 @@ const SCENES = [
       friend.collect();
 
       setObjective('Follow the black wire');
+    },
+  },
+  {
+    label: '7 · The red hall',
+    hint: 'Through the red door, at the top of the hall, with the trap not yet armed',
+    go() {
+      resetSequences();
+      medical.openDoor();
+      medical.shutDown();
+      room.lightUpBackRoom();
+      gauntlet.powerUp();
+      possession.unlock();
+
+      // Both of you inside and facing down the hall. Not on opposite sides of
+      // the divider — it does not start until five metres in, so the bucket
+      // walks straight over to you the moment it is following. Getting it into
+      // the other lane is the first thing the room asks of you and is not
+      // something the debug menu should do for you.
+      const entry = gauntlet.entry;
+      player.teleport({ position: entry.player, yaw: entry.yaw, pitch: 0 });
+      friend.spawn(entry.friend);
+      friend.collect();
+
+      setObjective('Get to the end of the hall');
     },
   },
 ];
@@ -566,7 +626,16 @@ renderer.setAnimationLoop((time) => {
     }
   }
 
+  // A bucket that cannot reach you normally means it is wedged and wants
+  // rescuing. In the red hall it means the room is working, so the rescue is
+  // switched off while it is in there.
+  friend.setRecallAllowed(!gauntlet.contains(friend.position.x, friend.position.z));
   friend.update(delta, camera, camera.position, room.colliders);
+  // After the friend has moved, so the plates read where it is now, and given
+  // the *body's* position rather than the camera's — while you are driving the
+  // bucket the camera is in the other lane and the thing the spikes are walking
+  // toward is standing still where you left it.
+  gauntlet.update(delta, player.position, friend);
   // Only the bucket can get up there, but the check is on position rather than
   // on identity — whatever ends up on the top board presses it. It latches, so
   // this is true on exactly one frame ever.
@@ -580,6 +649,7 @@ renderer.setAnimationLoop((time) => {
       // the reason you can walk back into somewhere you have only ever seen
       // one lit circle of.
       room.lightUpBackRoom();
+      gauntlet.powerUp();
       setObjective('Press F to return to your body');
       medical.speak(DOOR_LINES, () => {
         // Then it goes dark and takes its arms back, and the wire is all that
@@ -629,7 +699,7 @@ renderer.setAnimationLoop((time) => {
 
 // Dev-only handle for poking at the scene from the console.
 if (import.meta.env.DEV) {
-  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, wakeUp, possession, painter, monologue };
+  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, wakeUp, possession, painter, monologue };
   window.game.__tvLines = TV_LINES;
   // Console handles for diagnosing silence: game.audio.state() / .test()
   window.game.audio = {

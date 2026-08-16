@@ -227,6 +227,17 @@ export function createPlayer(camera, domElement, colliders) {
     setControlled(on) {
       controlled = on;
     },
+    /**
+     * The feet, in world space. Live — not a copy.
+     *
+     * Not the same thing as the camera while you are driving the bucket: the
+     * camera is over there and this body is still standing where you left it,
+     * which is exactly what anything hunting the *body* has to read.
+     */
+    get position() {
+      return position;
+    },
+
     get isControlled() {
       return controlled;
     },

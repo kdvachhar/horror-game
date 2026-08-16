@@ -568,6 +568,60 @@ export function playKnockout() {
 }
 
 /**
+ * The spike wall, dragging itself another metre down the hall.
+ *
+ * Retriggered every stride or so rather than looped, and pitched off how close
+ * it is: the whole point of the thing is that you cannot see it once you are
+ * ahead of it, so the only way to know how much room you have left is to listen
+ * to it. A steady loop would tell you it exists and nothing else.
+ *
+ * Two parts, both dragged rather than struck. Noise through a lowpass that
+ * opens as it scrapes is the grit under it; a detuned pair of saws an octave
+ * apart is the frame flexing, which is what makes it read as heavy.
+ */
+export function playSpikeGrind(level = 1) {
+  if (!ready() || level < 0.02) return;
+  playedCount++;
+  const t = context.currentTime + 0.005;
+
+  const grit = context.createBufferSource();
+  grit.buffer = getNoise();
+  const scrape = context.createBiquadFilter();
+  scrape.type = 'lowpass';
+  scrape.frequency.setValueAtTime(320, t);
+  scrape.frequency.linearRampToValueAtTime(1250, t + 0.5);
+  scrape.frequency.linearRampToValueAtTime(280, t + 1.15);
+  scrape.Q.value = 3.2;
+  const gritGain = context.createGain();
+  gritGain.gain.setValueAtTime(0.0001, t);
+  gritGain.gain.linearRampToValueAtTime(0.16 * level, t + 0.35);
+  gritGain.gain.linearRampToValueAtTime(0.0001, t + 1.15);
+  grit.connect(scrape).connect(gritGain);
+  send(gritGain, 1);
+  grit.start(t, Math.random() * 1.5);
+  grit.stop(t + 1.2);
+
+  // Detuned, so the two beat against each other instead of sounding like a note.
+  for (const [hz, detune] of [[41, 0], [82, 7]]) {
+    const flex = context.createOscillator();
+    flex.type = 'sawtooth';
+    flex.frequency.value = hz;
+    flex.detune.value = detune;
+    const body = context.createBiquadFilter();
+    body.type = 'lowpass';
+    body.frequency.value = 240;
+    const flexGain = context.createGain();
+    flexGain.gain.setValueAtTime(0.0001, t);
+    flexGain.gain.linearRampToValueAtTime(0.075 * level, t + 0.4);
+    flexGain.gain.linearRampToValueAtTime(0.0001, t + 1.1);
+    flex.connect(body).connect(flexGain);
+    send(flexGain, 0.35);
+    flex.start(t);
+    flex.stop(t + 1.15);
+  }
+}
+
+/**
  * Diagnostics, for when the game is silent and it isn't clear whether the fault
  * is in here or in the browser. `game.audio.state()` from the console reports
  * what the graph thinks; `game.audio.test()` plays a deliberately loud tone

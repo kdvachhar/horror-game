@@ -282,6 +282,14 @@ export function createFriend(scene) {
   // resets whether or not the hop achieved anything.
   let strandedTimer = 0;
   let wantsRecall = false;
+  // Whether giving up and teleporting to you is on the table at all.
+  //
+  // It normally is: a bucket wedged behind the machine forever is worse than a
+  // bucket that appears behind you. But there are rooms built entirely out of
+  // it not being able to reach you — the red hall is two lanes with a wall down
+  // the middle — and in those, "give up and go to the player" is not a rescue,
+  // it is the puzzle solving itself.
+  let recallAllowed = true;
   // Hops taken since it last covered any ground. Cleared by moving, not by
   // hopping, or it would never reach the cap.
   let hopsSinceProgress = 0;
@@ -510,7 +518,9 @@ export function createFriend(scene) {
       strandedTimer = 0;
       hopsSinceProgress = 0;
     }
-    if (strandedTimer > STRANDED_SECONDS && distance > STRANDED_DISTANCE) wantsRecall = true;
+    if (recallAllowed && strandedTimer > STRANDED_SECONDS && distance > STRANDED_DISTANCE) {
+      wantsRecall = true;
+    }
 
     // The hop is for a lip it can clear. Capped, because when it cannot clear
     // the thing in front of it the hop changes nothing and the next one is due
@@ -732,6 +742,12 @@ export function createFriend(scene) {
       strandedTimer = 0;
       hopsSinceProgress = 0;
       wantsRecall = false;
+    },
+
+    /** See recallAllowed. Set every frame from wherever it is standing. */
+    setRecallAllowed(on) {
+      recallAllowed = on;
+      if (!on) wantsRecall = false;
     },
 
     get isDriven() {

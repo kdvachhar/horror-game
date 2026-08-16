@@ -91,6 +91,39 @@ export const BACK_DOOR = {
 };
 
 /**
+ * The red door in the back room's left-hand wall — the one the sign points at.
+ *
+ * Shared for the same reason BACK_DOOR is: room.js cuts the hole in the wall
+ * and hangs the leaves, and gauntlet.js builds the hall on the other side, and
+ * the two cannot be allowed to disagree about where the opening is. Its z is
+ * derived from the far wall, so resizing the back room takes the door and the
+ * hall behind it along with it.
+ *
+ * `inset` is measured from the far wall, so it sits a few metres along from the
+ * corner you arrive at rather than jammed into it — you come out of the
+ * corridor, read the sign, walk that way, and it is in front of you.
+ *
+ * `swing` used to be 1.9, which stood the leaves a little past square and sent
+ * their free edges 0.88m back into a dead alcove built to receive them. There
+ * is a hall through there now and its near wall is the outside face of this
+ * one, a metre back, so the leaves are folded further — at 2.15 they lie nearly
+ * flat along the wall, 0.78m back, and clear it.
+ */
+export const SIDE_DOOR = {
+  width: 1.9,
+  height: 2.6,
+  inset: 3.6,
+  swing: 2.15,
+  /** The wall it sits in. */
+  get x() {
+    return -BACK_ROOM.width / 2;
+  },
+  get z() {
+    return DOOR.z - BACK_ROOM.depth + SIDE_DOOR.inset;
+  },
+};
+
+/**
  * Whether a world position is standing in the back room.
  *
  * The test used to be `z < DOOR.z` — everything past the hall's far wall was

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ROOM, FIXTURE_HEIGHT, MACHINE, DOOR, BACK_DOOR, BACK_ROOM, LAYER } from './config.js';
+import { ROOM, FIXTURE_HEIGHT, MACHINE, DOOR, BACK_DOOR, SIDE_DOOR, BACK_ROOM, LAYER } from './config.js';
 import {
   makeWallSurface,
   makeFloorSurface,
@@ -47,38 +47,16 @@ const FIXTURE_POSITIONS = [
 const ENTRANCE = { width: 2.6, height: 3.2, recess: 1.1 };
 
 /**
- * The door in the back room's left-hand wall — the one the sign points at.
- *
- * Shut, and nothing works it. There is no room on the other side of it yet, so
- * this is a way on that has not been built rather than one that is locked, and
- * the honest way to show that is a door that does not open. It is at least a
- * door in the wall the arrow indicates, which is what the arrow was missing.
- *
- * `inset` is measured from the far wall, so it sits a few metres along from the
- * corner you arrive at rather than jammed into it — you come out of the
- * corridor, read the sign, walk that way, and it is in front of you.
- */
-const SIDE_DOOR = {
-  width: 1.9,
-  height: 2.6,
-  inset: 3.6,
-  /** How far back the alcove goes. Must clear the swung leaves; see below. */
-  depth: 1.25,
-  /** Radians each leaf stands open. At 1.9 a 0.95m leaf reaches 0.90m back. */
-  swing: 1.9,
-};
-
-/**
  * A double door standing open: two leaves, a rail across each, a kick stripe,
  * and push bars. No frame of its own — it hangs inside the wall's reveals, and
  * a second jamb a couple of centimetres off the first is where z-fighting comes
  * from. Built facing +z and turned into place by the caller.
  *
  * Each leaf hangs off a hinge group at its outer jamb rather than being placed
- * in the middle of the opening, because a door turns about its edge. Swinging
- * them back needs somewhere for them to go, which is what the alcove behind is
- * for — at SIDE_DOOR.swing the free edge reaches 0.9m back, so the alcove has
- * to stay deeper than that or the leaves hang through its end wall.
+ * in the middle of the opening, because a door turns about its edge. They fold
+ * back nearly flat against the outside face of this wall; the hall through
+ * there is what they now stand in, and SIDE_DOOR.swing is picked so their free
+ * edges stay inside the wall's own thickness rather than through its far face.
  */
 function buildSideDoor() {
   const group = new THREE.Group();
@@ -94,7 +72,7 @@ function buildSideDoor() {
 
   for (const side of [-1, 1]) {
     // Hinged at the outer jamb. Turning the group by -side * swing sends both
-    // leaves back into the alcove: a point at local x = d lands at z = -d*sin,
+    // leaves back through the wall: a point at local x = d lands at z = -d*sin,
     // and the two leaves sit at opposite signs of d, so the sign of the angle
     // has to follow the side or one of them swings out into the room instead.
     const hinge = new THREE.Group();
@@ -230,65 +208,6 @@ function buildPaintTin() {
   group.add(handle);
 
   return group;
-}
-
-/**
- * The space behind that door.
- *
- * There is still no room through there, and an open door onto nothing shows you
- * the outside of the level. So it opens onto a shallow dead alcove: back wall,
- * two cheeks, a soffit and a floor, lined in the same trim as the reveals.
- *
- * Deep enough to walk into rather than sealed off at the threshold. Sealing it
- * would mean an invisible wall across an opening you can plainly see through,
- * which is worse than the door having been shut in the first place. Walk in and
- * it is obviously a dead end, which is honest — it is one.
- */
-function buildSideAlcove() {
-  const group = new THREE.Group();
-  const { width, height, depth } = SIDE_DOOR;
-  const half = width / 2;
-  // Faintly emissive once the room has power, which is standing in for bounce.
-  // Its soffit faces straight down and every light in the room is above it, so
-  // lit properly it is exactly black — physically right, and it reads as a hole
-  // in the top of the doorway. A real fix is a light in here, and 1.25m of dead
-  // end does not warrant one.
-  //
-  // Black to start with, though. Emissive is self-lit by definition, so it does
-  // not care which pass it is in: left on, the open doorway hung in the pitch
-  // dark of act one as a faint grey rectangle, which is precisely the thing
-  // that room is not allowed to have. lightUpBackRoom turns it on.
-  const skin = new THREE.MeshStandardMaterial({
-    color: '#33383a',
-    roughness: 0.93,
-    emissive: '#000000',
-  });
-
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(width, height), skin);
-  back.position.set(0, height / 2, -depth);
-  back.receiveShadow = true;
-  group.add(back);
-
-  for (const side of [-1, 1]) {
-    const cheek = new THREE.Mesh(new THREE.PlaneGeometry(depth, height), skin);
-    cheek.position.set(side * half, height / 2, -depth / 2);
-    cheek.rotation.y = side * -Math.PI / 2;
-    cheek.receiveShadow = true;
-    group.add(cheek);
-  }
-
-  const soffit = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), skin);
-  soffit.rotation.x = Math.PI / 2;
-  soffit.position.set(0, height, -depth / 2);
-  group.add(soffit);
-
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), skin);
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.set(0, 0.002, -depth / 2);
-  floor.receiveShadow = true;
-  group.add(floor);
-
-  return { group, skin };
 }
 
 // Fixtures still drawing power. One is left dead so the ceiling doesn't read
@@ -695,13 +614,11 @@ function buildBackRoom(scene) {
   place(sideDoor);
   sideDoor.traverse((o) => o.layers.set(LAYER.DARK));
 
-  // And the dead space the open leaves swing into, flush with the wall.
-  const sideAlcove = buildSideAlcove();
-  sideAlcove.group.position.set(-width / 2, 0, sideNear);
-  sideAlcove.group.rotation.y = Math.PI / 2;
-  place(sideAlcove.group);
-  sideAlcove.group.traverse((o) => o.layers.set(LAYER.DARK));
-  backRoom.alcoveSkin = sideAlcove.skin;
+  // What used to be here: a 1.25m dead alcove for the leaves to swing into,
+  // because there was nothing on the far side of this wall. There is a hall
+  // through there now — gauntlet.js owns everything past this plane, including
+  // the lining of the opening itself — so the alcove is gone and the doorway
+  // goes all the way through.
 
   // The far wall, round the corridor doorway. Each piece's texture is offset by
   // where it sits in the wall, the same as the hall's door panels, or the
@@ -1046,8 +963,6 @@ function lightUpBackRoom(scene) {
   backRoom.spot.layers.set(LAYER.MAIN);
   backRoom.spot.target.layers.set(LAYER.MAIN);
   backRoom.spot.intensity = 130;
-
-  backRoom.alcoveSkin.emissive.set('#0e1112');
 }
 
 /**
@@ -1080,7 +995,6 @@ function darkenBackRoom(scene) {
   backRoom.spot.intensity = 300;
 
   backRoom.doorBlank.visible = true;
-  backRoom.alcoveSkin.emissive.set('#000000');
   setDarkRoomFog(scene, false);
 }
 
@@ -1126,19 +1040,20 @@ function buildWallColliders() {
   const thin = 0.3;
   const halfBack = BACK_DOOR.width / 2;
 
-  // Left wall, in two runs with the side doorway open between them, plus the
-  // alcove's own three walls. That door stands open, so the collision has to
-  // stand open with it — a hole you can see through and not walk into is the
-  // one thing worse than the door having stayed shut.
-  const sideAt = DOOR.z - BACK_ROOM.depth + SIDE_DOOR.inset;
+  // Left wall, in two runs with the side doorway open between them. That door
+  // stands open and now has a hall behind it, so the collision stands open with
+  // it — a hole you can see through and not walk into is the one thing worse
+  // than the door having stayed shut.
+  //
+  // The full `t` is right here even though there is a room on the far side now,
+  // because gauntlet.js does not build its own near wall: it puts the visible
+  // face on this box's outer plane, at -bw - t, and lines the metre between the
+  // two faces as the threshold. One wall, one thickness, agreed on by both.
+  const sideAt = SIDE_DOOR.z;
   const sideA = sideAt - SIDE_DOOR.width / 2;
   const sideB = sideAt + SIDE_DOOR.width / 2;
-  const alcove = SIDE_DOOR.depth;
   add(-bw - t, -bw, far - t, sideA);
   add(-bw - t, -bw, sideB, DOOR.z);
-  add(-bw - alcove - t, -bw - alcove, sideA - t, sideB + t);
-  add(-bw - alcove, -bw, sideA - t, sideA);
-  add(-bw - alcove, -bw, sideB, sideB + t);
 
   // The paint tin, across the room from that door. It was 24cm and had no
   // collider on the reasoning that a box you cannot see the edges of is worse
@@ -1422,7 +1337,7 @@ function rebuildShell(scene) {
 
   DOOR.z = -ROOM.depth / 2;
 
-  backRoom = { spot: null, fittings: [], alcoveSkin: null, lit: false };
+  backRoom = { spot: null, fittings: [], lit: false };
 
   shellGroup = new THREE.Group();
   scene.add(shellGroup);

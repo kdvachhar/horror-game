@@ -8,6 +8,7 @@ import {
   makeRockSurface,
   makeSoftDotTexture,
   makePosterTexture,
+  makeInstructionPosterTexture,
   cloneSurface,
   surfaceTextures,
   worldRepeat,
@@ -142,6 +143,83 @@ function buildSideDoor() {
 }
 
 /**
+ * An open tin of paint, stood against the wall under the notice about the
+ * bucket. Green, the same green as the thing on the television, which is either
+ * where the sign-writing came from or a coincidence.
+ *
+ * Straight-sided rather than tapered, so it is a paint tin and not a second
+ * bucket — the joke needs the two to be different objects.
+ */
+function buildPaintTin() {
+  const group = new THREE.Group();
+  const R = 0.16;
+  const H = 0.24;
+  const paint = '#4e7d33';
+
+  const tinMat = new THREE.MeshStandardMaterial({ color: '#8d918b', roughness: 0.52, metalness: 0.3 });
+  const paintMat = new THREE.MeshStandardMaterial({ color: paint, roughness: 0.35, metalness: 0 });
+
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(R, R, H, 20, 1, true),
+    new THREE.MeshStandardMaterial({ ...tinMat, side: THREE.DoubleSide })
+  );
+  body.position.y = H / 2;
+  body.castShadow = true;
+  body.receiveShadow = true;
+  group.add(body);
+
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.02, 20), tinMat);
+  base.position.y = 0.01;
+  group.add(base);
+
+  // Filled most of the way, so you are looking at a disc of paint rather than
+  // down into an empty tin.
+  const surface = new THREE.Mesh(new THREE.CircleGeometry(R - 0.008, 20), paintMat);
+  surface.rotation.x = -Math.PI / 2;
+  surface.position.y = H - 0.05;
+  group.add(surface);
+
+  // Runs down the outside, and what has already reached the floor.
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + 0.4;
+    const run = 0.05 + (i % 3) * 0.045;
+    const drip = new THREE.Mesh(new THREE.BoxGeometry(0.035, run, 0.01), paintMat);
+    drip.position.set(Math.sin(a) * R, H - 0.05 - run / 2, Math.cos(a) * R);
+    drip.rotation.y = a;
+    group.add(drip);
+  }
+
+  const spill = new THREE.Mesh(new THREE.CircleGeometry(0.3, 18), paintMat);
+  spill.rotation.x = -Math.PI / 2;
+  spill.position.set(0.13, 0.004, 0.1);
+  spill.scale.set(1, 1, 0.72);
+  group.add(spill);
+
+  // The lid, dropped beside it, paint side up.
+  const lid = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.01, R + 0.01, 0.012, 20), tinMat);
+  lid.position.set(-0.3, 0.006, 0.14);
+  lid.rotation.z = 0.06;
+  lid.castShadow = true;
+  group.add(lid);
+
+  const lidPaint = new THREE.Mesh(new THREE.CircleGeometry(R - 0.02, 18), paintMat);
+  lidPaint.rotation.x = -Math.PI / 2;
+  lidPaint.position.set(-0.3, 0.013, 0.14);
+  group.add(lidPaint);
+
+  // Wire handle, up and over.
+  const handle = new THREE.Mesh(
+    new THREE.TorusGeometry(R - 0.005, 0.006, 6, 18, Math.PI),
+    new THREE.MeshStandardMaterial({ color: PALETTE.metalDark, roughness: 0.5, metalness: 0.6 })
+  );
+  handle.position.y = H - 0.02;
+  handle.rotation.y = Math.PI / 2;
+  group.add(handle);
+
+  return group;
+}
+
+/**
  * The space behind that door.
  *
  * There is still no room through there, and an open door onto nothing shows you
@@ -157,15 +235,20 @@ function buildSideAlcove() {
   const group = new THREE.Group();
   const { width, height, depth } = SIDE_DOOR;
   const half = width / 2;
-  // Faintly emissive, which is standing in for bounce. Its soffit faces
-  // straight down and every light in the room is above it, so lit properly it
-  // is exactly black — physically right and reads as a hole in the top of the
-  // doorway. A real fix is a light in here, and this alcove is 1.25m of dead
-  // end that does not warrant one.
+  // Faintly emissive once the room has power, which is standing in for bounce.
+  // Its soffit faces straight down and every light in the room is above it, so
+  // lit properly it is exactly black — physically right, and it reads as a hole
+  // in the top of the doorway. A real fix is a light in here, and 1.25m of dead
+  // end does not warrant one.
+  //
+  // Black to start with, though. Emissive is self-lit by definition, so it does
+  // not care which pass it is in: left on, the open doorway hung in the pitch
+  // dark of act one as a faint grey rectangle, which is precisely the thing
+  // that room is not allowed to have. lightUpBackRoom turns it on.
   const skin = new THREE.MeshStandardMaterial({
     color: '#33383a',
     roughness: 0.93,
-    emissive: '#0e1112',
+    emissive: '#000000',
   });
 
   const back = new THREE.Mesh(new THREE.PlaneGeometry(width, height), skin);
@@ -192,7 +275,7 @@ function buildSideAlcove() {
   floor.receiveShadow = true;
   group.add(floor);
 
-  return group;
+  return { group, skin };
 }
 
 // Fixtures still drawing power. One is left dead so the ceiling doesn't read
@@ -598,10 +681,11 @@ function buildBackRoom(scene) {
 
   // And the dead space the open leaves swing into, flush with the wall.
   const sideAlcove = buildSideAlcove();
-  sideAlcove.position.set(-width / 2, 0, sideNear);
-  sideAlcove.rotation.y = Math.PI / 2;
-  place(sideAlcove);
-  sideAlcove.traverse((o) => o.layers.set(LAYER.DARK));
+  sideAlcove.group.position.set(-width / 2, 0, sideNear);
+  sideAlcove.group.rotation.y = Math.PI / 2;
+  place(sideAlcove.group);
+  sideAlcove.group.traverse((o) => o.layers.set(LAYER.DARK));
+  backRoom.alcoveSkin = sideAlcove.skin;
 
   // The far wall, round the corridor doorway. Each piece's texture is offset by
   // where it sits in the wall, the same as the hall's door panels, or the
@@ -695,6 +779,38 @@ function buildBackRoom(scene) {
   );
   backing.position.set(POSTER.x, POSTER.bottom + POSTER.height / 2, BACK_DOOR.z + 0.15);
   place(backing);
+
+  // The other notice, further along the same wall — on your way from the
+  // corridor to the door the arrow sends you to, so you pass it either way.
+  // Hung a little higher than the THIS WAY sign to leave room for the tin.
+  const CARD = { x: 0.5, width: 1.05, height: 1.32, bottom: 1.16 };
+  const card = new THREE.Mesh(
+    new THREE.PlaneGeometry(CARD.width, CARD.height),
+    new THREE.MeshStandardMaterial({
+      map: makeInstructionPosterTexture(),
+      roughness: 0.92,
+      metalness: 0,
+    })
+  );
+  card.position.set(CARD.x, CARD.bottom + CARD.height / 2, BACK_DOOR.z + 0.17);
+  card.receiveShadow = true;
+  place(card);
+
+  const cardBacking = new THREE.Mesh(
+    new THREE.BoxGeometry(CARD.width + 0.06, CARD.height + 0.06, 0.02),
+    new THREE.MeshStandardMaterial({ color: '#2b2e2b', roughness: 0.95 })
+  );
+  cardBacking.position.set(CARD.x, CARD.bottom + CARD.height / 2, BACK_DOOR.z + 0.15);
+  place(cardBacking);
+
+  // And the tin of paint on the floor under it. No collider: it is 32cm across
+  // and ankle high, and a box you cannot see the edges of is worse than walking
+  // through a paint tin.
+  const tin = buildPaintTin();
+  tin.position.set(CARD.x - 0.1, 0, BACK_DOOR.z + 0.42);
+  tin.rotation.y = -0.5;
+  place(tin);
+  tin.traverse((o) => o.layers.set(LAYER.DARK));
 
   // What you see instead of the corridor, while the door at the end of it is
   // shut — which is the whole of act one.
@@ -903,6 +1019,8 @@ function lightUpBackRoom(scene) {
   backRoom.spot.layers.set(LAYER.MAIN);
   backRoom.spot.target.layers.set(LAYER.MAIN);
   backRoom.spot.intensity = 130;
+
+  backRoom.alcoveSkin.emissive.set('#0e1112');
 }
 
 /**
@@ -935,6 +1053,7 @@ function darkenBackRoom(scene) {
   backRoom.spot.intensity = 300;
 
   backRoom.doorBlank.visible = true;
+  backRoom.alcoveSkin.emissive.set('#000000');
   setDarkRoomFog(scene, false);
 }
 
@@ -1260,7 +1379,7 @@ function rebuildShell(scene) {
 
   DOOR.z = -ROOM.depth / 2;
 
-  backRoom = { spot: null, fittings: [], lit: false };
+  backRoom = { spot: null, fittings: [], alcoveSkin: null, lit: false };
 
   shellGroup = new THREE.Group();
   scene.add(shellGroup);

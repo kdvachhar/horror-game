@@ -963,30 +963,47 @@ export function makeRadialFalloffTexture() {
  * `flip` mirrors the drawing, because the arm has to point at a door whose side
  * is a fact about the room, not about the artwork.
  */
-export function makePosterTexture(flip = false) {
-  const W = 512;
-  const H = 640;
+/** Poster stock: off-white, and grubbier toward the edges the way tape and
+ *  hands leave it. Shared so the notices in this building match each other. */
+const POSTER_W = 512;
+const POSTER_H = 640;
+const POSTER_INK = '#1b1d1a';
+const POSTER_GREEN = '#4e7d33';
+
+function posterPaper() {
   const canvas = document.createElement('canvas');
-  canvas.width = W;
-  canvas.height = H;
+  canvas.width = POSTER_W;
+  canvas.height = POSTER_H;
   const c = canvas.getContext('2d');
 
-  // Paper: off-white, and grubbier toward the edges the way tape and hands
-  // leave it. Drawn before the mirror so the staining does not read as part of
-  // the picture.
   c.fillStyle = '#e8e6da';
-  c.fillRect(0, 0, W, H);
-  const grime = c.createRadialGradient(W / 2, H / 2, H * 0.25, W / 2, H / 2, H * 0.62);
+  c.fillRect(0, 0, POSTER_W, POSTER_H);
+  const grime = c.createRadialGradient(
+    POSTER_W / 2, POSTER_H / 2, POSTER_H * 0.25,
+    POSTER_W / 2, POSTER_H / 2, POSTER_H * 0.62
+  );
   grime.addColorStop(0, 'rgba(120,118,96,0)');
   grime.addColorStop(1, 'rgba(120,118,96,0.34)');
   c.fillStyle = grime;
-  c.fillRect(0, 0, W, H);
+  c.fillRect(0, 0, POSTER_W, POSTER_H);
   for (let i = 0; i < 240; i++) {
-    const x = Math.random() * W;
-    const y = Math.random() * H;
     c.fillStyle = `rgba(90,86,70,${0.02 + Math.random() * 0.07})`;
-    c.fillRect(x, y, 1 + Math.random() * 3, 1 + Math.random() * 3);
+    c.fillRect(Math.random() * POSTER_W, Math.random() * POSTER_H, 1 + Math.random() * 3, 1 + Math.random() * 3);
   }
+  return { canvas, c };
+}
+
+function posterTexture(canvas) {
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+
+export function makePosterTexture(flip = false) {
+  const W = POSTER_W;
+  const H = POSTER_H;
+  const { canvas, c } = posterPaper();
 
   if (flip) {
     c.translate(W, 0);
@@ -1137,10 +1154,114 @@ export function makePosterTexture(flip = false) {
   c.closePath();
   c.fill();
 
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 4;
-  return texture;
+  return posterTexture(canvas);
+}
+
+/**
+ * The other notice: how to work the bucket.
+ *
+ * The controls are on the title card and nowhere else, which is fine until
+ * someone starts at the medical room or comes back after a week. A card on the
+ * wall is the diegetic version — the thing on the television connected you two
+ * and then put up a sign about it, which is entirely in character.
+ *
+ * Same stock and the same flat cartoon hand as the THIS WAY sign, so the two
+ * read as having come off the same printer.
+ */
+export function makeInstructionPosterTexture() {
+  const { canvas, c } = posterPaper();
+  const W = POSTER_W;
+  const ink = POSTER_INK;
+
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+
+  // Title, with a rule under it.
+  c.fillStyle = ink;
+  c.font = 'bold 60px "Courier New", Courier, monospace';
+  c.fillText('YOUR FRIEND', W / 2, 62);
+  c.fillRect(56, 100, W - 112, 6);
+
+  // The bucket itself, drawn the way it is built: a tapered pail on two stub
+  // legs with a wire handle, and the two big eyes that are the whole character.
+  const bx = W / 2;
+  const by = 150;
+  c.strokeStyle = ink;
+  c.lineWidth = 7;
+  c.lineJoin = 'round';
+  c.lineCap = 'round';
+
+  c.beginPath();                                  // handle, behind the body
+  c.arc(bx, by + 6, 62, Math.PI, 0);
+  c.stroke();
+
+  c.beginPath();                                  // tapered body
+  c.moveTo(bx - 66, by);
+  c.lineTo(bx + 66, by);
+  c.lineTo(bx + 50, by + 104);
+  c.lineTo(bx - 50, by + 104);
+  c.closePath();
+  c.fillStyle = '#b9bdb6';
+  c.fill();
+  c.stroke();
+
+  c.beginPath();                                  // rim
+  c.ellipse(bx, by, 66, 15, 0, 0, Math.PI * 2);
+  c.fillStyle = '#9aa09a';
+  c.fill();
+  c.stroke();
+
+  for (const ex of [-26, 26]) {                   // eyes
+    c.beginPath();
+    c.arc(bx + ex, by + 48, 21, 0, Math.PI * 2);
+    c.fillStyle = '#fbfbf5';
+    c.fill();
+    c.lineWidth = 6;
+    c.stroke();
+    c.beginPath();
+    c.arc(bx + ex + 4, by + 52, 9, 0, Math.PI * 2);
+    c.fillStyle = ink;
+    c.fill();
+  }
+
+  c.lineWidth = 8;                                // legs
+  for (const lx of [-24, 24]) {
+    c.beginPath();
+    c.moveTo(bx + lx, by + 104);
+    c.lineTo(bx + lx, by + 138);
+    c.stroke();
+  }
+
+  // The four things you can do, each with its key cap.
+  const rows = [
+    ['F', 'TAKE OVER'],
+    ['WASD', 'WALK'],
+    ['SPACE', 'JUMP'],
+    ['G', 'STAY / COME'],
+  ];
+  let y = 348;
+  for (const [key, what] of rows) {
+    const capW = Math.max(76, key.length * 30 + 34);
+    c.fillStyle = '#fbfbf5';
+    c.strokeStyle = ink;
+    c.lineWidth = 6;
+    c.beginPath();
+    c.roundRect(56, y - 30, capW, 60, 12);
+    c.fill();
+    c.stroke();
+
+    c.fillStyle = ink;
+    c.font = `bold ${key.length > 2 ? 30 : 40}px "Courier New", Courier, monospace`;
+    c.fillText(key, 56 + capW / 2, y + 2);
+
+    c.textAlign = 'left';
+    c.font = 'bold 38px "Courier New", Courier, monospace';
+    c.fillText(what, 56 + capW + 26, y + 2);
+    c.textAlign = 'center';
+    y += 74;
+  }
+
+  return posterTexture(canvas);
 }
 
 export function makeSoftDotTexture() {

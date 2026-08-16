@@ -31,9 +31,33 @@ const PAINT_W = 1024;
 const PAINT_H = 256;
 let paintCanvas = null;
 let paintTexture = null;
+/**
+ * The bare bucket, kept as its own image and never drawn on.
+ *
+ * Two things need it. Stripping the paint is a blit of it over the top, and the
+ * eraser is a brush that paints *with* it — which is why it has to be an image
+ * rather than a fill colour. The metal is streaked, so an eraser that painted
+ * flat grey would leave a patch that reads as more paint, in a duller colour.
+ */
+let baseCanvas = null;
 
 export function bucketPaintSurface() {
-  if (paintCanvas) return { canvas: paintCanvas, texture: paintTexture, width: PAINT_W, height: PAINT_H };
+  if (paintCanvas) {
+    return { canvas: paintCanvas, base: baseCanvas, texture: paintTexture, width: PAINT_W, height: PAINT_H };
+  }
+
+  baseCanvas = document.createElement('canvas');
+  baseCanvas.width = PAINT_W;
+  baseCanvas.height = PAINT_H;
+  const b = baseCanvas.getContext('2d');
+  b.fillStyle = PALETTE.galvanised;
+  b.fillRect(0, 0, PAINT_W, PAINT_H);
+  // A little vertical streaking, so bare bucket is not a flat swatch and a
+  // painted one has something underneath it.
+  for (let i = 0; i < 90; i++) {
+    b.fillStyle = `rgba(${Math.random() < 0.5 ? '255,255,255' : '20,24,26'},${0.02 + Math.random() * 0.05})`;
+    b.fillRect(Math.random() * PAINT_W, 0, 1 + Math.random() * 5, PAINT_H);
+  }
 
   paintCanvas = document.createElement('canvas');
   paintCanvas.width = PAINT_W;
@@ -43,22 +67,15 @@ export function bucketPaintSurface() {
   paintTexture = new THREE.CanvasTexture(paintCanvas);
   paintTexture.colorSpace = THREE.SRGBColorSpace;
   paintTexture.anisotropy = 4;
-  return { canvas: paintCanvas, texture: paintTexture, width: PAINT_W, height: PAINT_H };
+  return { canvas: paintCanvas, base: baseCanvas, texture: paintTexture, width: PAINT_W, height: PAINT_H };
 }
 
-/** Back to bare metal. The base coat is the colour the body used to be. */
+/** Back to bare metal. */
 export function clearBucketPaint() {
   if (!paintCanvas) return;
   const c = paintCanvas.getContext('2d');
-  c.fillStyle = PALETTE.galvanised;
-  c.fillRect(0, 0, PAINT_W, PAINT_H);
-  // A little vertical streaking, so bare bucket is not a flat swatch and a
-  // painted one has something underneath it.
-  for (let i = 0; i < 90; i++) {
-    const x = Math.random() * PAINT_W;
-    c.fillStyle = `rgba(${Math.random() < 0.5 ? '255,255,255' : '20,24,26'},${0.02 + Math.random() * 0.05})`;
-    c.fillRect(x, 0, 1 + Math.random() * 5, PAINT_H);
-  }
+  c.clearRect(0, 0, PAINT_W, PAINT_H);
+  c.drawImage(baseCanvas, 0, 0);
   if (paintTexture) paintTexture.needsUpdate = true;
 }
 

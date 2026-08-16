@@ -58,6 +58,17 @@ const STYLE = `
   border: 2px solid rgba(255, 255, 255, 0.22); padding: 0;
 }
 #painter .swatch.on { border-color: #46e07a; transform: scale(1.14); }
+/* The eraser: the metal, struck through, so it is not read as another grey. */
+#painter .swatch.erase {
+  background:
+    linear-gradient(135deg, transparent 44%, #c0392b 44%, #c0392b 56%, transparent 56%),
+    #9aa0a3;
+}
+
+#painter button.text:disabled {
+  opacity: 0.35; cursor: default;
+}
+#painter button.text:disabled:hover { background: rgba(255, 255, 255, 0.06); }
 
 #painter .sizes { display: flex; gap: 0.36rem; align-items: center; }
 #painter .size {
@@ -104,6 +115,17 @@ function paintFor(swatch) {
   return `rgb(${mix(16)}, ${mix(8)}, ${mix(0)})`;
 }
 
+/** The eraser, as a colour you can select. Not a hex, so it never tone-maps. */
+const ERASER = 'erase';
+
+/**
+ * How many strokes back you can go.
+ *
+ * Each step is a full 1024x256 ImageData, which is exactly a megabyte, so this
+ * is a fifteen megabyte ceiling and the reason there is a ceiling at all.
+ */
+const UNDO_STEPS = 15;
+
 /**
  * Brush widths in texture pixels. The canvas is 1024 across for a body 1.6m
  * around, so this is 640 pixels to the metre: the old 7/16/34 were strokes of
@@ -130,6 +152,7 @@ export function createPainter({ player }) {
       <div class="tools">
         <div class="swatches"></div>
         <div class="sizes"></div>
+        <button class="text" data-act="undo" disabled>Undo</button>
         <button class="text" data-act="clear">Strip it</button>
         <button class="text done" data-act="done">Done</button>
       </div>
@@ -150,16 +173,27 @@ export function createPainter({ player }) {
   let open = false;
 
   const swatches = root.querySelector('.swatches');
+  const pickColour = (value, button) => {
+    colour = value;
+    for (const el of swatches.children) el.classList.toggle('on', el === button);
+  };
   for (const c of PALETTE_COLOURS) {
     const b = document.createElement('button');
     b.className = 'swatch' + (c === colour ? ' on' : '');
     b.style.background = c;
-    b.onclick = () => {
-      colour = c;
-      for (const el of swatches.children) el.classList.toggle('on', el === b);
-    };
+    b.title = 'Paint';
+    b.onclick = () => pickColour(c, b);
     swatches.appendChild(b);
   }
+
+  // The eraser sits with the colours because that is what it is — another
+  // thing to have loaded on the brush. Marked with a slash so it is not mistaken
+  // for a grey.
+  const rubber = document.createElement('button');
+  rubber.className = 'swatch erase';
+  rubber.title = 'Eraser — back to bare metal';
+  rubber.onclick = () => pickColour(ERASER, rubber);
+  swatches.appendChild(rubber);
 
   const sizes = root.querySelector('.sizes');
   for (const size of BRUSHES) {
@@ -193,8 +227,19 @@ export function createPainter({ player }) {
    * other or every stroke stops dead at a join that does not exist on the
    * object. The two extra passes are clipped away by the canvas bounds.
    */
+  /**
+   * The bare bucket as a repeating pattern, which is the whole eraser.
+   *
+   * Stroking with it paints the base image's own pixels at the coordinates the
+   * brush is over, so what comes back is the streaked metal that was there and
+   * not an approximation of it. `repeat` rather than `no-repeat` is what makes
+   * it survive the seam passes below: a stroke drawn at x + W samples the base
+   * at x, which is exactly the pixel that is at that place on the cylinder.
+   */
+  const barePattern = ctx.createPattern(surface.base, 'repeat');
+
   function stroke(from, to) {
-    ctx.strokeStyle = paintFor(colour);
+    ctx.strokeStyle = colour === ERASER ? barePattern : paintFor(colour);
     ctx.lineWidth = brush;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -208,9 +253,37 @@ export function createPainter({ player }) {
     repaintView();
   }
 
+  /**
+   * Undo history, one entry per stroke rather than per segment.
+   *
+   * Taken on pointerdown, before anything is laid down, so a step is "the whole
+   * drag you just did". Snapshotting inside stroke() instead would fill the
+   * fifteen slots with fifteen frames of a single sweep and undo would look
+   * broken — it would appear to do nothing.
+   */
+  const history = [];
+  const undoButton = root.querySelector('[data-act="undo"]');
+  const syncUndo = () => { undoButton.disabled = history.length === 0; };
+
+  function snapshot() {
+    history.push(ctx.getImageData(0, 0, surface.width, surface.height));
+    if (history.length > UNDO_STEPS) history.shift();
+    syncUndo();
+  }
+
+  function undo() {
+    const previous = history.pop();
+    if (!previous) return;
+    ctx.putImageData(previous, 0, 0);
+    surface.texture.needsUpdate = true;
+    repaintView();
+    syncUndo();
+  }
+
   let last = null;
   view.addEventListener('pointerdown', (event) => {
     view.setPointerCapture(event.pointerId);
+    snapshot();
     last = at(event);
     stroke(last, last); // a click with no drag should still leave a dot
   });
@@ -224,18 +297,30 @@ export function createPainter({ player }) {
   view.addEventListener('pointerup', release);
   view.addEventListener('pointercancel', release);
 
+  undoButton.onclick = () => undo();
   root.querySelector('[data-act="clear"]').onclick = () => {
+    // Undoable too. Stripping a bucket you have spent five minutes on because
+    // you meant to press the button next to it is the one mistake here that
+    // would actually cost you something.
+    snapshot();
     clearBucketPaint();
     repaintView();
   };
   root.querySelector('[data-act="done"]').onclick = () => close();
 
   window.addEventListener('keydown', (event) => {
-    if (!open || event.code !== 'Escape') return;
-    // Ours, not the browser's — the pointer is already unlocked, so nothing
-    // else is listening for this and it would otherwise do nothing at all.
-    event.preventDefault();
-    close();
+    if (!open) return;
+    if (event.code === 'Escape') {
+      // Ours, not the browser's — the pointer is already unlocked, so nothing
+      // else is listening for this and it would otherwise do nothing at all.
+      event.preventDefault();
+      close();
+      return;
+    }
+    if (event.code === 'KeyZ' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      undo();
+    }
   });
 
   function close() {

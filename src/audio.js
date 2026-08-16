@@ -632,10 +632,19 @@ export function playSpikeGrind(level = 1) {
  * **It is driven by how close the thing is.** `setPressure` takes 0 when the
  * wall is far behind you and 1 when it is about to have you, and everything
  * moves with it: the tempo from 96 to 152, the volume, how open the bass filter
- * is, and which voices are playing at all. Far away it is a pulse and a
- * heartbeat. Close, the semitone above the root comes in against it and a
- * scrape rides the offbeat. That means the music is telling you the same thing
- * the grind of the wall is, in a register you cannot mistake for the room.
+ * is, and which voices are playing at all. Far away it is a pulse, a downbeat
+ * impact and a heartbeat. As it closes, a sustained minor second comes in over
+ * the top, then a scrape on the offbeat, then a riser dragging the last beat of
+ * each bar into the next impact, then sixteenths on the run-in. That means the
+ * music is telling you the same thing the grind of the wall is, in a register
+ * you cannot mistake for the room.
+ *
+ * It is mixed loud on purpose and goes through its own compressor rather than
+ * straight to the master. Six voices landing on the same downbeat at full
+ * pressure is a much bigger peak than anything else in the game makes, and
+ * without something holding the top down the choice is between music that is
+ * quiet enough to be safe and a downbeat that distorts. The compressor buys the
+ * makeup gain: the peaks stay put and everything under them comes up.
  *
  * The scheduling is the standard Web Audio arrangement and worth stating
  * because the naive version does not work: you cannot fire notes from the frame
@@ -652,42 +661,152 @@ const CHASE_FLAT2 = CHASE_ROOT * 1.0595; // the semitone above it
 export function createChaseMusic() {
   let running = false;
   let bus = null;
+  /** Everything between the bus and the master, so `stop` can take it apart. */
+  let chain = [];
   /** When the next sixteenth falls due, on the audio clock. */
   let nextStep = 0;
   let step = 0;
   let pressure = 0;
 
-  /** The bass pulse: a saw through a filter that opens as things get worse. */
+  /**
+   * The bass pulse: two saws pulled apart by a few cents through a filter that
+   * opens as things get worse, with a sine under them for the weight the saws
+   * do not have on a laptop speaker. The detune is what makes one note sound
+   * like a section rather than like a synthesiser.
+   */
   function pulse(t, freq, dur, level) {
-    const osc = context.createOscillator();
-    osc.type = 'sawtooth';
-    osc.frequency.value = freq;
     const tone = context.createBiquadFilter();
     tone.type = 'lowpass';
-    tone.frequency.value = 190 + pressure * 900;
-    tone.Q.value = 6;
+    tone.frequency.setValueAtTime(260 + pressure * 1600, t);
+    tone.frequency.exponentialRampToValueAtTime(150 + pressure * 500, t + dur);
+    tone.Q.value = 7;
     const gain = context.createGain();
     gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(level, t + 0.012);
+    gain.gain.exponentialRampToValueAtTime(level, t + 0.01);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    osc.connect(tone).connect(gain).connect(bus);
-    osc.start(t);
-    osc.stop(t + dur + 0.02);
+    tone.connect(gain).connect(bus);
+    for (const cents of [-11, 11]) {
+      const osc = context.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = freq;
+      osc.detune.value = cents;
+      osc.connect(tone);
+      osc.start(t);
+      osc.stop(t + dur + 0.02);
+    }
+    // Straight to the bus, so the closing filter cannot take the body with it.
+    const sub = context.createOscillator();
+    sub.type = 'sine';
+    sub.frequency.value = freq;
+    const subGain = context.createGain();
+    subGain.gain.setValueAtTime(0.0001, t);
+    subGain.gain.exponentialRampToValueAtTime(level * 0.9, t + 0.014);
+    subGain.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.9);
+    sub.connect(subGain).connect(bus);
+    sub.start(t);
+    sub.stop(t + dur + 0.02);
   }
 
   /** The heartbeat under it. Sine, dropping fast — felt more than heard. */
   function thud(t, level) {
     const osc = context.createOscillator();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(96, t);
-    osc.frequency.exponentialRampToValueAtTime(38, t + 0.16);
+    osc.frequency.setValueAtTime(112, t);
+    osc.frequency.exponentialRampToValueAtTime(34, t + 0.18);
     const gain = context.createGain();
     gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(level, t + 0.008);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+    gain.gain.exponentialRampToValueAtTime(level, t + 0.006);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
     osc.connect(gain).connect(bus);
     osc.start(t);
-    osc.stop(t + 0.3);
+    osc.stop(t + 0.36);
+  }
+
+  /**
+   * The downbeat. A noise slam over a sine dropping through the floor — the one
+   * moment in the bar the whole thing is aimed at, and the reason there is a
+   * compressor on the bus at all.
+   */
+  function impact(t, level) {
+    const osc = context.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(150, t);
+    osc.frequency.exponentialRampToValueAtTime(28, t + 0.3);
+    const oscGain = context.createGain();
+    oscGain.gain.setValueAtTime(0.0001, t);
+    oscGain.gain.exponentialRampToValueAtTime(level, t + 0.005);
+    oscGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+    osc.connect(oscGain).connect(bus);
+    osc.start(t);
+    osc.stop(t + 0.52);
+
+    const src = context.createBufferSource();
+    src.buffer = getNoise();
+    const body = context.createBiquadFilter();
+    body.type = 'lowpass';
+    body.frequency.setValueAtTime(2600, t);
+    body.frequency.exponentialRampToValueAtTime(220, t + 0.26);
+    const noiseGain = context.createGain();
+    noiseGain.gain.setValueAtTime(0.0001, t);
+    noiseGain.gain.exponentialRampToValueAtTime(level * 0.75, t + 0.004);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+    src.connect(body).connect(noiseGain).connect(bus);
+    src.start(t, Math.random() * 1.5);
+    src.stop(t + 0.32);
+  }
+
+  /**
+   * The minor second, held. Two detuned saws a semitone apart sustaining across
+   * the whole bar, up in the register where strings sit. This is the voice that
+   * does the actual damage — the pulse is a clock, but two notes a semitone
+   * apart refusing to stop is what makes the corridor feel like it is closing.
+   */
+  function drone(t, low, high, dur, level) {
+    const tone = context.createBiquadFilter();
+    tone.type = 'lowpass';
+    tone.frequency.value = 900 + pressure * 2200;
+    tone.Q.value = 2;
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    // Swelling in and out rather than a flat pad, so it breathes with the bar.
+    gain.gain.exponentialRampToValueAtTime(level, t + dur * 0.45);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    tone.connect(gain).connect(bus);
+    for (const [freq, cents] of [
+      [low * 4, -7],
+      [low * 4, 7],
+      [high * 4, 5],
+    ]) {
+      const osc = context.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = freq;
+      osc.detune.value = cents;
+      osc.connect(tone);
+      osc.start(t);
+      osc.stop(t + dur + 0.05);
+    }
+  }
+
+  /**
+   * A rising noise sweep dragging the end of a bar into the next downbeat. It
+   * is the cheapest way to make a loop feel like it is going somewhere, which is
+   * exactly what is wanted when the thing behind you is also going somewhere.
+   */
+  function riser(t, dur, level) {
+    const src = context.createBufferSource();
+    src.buffer = getNoise();
+    const band = context.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.setValueAtTime(300, t);
+    band.frequency.exponentialRampToValueAtTime(3600, t + dur);
+    band.Q.value = 4;
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(level, t + dur * 0.95);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.05);
+    src.connect(band).connect(gain).connect(bus);
+    src.start(t, Math.random() * 1.5);
+    src.stop(t + dur + 0.07);
   }
 
   /** A metal scrape on the offbeat, once it is close. Noise, not a note. */
@@ -715,22 +834,32 @@ export function createChaseMusic() {
    * which is the whole harmonic idea: a minor second has nowhere to resolve to,
    * so it never stops sounding like a question.
    */
-  function schedule(t, index) {
+  function schedule(t, index, span) {
     const bar = Math.floor(index / 16);
     const beat = index % 16;
-    const level = 0.06 + pressure * 0.1;
+    const level = 0.1 + pressure * 0.16;
+    const root = bar % 2 ? CHASE_FLAT2 : CHASE_ROOT;
+    const other = bar % 2 ? CHASE_ROOT : CHASE_FLAT2;
 
     // Eighths, always. This is the thing you hear first and last.
-    if (beat % 2 === 0) {
-      pulse(t, bar % 2 ? CHASE_FLAT2 : CHASE_ROOT, 0.17, level);
+    if (beat % 2 === 0) pulse(t, root, 0.17, level);
+    // The downbeat, always, because a loop with nothing landing on the one is
+    // atmosphere rather than a chase.
+    if (beat === 0) impact(t, 0.17 + pressure * 0.25);
+    if (beat === 0 || beat === 6 || beat === 10) thud(t, 0.17 + pressure * 0.24);
+
+    // Everything below arrives as the wall does, in the order it gets worse.
+    // Booked once a bar and held across it, so it is a sustain, not a stab.
+    if (pressure > 0.18 && beat === 0) {
+      drone(t, root, other, span * 16, 0.035 + pressure * 0.075);
     }
-    // And the semitone against it once it is close, which is where the sound
-    // stops being a pulse and starts being wrong.
-    if (pressure > 0.45 && beat % 8 === 4) {
-      pulse(t, bar % 2 ? CHASE_ROOT * 2 : CHASE_FLAT2 * 2, 0.22, level * 0.7);
-    }
-    if (beat === 0 || beat === 10) thud(t, 0.12 + pressure * 0.16);
-    if (pressure > 0.6 && (beat === 7 || beat === 15)) scrape(t, 0.03 + pressure * 0.05);
+    // The semitone against it, which is where the sound stops being a pulse and
+    // starts being wrong.
+    if (pressure > 0.3 && beat % 8 === 4) pulse(t, other * 2, 0.22, level * 0.75);
+    if (pressure > 0.45 && (beat === 7 || beat === 15)) scrape(t, 0.05 + pressure * 0.09);
+    if (pressure > 0.5 && beat === 12) riser(t, span * 4, 0.05 + pressure * 0.09);
+    // Sixteenths on the run-in: the bar itself starts to hurry at the end.
+    if (pressure > 0.62 && (beat === 13 || beat === 15)) pulse(t, root, 0.1, level * 0.85);
   }
 
   return {
@@ -746,13 +875,35 @@ export function createChaseMusic() {
     start() {
       if (running || !ready()) return;
       running = true;
+      const t = context.currentTime;
       bus = context.createGain();
-      // Up from silence over a bar or so, so it arrives with the wall rather
-      // than being switched on.
-      bus.gain.setValueAtTime(0.0001, context.currentTime);
-      bus.gain.exponentialRampToValueAtTime(1, context.currentTime + 2.5);
-      send(bus, 0.55);
-      nextStep = context.currentTime + 0.08;
+      // Up from silence, but quickly — this is the wall arriving, and a slow
+      // swell reads as ambience.
+      bus.gain.setValueAtTime(0.0001, t);
+      bus.gain.exponentialRampToValueAtTime(1, t + 1.2);
+
+      // Holds the downbeat down so the makeup gain below can lift everything
+      // else. Without it, loud enough to be dramatic is loud enough to clip.
+      const glue = context.createDynamicsCompressor();
+      // Set to limit rather than to glue: a fast enough attack to catch the
+      // impact's own transient, which at a gentler setting walks straight
+      // through and puts the mix over full scale on every downbeat.
+      glue.threshold.value = -24;
+      glue.knee.value = 6;
+      glue.ratio.value = 12;
+      glue.attack.value = 0.002;
+      glue.release.value = 0.12;
+
+      const out = context.createGain();
+      out.gain.value = 1.3;
+
+      bus.connect(glue).connect(out);
+      // Drier than before: the level is up, and reverb on top of that is mud
+      // rather than size.
+      send(out, 0.32);
+      chain = [bus, glue, out];
+
+      nextStep = t + 0.08;
       step = 0;
       playedCount++;
     },
@@ -763,13 +914,16 @@ export function createChaseMusic() {
       if (!bus || !context) return;
       const t = context.currentTime;
       const dying = bus;
+      const dyingChain = chain;
       bus = null;
+      chain = [];
       // Ramped, not cut. Stopping dead on the frame the last button goes in
       // reads as the game having crashed rather than as the trap giving up.
       dying.gain.cancelScheduledValues(t);
       dying.gain.setValueAtTime(Math.max(0.0001, dying.gain.value), t);
       dying.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
-      setTimeout(() => dying.disconnect(), 1500);
+      // Long enough for the tail of the last drone, which is a whole bar.
+      setTimeout(() => dyingChain.forEach((node) => node.disconnect()), 5000);
     },
 
     /** Books every step falling due inside the lookahead. Call it each frame. */
@@ -781,7 +935,7 @@ export function createChaseMusic() {
       // Capped, so a tab that has been in the background for a minute schedules
       // a handful of notes and catches up rather than booking four thousand.
       for (let i = 0; i < 32 && nextStep < horizon; i++) {
-        schedule(nextStep, step);
+        schedule(nextStep, step, sixteenth);
         nextStep += sixteenth;
         step++;
       }

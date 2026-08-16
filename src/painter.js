@@ -1,4 +1,4 @@
-import { bucketPaintSurface, clearBucketPaint } from './bucket.js';
+import { bucketPaintSurface, clearBucketPaint, PAINT_BANDS } from './bucket.js';
 
 /**
  * The paint GUI: a flat map of the bucket, and colours to put on it.
@@ -41,9 +41,10 @@ const STYLE = `
   color: #8d968f; text-align: center;
 }
 
-/* The bucket, unrolled. Chequerboard under it so you can see what is paint. */
+/* The bucket, unrolled. Aspect ratio is set from the texture in JS — the bands
+   decide how tall it is, and a hardcoded one here would silently squash it. */
 #paint-canvas {
-  display: block; width: min(1040px, 88vw); height: auto; aspect-ratio: 4 / 1;
+  display: block; width: min(1040px, 88vw); height: auto;
   border: 1px solid rgba(210, 226, 214, 0.3); border-radius: 4px;
   cursor: crosshair; touch-action: none; image-rendering: auto;
 }
@@ -119,12 +120,13 @@ function paintFor(swatch) {
 const ERASER = 'erase';
 
 /**
- * How many strokes back you can go.
+ * How far back you can go, as memory rather than as a count.
  *
- * Each step is a full 1024x256 ImageData, which is exactly a megabyte, so this
- * is a fifteen megabyte ceiling and the reason there is a ceiling at all.
+ * Each step is a full-canvas ImageData — over a megabyte and a half now that
+ * the rim and handle have bands of their own — so the honest limit is a budget.
+ * A count would quietly double what this holds the next time a part is added.
  */
-const UNDO_STEPS = 15;
+const UNDO_BUDGET = 24 * 1024 * 1024;
 
 /**
  * Brush widths in texture pixels. The canvas is 1024 across for a body 1.6m
@@ -137,6 +139,7 @@ const BRUSHES = [16, 40, 90];
 export function createPainter({ player }) {
   const surface = bucketPaintSurface();
   const ctx = surface.canvas.getContext('2d');
+  const undoSteps = Math.max(4, Math.floor(UNDO_BUDGET / (surface.width * surface.height * 4)));
 
   const style = document.createElement('style');
   style.textContent = STYLE;
@@ -147,7 +150,7 @@ export function createPainter({ player }) {
   root.innerHTML = `
     <div class="panel">
       <h2>Paint your friend</h2>
-      <p class="hint">drag to paint &nbsp;·&nbsp; this is the bucket unrolled &nbsp;·&nbsp; esc to finish</p>
+      <p class="hint">drag to paint &nbsp;·&nbsp; the bucket unrolled, handle and rim included &nbsp;·&nbsp; esc to finish</p>
       <canvas id="paint-canvas"></canvas>
       <div class="tools">
         <div class="swatches"></div>
@@ -165,8 +168,41 @@ export function createPainter({ player }) {
   const view = root.querySelector('#paint-canvas');
   view.width = surface.width;
   view.height = surface.height;
+  view.style.aspectRatio = `${surface.width} / ${surface.height}`;
   const viewCtx = view.getContext('2d');
-  const repaintView = () => viewCtx.drawImage(surface.canvas, 0, 0);
+
+  /**
+   * The texture, plus the part names written over it.
+   *
+   * The bands are metal on metal — without the labels the two strips along the
+   * top are a mystery, and the first thing anyone would do is try to paint the
+   * body and miss. Drawn here on the copy and never into the texture, so none
+   * of it ends up on the bucket.
+   */
+  function repaintView() {
+    viewCtx.drawImage(surface.canvas, 0, 0);
+    viewCtx.save();
+    viewCtx.font = '600 15px "Courier New", Courier, monospace';
+    viewCtx.textBaseline = 'middle';
+    for (const band of PAINT_BANDS) {
+      if (band.y > 0) {
+        viewCtx.setLineDash([10, 8]);
+        viewCtx.strokeStyle = 'rgba(70, 224, 122, 0.5)';
+        viewCtx.lineWidth = 2;
+        viewCtx.beginPath();
+        viewCtx.moveTo(0, band.y);
+        viewCtx.lineTo(surface.width, band.y);
+        viewCtx.stroke();
+      }
+      const label = band.label.toUpperCase();
+      const width = viewCtx.measureText(label).width;
+      viewCtx.fillStyle = 'rgba(8, 12, 10, 0.62)';
+      viewCtx.fillRect(0, band.y, width + 20, 26);
+      viewCtx.fillStyle = 'rgba(223, 233, 224, 0.85)';
+      viewCtx.fillText(label, 10, band.y + 14);
+    }
+    viewCtx.restore();
+  }
 
   let colour = PALETTE_COLOURS[5];
   let brush = BRUSHES[1];
@@ -221,13 +257,6 @@ export function createPainter({ player }) {
   }
 
   /**
-   * One stroke, drawn three times: where it is, and one canvas width either
-   * side. The bucket is a cylinder, so the left and right edges of this canvas
-   * are the same seam — a brush that runs off one side has to arrive on the
-   * other or every stroke stops dead at a join that does not exist on the
-   * object. The two extra passes are clipped away by the canvas bounds.
-   */
-  /**
    * The bare bucket as a repeating pattern, which is the whole eraser.
    *
    * Stroking with it paints the base image's own pixels at the coordinates the
@@ -238,17 +267,47 @@ export function createPainter({ player }) {
    */
   const barePattern = ctx.createPattern(surface.base, 'repeat');
 
-  function stroke(from, to) {
+  /** Which part of the bucket a point on the canvas is, clamped to the ends. */
+  function bandAt(y) {
+    for (const band of PAINT_BANDS) {
+      if (y < band.y + band.height) return band;
+    }
+    return PAINT_BANDS[PAINT_BANDS.length - 1];
+  }
+
+  /**
+   * One stroke, on one part.
+   *
+   * Clipped to the band it started in, for two reasons. The widest brush is
+   * 90px and the rim's band is 80, so an unclipped stroke anywhere near it
+   * paints the handle and the body at the same time — three parts of the bucket
+   * that are nowhere near each other in the world. And it fixes where a drag
+   * belongs: run off the rim onto the body mid-sweep and the line would jump
+   * the width of the bucket rather than stopping at the edge of the part.
+   *
+   * Drawn three times where the band wraps: where it is, and one canvas width
+   * either side. The body and the rim are closed rings, so the left and right
+   * edges are the same seam — a brush that runs off one side has to arrive on
+   * the other or every stroke stops dead at a join that does not exist on the
+   * object. The extra passes fall outside the canvas and cost nothing. The
+   * handle does not wrap; its ends are the two lugs.
+   */
+  function stroke(from, to, band) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, band.y, surface.width, band.height);
+    ctx.clip();
     ctx.strokeStyle = colour === ERASER ? barePattern : paintFor(colour);
     ctx.lineWidth = brush;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    for (const shift of [-surface.width, 0, surface.width]) {
+    for (const shift of band.wraps ? [-surface.width, 0, surface.width] : [0]) {
       ctx.beginPath();
       ctx.moveTo(from.x + shift, from.y);
       ctx.lineTo(to.x + shift, to.y);
       ctx.stroke();
     }
+    ctx.restore();
     surface.texture.needsUpdate = true;
     repaintView();
   }
@@ -267,7 +326,7 @@ export function createPainter({ player }) {
 
   function snapshot() {
     history.push(ctx.getImageData(0, 0, surface.width, surface.height));
-    if (history.length > UNDO_STEPS) history.shift();
+    if (history.length > undoSteps) history.shift();
     syncUndo();
   }
 
@@ -281,19 +340,21 @@ export function createPainter({ player }) {
   }
 
   let last = null;
+  let painting = null;
   view.addEventListener('pointerdown', (event) => {
     view.setPointerCapture(event.pointerId);
     snapshot();
     last = at(event);
-    stroke(last, last); // a click with no drag should still leave a dot
+    painting = bandAt(last.y);
+    stroke(last, last, painting); // a click with no drag should still leave a dot
   });
   view.addEventListener('pointermove', (event) => {
     if (!last) return;
     const now = at(event);
-    stroke(last, now);
+    stroke(last, now, painting);
     last = now;
   });
-  const release = () => { last = null; };
+  const release = () => { last = null; painting = null; };
   view.addEventListener('pointerup', release);
   view.addEventListener('pointercancel', release);
 

@@ -24,11 +24,47 @@ const HELD_SCALE = 0.5;
  * straightforward flat map of the bucket, and it is why the GUI can present a
  * plain rectangle to draw on and have it land where you expect.
  *
- * 1024 x 256 for a body 1.6m around and 0.41 tall — near enough square texels,
- * and fine enough to hold a brush stroke at the distance you look at it.
+ * 1024 across for a body 1.6m around and 0.41 tall — near enough square texels
+ * at 256 high, and fine enough to hold a brush stroke at the distance you look
+ * at it.
  */
 const PAINT_W = 1024;
-const PAINT_H = 256;
+
+/**
+ * The canvas, divided into strips — one per paintable part.
+ *
+ * The rim and the handle are tori, and a torus is already unwrapped the same
+ * way the cylinder is: u runs along the ring, v around the tube. So they can
+ * share the body's canvas rather than carry maps of their own, each squeezed
+ * into a band of it and each still a plain rectangle to draw on.
+ *
+ * Ordered top to bottom as the bucket is: the handle arcs over the rim, the rim
+ * sits on the body. Texture v=0 is the *bottom* row of a canvas, so this list
+ * reads the same way down the screen in the GUI as it does down the object.
+ *
+ * 80 rows for the rim is proportional — 1024px for its 1.9m circumference is
+ * 543 to the metre, and its tube is 0.14m around. The handle's is denser than
+ * life, which nothing at that scale will ever show.
+ *
+ * `wraps` is whether the left and right edges are the same seam. The rim is a
+ * closed ring so they are; the handle's ends are the two lugs, a hand's width
+ * apart across the mouth, so a stroke running off one end must not reappear at
+ * the other.
+ */
+export const PAINT_BANDS = [
+  { key: 'handle', label: 'handle', height: 80, wraps: false, tint: PALETTE.galvanisedDark },
+  { key: 'rim', label: 'rim', height: 80, wraps: true, tint: PALETTE.galvanisedDark },
+  { key: 'body', label: 'body', height: 256, wraps: true, tint: PALETTE.galvanised },
+];
+const BAND = {};
+let stacked = 0;
+for (const band of PAINT_BANDS) {
+  band.y = stacked;
+  stacked += band.height;
+  BAND[band.key] = band;
+}
+const PAINT_H = stacked;
+
 let paintCanvas = null;
 let paintTexture = null;
 /**
@@ -50,11 +86,16 @@ export function bucketPaintSurface() {
   baseCanvas.width = PAINT_W;
   baseCanvas.height = PAINT_H;
   const b = baseCanvas.getContext('2d');
-  b.fillStyle = PALETTE.galvanised;
-  b.fillRect(0, 0, PAINT_W, PAINT_H);
+  // Each part in its own metal. The trim was a shade darker than the body back
+  // when it was material colours, and it stays that way now that it is pixels —
+  // a bucket whose rim matched its side would read as pressed out of one piece.
+  for (const band of PAINT_BANDS) {
+    b.fillStyle = band.tint;
+    b.fillRect(0, band.y, PAINT_W, band.height);
+  }
   // A little vertical streaking, so bare bucket is not a flat swatch and a
   // painted one has something underneath it.
-  for (let i = 0; i < 90; i++) {
+  for (let i = 0; i < 120; i++) {
     b.fillStyle = `rgba(${Math.random() < 0.5 ? '255,255,255' : '20,24,26'},${0.02 + Math.random() * 0.05})`;
     b.fillRect(Math.random() * PAINT_W, 0, 1 + Math.random() * 5, PAINT_H);
   }
@@ -80,12 +121,34 @@ export function clearBucketPaint() {
 }
 
 /**
+ * Squeezes a geometry's v range into one band of the paint canvas.
+ *
+ * Done to the vertices rather than with texture offset/repeat because a
+ * three.js texture carries its own transform: doing it that way would need one
+ * texture per part, and each would be its own upload of the same canvas every
+ * time the brush moved. Baked here, all three parts share one map.
+ *
+ * v=0 is the bottom row of the image, hence the flips.
+ */
+function mapIntoBand(geometry, band) {
+  const uv = geometry.attributes.uv;
+  const top = 1 - band.y / PAINT_H;
+  const bottom = 1 - (band.y + band.height) / PAINT_H;
+  for (let i = 0; i < uv.count; i++) {
+    uv.setY(i, bottom + uv.getY(i) * (top - bottom));
+  }
+  uv.needsUpdate = true;
+  return geometry;
+}
+
+/**
  * The bucket geometry on its own, origin at the base. Exported because the
  * friend is built from the same shape — it is, after all, the bucket you fed
  * the machine.
  */
 export function buildBucketMesh() {
   const group = new THREE.Group();
+  const painted = bucketPaintSurface().texture;
 
   // Low metalness on purpose. There is no environment map in this scene, so a
   // highly metallic surface has nothing to reflect and renders almost black —
@@ -96,15 +159,25 @@ export function buildBucketMesh() {
     metalness: 0.3,
   });
 
+  // The rim and handle. Same map as the body, so still one texture and one
+  // upload; a separate material only because they are solid tubes and do not
+  // want the body's double-sided pass.
+  const trim = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: painted,
+    roughness: 0.5,
+    metalness: 0.3,
+  });
+
   // Tapered body, open at the top so you can see down into it.
   const body = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.3, 0.22, 0.41, 22, 1, true),
+    mapIntoBand(new THREE.CylinderGeometry(0.3, 0.22, 0.41, 22, 1, true), BAND.body),
     new THREE.MeshStandardMaterial({
       // White, with the galvanised colour painted into the map instead. A
       // material colour multiplies the map, so leaving it as the metal would
       // tint every colour you brushed on toward grey-green.
       color: 0xffffff,
-      map: bucketPaintSurface().texture,
+      map: painted,
       roughness: 0.45,
       metalness: 0.25,
       side: THREE.DoubleSide,
@@ -128,19 +201,25 @@ export function buildBucketMesh() {
   residue.position.y = 0.04;
   group.add(residue);
 
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.022, 8, 22), dark);
+  // Rim and handle are painted too, so they get more segments than a bare tube
+  // needs — 8 around the rim's tube put a brush stroke on a visible facet.
+  const rim = new THREE.Mesh(mapIntoBand(new THREE.TorusGeometry(0.3, 0.022, 14, 44), BAND.rim), trim);
   rim.rotation.x = Math.PI / 2;
   rim.position.y = 0.41;
   rim.castShadow = true;
   group.add(rim);
 
   // Swing handle, arcing over the mouth.
-  const handle = new THREE.Mesh(new THREE.TorusGeometry(0.285, 0.018, 6, 20, Math.PI), dark);
+  const handle = new THREE.Mesh(
+    mapIntoBand(new THREE.TorusGeometry(0.285, 0.018, 12, 40, Math.PI), BAND.handle),
+    trim
+  );
   handle.position.y = 0.41;
   handle.castShadow = true;
   group.add(handle);
 
-  // Lugs the handle pivots on.
+  // Lugs the handle pivots on. Left bare — they are the pivots, not the bucket,
+  // and at 3cm there is nothing to paint on them.
   for (const x of [-0.285, 0.285]) {
     const lug = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 8), dark);
     lug.position.set(x, 0.4, 0);

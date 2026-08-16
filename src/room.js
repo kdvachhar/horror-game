@@ -143,6 +143,18 @@ function buildSideDoor() {
 }
 
 /**
+ * Where the paint and the notice about the bucket stand: the right-hand wall,
+ * directly across the room from the red door.
+ *
+ * `z` is taken from the door's own inset so the two stay opposite each other —
+ * move the door along its wall and this follows. Shared at module scope because
+ * buildWallColliders needs the same spot: the tin is knee height now and gets a
+ * collider, and a collider that disagrees with where the thing was drawn is the
+ * whole catalogue of bugs this project keeps hitting.
+ */
+const PAINT = { radius: 0.28, height: 0.42, offWall: 0.46 };
+
+/**
  * An open tin of paint, stood against the wall under the notice about the
  * bucket. Green, the same green as the thing on the television, which is either
  * where the sign-writing came from or a coincidence.
@@ -152,8 +164,7 @@ function buildSideDoor() {
  */
 function buildPaintTin() {
   const group = new THREE.Group();
-  const R = 0.16;
-  const H = 0.24;
+  const { radius: R, height: H } = PAINT;
   const paint = '#4e7d33';
 
   const tinMat = new THREE.MeshStandardMaterial({ color: '#8d918b', roughness: 0.52, metalness: 0.3 });
@@ -168,51 +179,53 @@ function buildPaintTin() {
   body.receiveShadow = true;
   group.add(body);
 
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.02, 20), tinMat);
-  base.position.y = 0.01;
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.03, 20), tinMat);
+  base.position.y = 0.015;
   group.add(base);
 
   // Filled most of the way, so you are looking at a disc of paint rather than
-  // down into an empty tin.
-  const surface = new THREE.Mesh(new THREE.CircleGeometry(R - 0.008, 20), paintMat);
+  // down into an empty tin. Everything below is a fraction of R or H rather
+  // than a number of its own, so resizing the tin resizes the paint with it.
+  const fill = H * 0.8;
+  const surface = new THREE.Mesh(new THREE.CircleGeometry(R - 0.014, 20), paintMat);
   surface.rotation.x = -Math.PI / 2;
-  surface.position.y = H - 0.05;
+  surface.position.y = fill;
   group.add(surface);
 
   // Runs down the outside, and what has already reached the floor.
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * Math.PI * 2 + 0.4;
-    const run = 0.05 + (i % 3) * 0.045;
-    const drip = new THREE.Mesh(new THREE.BoxGeometry(0.035, run, 0.01), paintMat);
-    drip.position.set(Math.sin(a) * R, H - 0.05 - run / 2, Math.cos(a) * R);
+    const run = H * (0.22 + (i % 3) * 0.19);
+    const drip = new THREE.Mesh(new THREE.BoxGeometry(R * 0.22, run, 0.016), paintMat);
+    drip.position.set(Math.sin(a) * R, fill - run / 2, Math.cos(a) * R);
     drip.rotation.y = a;
     group.add(drip);
   }
 
-  const spill = new THREE.Mesh(new THREE.CircleGeometry(0.3, 18), paintMat);
+  const spill = new THREE.Mesh(new THREE.CircleGeometry(R * 1.85, 18), paintMat);
   spill.rotation.x = -Math.PI / 2;
-  spill.position.set(0.13, 0.004, 0.1);
+  spill.position.set(R * 0.8, 0.004, R * 0.62);
   spill.scale.set(1, 1, 0.72);
   group.add(spill);
 
   // The lid, dropped beside it, paint side up.
-  const lid = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.01, R + 0.01, 0.012, 20), tinMat);
-  lid.position.set(-0.3, 0.006, 0.14);
+  const lid = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.015, R + 0.015, 0.018, 20), tinMat);
+  lid.position.set(-R * 1.9, 0.009, R * 0.86);
   lid.rotation.z = 0.06;
   lid.castShadow = true;
   group.add(lid);
 
-  const lidPaint = new THREE.Mesh(new THREE.CircleGeometry(R - 0.02, 18), paintMat);
+  const lidPaint = new THREE.Mesh(new THREE.CircleGeometry(R - 0.035, 18), paintMat);
   lidPaint.rotation.x = -Math.PI / 2;
-  lidPaint.position.set(-0.3, 0.013, 0.14);
+  lidPaint.position.set(-R * 1.9, 0.019, R * 0.86);
   group.add(lidPaint);
 
   // Wire handle, up and over.
   const handle = new THREE.Mesh(
-    new THREE.TorusGeometry(R - 0.005, 0.006, 6, 18, Math.PI),
+    new THREE.TorusGeometry(R - 0.008, 0.009, 6, 18, Math.PI),
     new THREE.MeshStandardMaterial({ color: PALETTE.metalDark, roughness: 0.5, metalness: 0.6 })
   );
-  handle.position.y = H - 0.02;
+  handle.position.y = H - 0.03;
   handle.rotation.y = Math.PI / 2;
   group.add(handle);
 
@@ -780,10 +793,15 @@ function buildBackRoom(scene) {
   backing.position.set(POSTER.x, POSTER.bottom + POSTER.height / 2, BACK_DOOR.z + 0.15);
   place(backing);
 
-  // The other notice, further along the same wall — on your way from the
-  // corridor to the door the arrow sends you to, so you pass it either way.
-  // Hung a little higher than the THIS WAY sign to leave room for the tin.
-  const CARD = { x: 0.5, width: 1.05, height: 1.32, bottom: 1.16 };
+  // The other notice, on the right-hand wall directly across from the red door,
+  // with the paint underneath it. Turned a quarter to face -x into the room:
+  // a plane faces +z as built, and left unturned it would be edge-on to
+  // everybody and effectively invisible.
+  const CARD = { width: 1.05, height: 1.32, bottom: 1.16 };
+  const cardX = width / 2;
+  const cardZ = DOOR.z - depth + SIDE_DOOR.inset;
+  const cardY = CARD.bottom + CARD.height / 2;
+
   const card = new THREE.Mesh(
     new THREE.PlaneGeometry(CARD.width, CARD.height),
     new THREE.MeshStandardMaterial({
@@ -792,22 +810,22 @@ function buildBackRoom(scene) {
       metalness: 0,
     })
   );
-  card.position.set(CARD.x, CARD.bottom + CARD.height / 2, BACK_DOOR.z + 0.17);
+  card.position.set(cardX - 0.17, cardY, cardZ);
+  card.rotation.y = -Math.PI / 2;
   card.receiveShadow = true;
   place(card);
 
   const cardBacking = new THREE.Mesh(
-    new THREE.BoxGeometry(CARD.width + 0.06, CARD.height + 0.06, 0.02),
+    new THREE.BoxGeometry(0.02, CARD.height + 0.06, CARD.width + 0.06),
     new THREE.MeshStandardMaterial({ color: '#2b2e2b', roughness: 0.95 })
   );
-  cardBacking.position.set(CARD.x, CARD.bottom + CARD.height / 2, BACK_DOOR.z + 0.15);
+  cardBacking.position.set(cardX - 0.15, cardY, cardZ);
   place(cardBacking);
 
-  // And the tin of paint on the floor under it. No collider: it is 32cm across
-  // and ankle high, and a box you cannot see the edges of is worse than walking
-  // through a paint tin.
+  // And the tin on the floor under it, out from the wall far enough that its
+  // own radius clears the skirt of the reveal-free wall face.
   const tin = buildPaintTin();
-  tin.position.set(CARD.x - 0.1, 0, BACK_DOOR.z + 0.42);
+  tin.position.set(cardX - PAINT.offWall, 0, cardZ + 0.1);
   tin.rotation.y = -0.5;
   place(tin);
   tin.traverse((o) => o.layers.set(LAYER.DARK));
@@ -1112,6 +1130,22 @@ function buildWallColliders() {
   add(-bw - alcove - t, -bw - alcove, sideA - t, sideB + t);
   add(-bw - alcove, -bw, sideA - t, sideA);
   add(-bw - alcove, -bw, sideB, sideB + t);
+
+  // The paint tin, across the room from that door. It was 24cm and had no
+  // collider on the reasoning that a box you cannot see the edges of is worse
+  // than walking through it; at 42cm that stops being true — it is knee height
+  // and walking through it reads as a bug rather than as a small object.
+  //
+  // Registered here rather than beside the mesh because this is the function
+  // whose boxes get torn down and rebuilt with the shell. Added in
+  // buildBackRoom it would go on the permanent list and the editor would leave
+  // a fresh copy behind every time the room was resized.
+  const tinX = bw - PAINT.offWall;
+  const tinZ = sideAt + 0.1;
+  const tinBox = { minX: tinX - PAINT.radius, maxX: tinX + PAINT.radius,
+                   minZ: tinZ - PAINT.radius, maxZ: tinZ + PAINT.radius, top: PAINT.height };
+  colliders.push(tinBox);
+  shellColliders.push(tinBox);
   add(bw, bw + thin, far, DOOR.z);
   // Far wall, split around the corridor doorway the way the hall's is split
   // around its own, and straddling the plane for the same reason — the medical

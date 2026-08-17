@@ -164,15 +164,25 @@ if (import.meta.env?.DEV) {
  * The black wire, and the route it takes.
  *
  * It leaves the television, crosses the ward floor, goes under the ward door,
- * over the corridor, under the second door and the length of the dark room, to
- * a port beside the doorway you were carried through. It is the thing you
- * follow: the television tells you to, and from here on the level is wherever
- * this goes.
+ * over the corridor, under the second door, across the back room and under the
+ * red door into the hall beyond it, where gauntlet.js takes it the rest of the
+ * way. It is the thing you follow: the television tells you to, and from here
+ * on the level is wherever this goes.
  *
- * It used to turn the other way at the corridor and end in the store room,
- * which was the wrong room to send you to — that one is a cupboard you reach
- * by throwing a bucket through a window, and it is finished with once the
- * button in it is pressed.
+ * Which is why it goes to one place. It ended in the store room once — a
+ * cupboard you reach by throwing a bucket through a window, finished with the
+ * moment its button is pressed — and then at a port beside the doorway you
+ * were carried through, which is worse, because that is the way you have
+ * already come. A wire the player is told to follow is a promise that there is
+ * somewhere to get to, and every end it has that is not that place is the
+ * promise being broken. It has one end now, and the red hall is at it.
+ *
+ * The cost, which is worth writing down rather than discovering: in act one it
+ * runs along the top of the back room instead of down the middle, so it no
+ * longer passes under the one lamp burning in there and you will not see it
+ * until the power comes back. What the dark room loses, the beat after it
+ * gains — that is the beat that says *follow the black wire*, and now there is
+ * exactly one direction to follow it in.
  *
  * Declared below the rooms so the points can be taken from them. Written above
  * and it reads STORE and LIT_ROOM before either exists, which is a temporal
@@ -216,54 +226,18 @@ const WIRE_PATH = [
   [5.15, WIRE_RADIUS, 6.6],
   [5.3, WIRE_RADIUS, 7.35],
   [LIT_DOOR.x, WIRE_RADIUS, HALLWAY.far],
-  // And the length of the lit room. Kept off the middle of the floor on the
-  // way down so it crosses in front of you rather than lying under your feet.
+  // And across the back room to the red door, which is the only place it goes.
+  // It used to turn south here and run the length of the room to a port beside
+  // the doorway you were carried through — the way you had already come, which
+  // is the one direction a wire you are told to follow should never point.
   [5.2, WIRE_RADIUS, 8.7],
-  [4.5, WIRE_RADIUS, 10.4],
-  [3.4, WIRE_RADIUS, 13.0],
-  [2.0, WIRE_RADIUS, 16.0],
-  [0.8, WIRE_RADIUS, 19.2],
-  [0.1, WIRE_RADIUS, 22.4],
-  [0.45, WIRE_RADIUS, 24.6],
-  // Up into the wall beside the hall doorway — clear of its reveal, which
-  // stands half a metre out either side of the opening. That doorway is the
-  // one you were carried through, and the far wall is DOOR's wall, so the port
-  // is placed off DOOR rather than off a number that happens to match it.
-  [DOOR.width / 2 + 0.5 + 0.9 - MEDICAL.center[0], 0.35, LIT_ROOM.far - 0.15],
-  [DOOR.width / 2 + 0.5 + 0.9 - MEDICAL.center[0], 0.95, LIT_ROOM.far - 0.04],
-];
-
-/**
- * The leg of it that goes to the red hall.
- *
- * The run above ends where it always did, at the port beside the doorway you
- * were carried through, and this tees off it and crosses to the red door in
- * the side wall. Two legs rather than a reroute, because each is doing a
- * different job and the trunk's job is not finished: in act one you follow it
- * across a black room by the one circle of light in the middle, and the place
- * that circle crosses it is the only thing telling you the cable goes on. Bend
- * the whole run north to the red door and it never passes under the lamp at
- * all, and the dark room loses the only readable thing in it.
- *
- * The branch is what the wire is for after the power comes back. That is the
- * beat where the ward goes quiet and the objective becomes *follow the black
- * wire* again, and until now the only thing the wire pointed at was the way
- * you had already come. This points at the door the room actually wants you to
- * open, and then goes under it — see gauntlet.js, which picks it up on the
- * other side and runs it the length of the hall.
- *
- * It tees at a waypoint the trunk already has rather than at a point of its
- * own, so the junction cannot drift off the cable it is spliced into.
- */
-const WIRE_TEE = [3.4, WIRE_RADIUS, 13.0];
-const WIRE_BRANCH = [
-  WIRE_TEE,
-  [1.0, WIRE_RADIUS, 12.6],
-  [-1.9, WIRE_RADIUS, 12.2],
-  [-4.8, WIRE_RADIUS, 11.7],
+  [3.4, WIRE_RADIUS, 9.5],
+  [1.0, WIRE_RADIUS, 10.2],
+  [-1.9, WIRE_RADIUS, 11.0],
+  [-4.8, WIRE_RADIUS, 11.4],
   [-7.4, WIRE_RADIUS, 11.35],
   // Under the red door, half a metre off the middle of the opening so it comes
-  // through on the side of the hall it is going to run down. The last point is
+  // through on the side of the hall it is going to run down. This last point is
   // the one gauntlet.js starts its own run from, in world terms — the two are
   // written down in different files and have to meet in the threshold.
   [SIDE_DOOR.x + 0.1 - MEDICAL.center[0], WIRE_RADIUS, SIDE_DOOR.z - 0.5 - MEDICAL.center[2]],
@@ -861,57 +835,10 @@ function buildBlackWire() {
   }
   clipsAlong(curve);
 
-  // The branch to the red hall. One piece rather than two, because unlike the
-  // trunk it never leaves the back room: it is all on the dark pass until the
-  // power comes back and the layer sweep in lightUpBackRoom carries it over
-  // with everything else in there.
-  const branch = new THREE.CatmullRomCurve3(
-    WIRE_BRANCH.map((p) => new THREE.Vector3(...p))
-  );
-  const branchWire = new THREE.Mesh(
-    new THREE.TubeGeometry(branch, 90, WIRE_RADIUS, 6, false),
-    new THREE.MeshStandardMaterial({
-      color: '#141517',
-      roughness: 0.75,
-      metalness: 0.05,
-      fog: false,
-    })
-  );
-  branchWire.receiveShadow = true;
-  branchWire.layers.set(LAYER.DARK);
-  group.add(branchWire);
-  clipsAlong(branch);
-
-  // The splice, so the tee is a fitting and not two cables that happen to
-  // touch. Sat on the trunk's own waypoint — see WIRE_TEE.
-  const junction = new THREE.Mesh(
-    new THREE.BoxGeometry(0.3, 0.11, 0.22),
-    clinicalMaterial('#3a3d3f', 0.6)
-  );
-  junction.position.set(WIRE_TEE[0], 0.055, WIRE_TEE[2]);
-  junction.rotation.y = 0.22;
-  junction.layers.set(LAYER.DARK);
-  group.add(junction);
-
-  // Where it leaves: a socket in the far wall, the same fitting as the arms'.
-  // Both in the dark room, at the far end of it.
-  const end = curve.getPointAt(1);
-  const port = new THREE.Mesh(
-    new THREE.TorusGeometry(0.16, 0.045, 10, 20),
-    clinicalMaterial('#4a4d4c', 0.6)
-  );
-  port.position.copy(end);
-  port.layers.set(LAYER.DARK);
-  group.add(port);
-
-  const socket = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.14, 0.14, 0.12, 16),
-    clinicalMaterial('#101112', 0.9)
-  );
-  socket.rotation.x = Math.PI / 2;
-  socket.position.set(end.x, end.y, end.z + 0.05);
-  socket.layers.set(LAYER.DARK);
-  group.add(socket);
+  // Nothing terminates this end of it any more. It used to finish in a socket
+  // in the far wall — the same fitting as the arms' — and a socket is what you
+  // build when a cable stops. This one does not stop: it goes under the red
+  // door and comes out in gauntlet.js on the other side.
 
   return group;
 }

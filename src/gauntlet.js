@@ -1085,10 +1085,10 @@ export function createGauntlet({ scene, onCaught }) {
    * The black wire, carried on into the hall.
    *
    * This is one end of an actual cable and not a matching prop: medicalRoom.js
-   * runs the branch of it across the back room to the red door, and the last
-   * point of that list and the first point of this one are the same place in
-   * the world, written down in two files because the two rooms are built by two
-   * of them. It comes in under the door rather than out of a fitting — the
+   * runs it from the television across the back room to the red door, and the
+   * last point of that list and the first point of this one are the same place
+   * in the world, written down in two files because the two rooms are built by
+   * two of them. It comes in under the door rather than out of a fitting — the
    * leaves fold back flat against the wall, so there is nothing in the opening
    * for it to get past.
    *

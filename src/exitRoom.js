@@ -8,6 +8,7 @@ import {
 import { setObjective, showNote } from './hud.js';
 import { playButtonPress, playWardDoor } from './audio.js';
 import { buildTelevision, createScreenLife } from './screenFace.js';
+import { createWallArms } from './wallArms.js';
 
 /**
  * The room on the other side of the red hall's way out.
@@ -51,7 +52,7 @@ const TRIM = '#3c4147';
  */
 const CONSOLE_LINES = [
   { text: 'Oh — you made it.', hold: 2.2 },
-  { text: 'Corridor three. Both of you, even.', hold: 2.9, eyes: 'closed' },
+  { text: 'Corridor three. Both of you, even.', hold: 2.9, eyes: 'closed', arms: 'crossed' },
   { text: 'I am preparing the next room.', hold: 2.8 },
   { text: 'Don\u2019t go far.', hold: 2.4, eyes: 'closed' },
 ];
@@ -222,7 +223,7 @@ export function createExitRoom({ scene, doorway }) {
   const television = buildTelevision();
   // Against the wall, turned to face the door, and hung so its bottom edge
   // clears the desk in front of it.
-  television.group.position.set(far + television.depth / 2 + 0.02, 1.85, axis);
+  television.group.position.set(far + television.depth / 2 + 0.02, 2.05, axis);
   television.group.rotation.y = Math.PI / 2;
   group.add(television.group);
 
@@ -235,6 +236,31 @@ export function createExitRoom({ scene, doorway }) {
     mouth: television.mouth,
     faceParts: television.faceParts,
     glow: television.glow,
+  });
+
+  /**
+   * And its arms, out of the wall either side of it.
+   *
+   * They are not attached to the television in the ward and they are not
+   * attached to it here — that is the whole of the effect, and it is why they
+   * are built by the character rather than by whichever room it turns up in.
+   *
+   * The anchor is what tells them where the wall is and which way it faces:
+   * this one is turned a quarter turn, because the ward's wall looks down the
+   * room in +z and this one looks back up the hall in +x. Everything in the
+   * arms is written in the wall's own frame and this is the only place that
+   * knows the difference.
+   */
+  const armAnchor = new THREE.Group();
+  armAnchor.position.set(far, 0, axis);
+  armAnchor.rotation.y = Math.PI / 2;
+  group.add(armAnchor);
+  const wallArms = createWallArms({
+    parent: armAnchor,
+    colliders,
+    origin: new THREE.Vector3(far, 0, axis),
+    yaw: Math.PI / 2,
+    startRetracted: true,
   });
   /**
    * How far up the picture is, 0 to 1.
@@ -318,7 +344,7 @@ export function createExitRoom({ scene, doorway }) {
   interactions.push({
     // On the set itself rather than on the desk under it: it is the thing you
     // would be talking to.
-    position: new THREE.Vector3(far + 0.4, 1.85, axis),
+    position: new THREE.Vector3(far + 0.4, 2.05, axis),
     label: 'Ask it again',
     range: 2.1,
     once: false,
@@ -387,6 +413,14 @@ export function createExitRoom({ scene, doorway }) {
         if (wakeIn <= 0) life.speak(CONSOLE_LINES);
       }
       life.update(delta, lit);
+      // The arms come out of the wall with the picture and go back into it if
+      // the room is ever wound down, which is the same movement the ward uses
+      // when the thing has said its piece — run backwards to arrive.
+      wallArms.update(delta, {
+        speaking: life.isSpeaking,
+        cross: life.line?.arms === 'crossed',
+        retract: !awake,
+      });
     },
   };
 }

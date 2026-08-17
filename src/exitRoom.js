@@ -7,7 +7,7 @@ import {
 } from './textures.js';
 import { setObjective, showNote } from './hud.js';
 import { playButtonPress, playWardDoor } from './audio.js';
-import { buildScreenFace, createScreenLife } from './screenFace.js';
+import { buildTelevision, createScreenLife } from './screenFace.js';
 
 /**
  * The room on the other side of the red hall's way out.
@@ -29,7 +29,12 @@ import { buildScreenFace, createScreenLife } from './screenFace.js';
  */
 const DEPTH = 7.2;
 const HALF_WIDTH = 4;
-const HEIGHT = 3.4;
+/**
+ * Taller than a service room needs to be, because of what is on the far wall.
+ * The television is 1.9 high and throws loose wires a metre past the top of its
+ * casing; at 3.4 they went through the ceiling.
+ */
+const HEIGHT = 4.2;
 
 /** Concrete, a shade off the hall's red — you are out of it, and it should look it. */
 const WALL_TINT = '#8f8d86';
@@ -203,52 +208,43 @@ export function createExitRoom({ scene, doorway }) {
   }
   solid(DESK_X - 0.45, DESK_X + 0.45, axis - 1.2, axis + 1.2, { top: DESK_TOP });
 
-  // The monitor: a deep case with the glass set back in it, facing the door.
-  const monitor = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.58, 0.72), caseMat);
-  monitor.position.set(-0.05, DESK_TOP + 0.29, -0.35);
-  monitor.castShadow = true;
-  desk.add(monitor);
-
-  const bezel = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.46, 0.6), caseMat);
-  bezel.position.set(0.27, DESK_TOP + 0.3, -0.35);
-  desk.add(bezel);
-
-  // The tube: near black and unlit, the same as the television's, so the face
-  // in front of it is the only thing on the glass that has a value.
-  const screen = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.5, 0.38),
-    new THREE.MeshBasicMaterial({ color: '#0b0a0d', toneMapped: false })
-  );
-  screen.position.set(0.29, DESK_TOP + 0.3, -0.35);
-  screen.rotation.y = Math.PI / 2;
-  desk.add(screen);
-
   /**
-   * And the thing that is on it. The same face as the ward's television, built
-   * by the same code — not a second character, but the one that went dark two
-   * rooms ago, waiting at the end of the one it just watched you run.
+   * And the screen it is on: the ward's television, the same object at the same
+   * size, mounted on the far wall above the desk.
    *
-   * Drawn at the size it was drawn and scaled down as a whole, which is what
-   * the face is built to expect. It has been squeezed into a smaller screen and
-   * it should look it.
+   * It had its own small monitor here first, with the face scaled down to fit
+   * the glass. That was wrong. The set is as much the character as the eyes
+   * are — a wide grey box with the face floating in far too much screen, loose
+   * wires out of the top and bottom, and its own green glow on the wall — and
+   * shrunk onto a desk it read as a computer with a face on it rather than as
+   * the thing that talked to you in the ward.
    */
-  const { group: face, eyes, mouth, faceParts } = buildScreenFace();
-  // 0.3 put the eyes on the bezel and the mouth off the bottom of the glass:
-  // drawn, the face stands about 1.2 tall, and this tube is 0.38. At 0.21 it
-  // sits inside it with a margin all round, which is what a face crammed into
-  // somebody else's monitor should look like.
-  face.scale.setScalar(0.21);
-  face.position.set(0.31, DESK_TOP + 0.3, -0.35);
-  face.rotation.y = Math.PI / 2;
-  face.visible = false;
-  desk.add(face);
+  const television = buildTelevision();
+  // Against the wall, turned to face the door, and hung so its bottom edge
+  // clears the desk in front of it.
+  television.group.position.set(far + television.depth / 2 + 0.02, 1.85, axis);
+  television.group.rotation.y = Math.PI / 2;
+  group.add(television.group);
 
-  // No glow light on this one. The television has one because it is the only
-  // thing lighting the ward when it talks; here there is already a lamp on the
-  // ceiling, and a second light in a forward renderer is paid for by every
-  // surface in the world.
-  const life = createScreenLife({ eyes, mouth, faceParts });
-  /** Eases 0 to 1 as it comes on, so the face arrives rather than appearing. */
+  // Its glow is part of the set, so it comes with it — that is a second light
+  // in this room and it is not free, because in a forward renderer every light
+  // is shaded on every surface in the world. It is worth it: the green thrown
+  // on the wall behind is how you know from the doorway that the thing is on.
+  const life = createScreenLife({
+    eyes: television.eyes,
+    mouth: television.mouth,
+    faceParts: television.faceParts,
+    glow: television.glow,
+  });
+  /**
+   * How far up the picture is, 0 to 1.
+   *
+   * The set is always there — dead casing, dark tube, wires — and this is what
+   * arrives when the button goes in. Hiding the whole television and switching
+   * it on read as a rendering fault rather than as a fright: four metres of grey
+   * box does not appear in a lit room. It is the same fade the ward uses when it
+   * goes dark, run the other way.
+   */
   let lit = 0;
 
   const keyboard = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 0.62), caseMat);
@@ -308,7 +304,6 @@ export function createExitRoom({ scene, doorway }) {
       awake = true;
       playButtonPress();
       playWardDoor(0.6);
-      face.visible = true;
       ringMat.color.set('#2fd46a');
       ringMat.emissive.set('#12561f');
       cap.position.y = PLINTH_TOP + 0.075;
@@ -321,9 +316,11 @@ export function createExitRoom({ scene, doorway }) {
   });
 
   interactions.push({
-    position: new THREE.Vector3(DESK_X + 0.35, DESK_TOP + 0.3, axis - 0.35),
+    // On the set itself rather than on the desk under it: it is the thing you
+    // would be talking to.
+    position: new THREE.Vector3(far + 0.4, 1.85, axis),
     label: 'Ask it again',
-    range: 1.7,
+    range: 2.1,
     once: false,
     enabled: () => powered && awake && wakeIn <= 0 && !life.isSpeaking,
     onInteract() {
@@ -361,7 +358,6 @@ export function createExitRoom({ scene, doorway }) {
       wakeIn = 0;
       lit = 0;
       life.stop();
-      face.visible = false;
       group.visible = false;
       lamp.intensity = 0;
       tubeMat.emissive.set('#000000');

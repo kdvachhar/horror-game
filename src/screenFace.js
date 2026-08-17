@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { makeMetalPanelSurface } from './textures.js';
 import { createSpeechRunner, MOUTH_AT_REST } from './voice.js';
 
 /**
@@ -12,9 +13,13 @@ import { createSpeechRunner, MOUTH_AT_REST } from './voice.js';
  * console at the end of the red hall is that it is the *same* one, watching from
  * further along.
  *
- * The casing is not in here. A television and a monitor are different objects
- * with different wiring; what they have in common is the face, the blink, the
- * mouth, and the way the picture breathes.
+ * The casing is in here too, and that is deliberate. The first attempt gave the
+ * console at the end of the red hall its own small monitor and scaled the face
+ * down to fit it, which was wrong in a way worth writing down: the set — a wide
+ * grey box with the face floating in the middle of far too much screen, loose
+ * wires out of the top and bottom, a green glow thrown on the wall behind it —
+ * is as much the character as the eyes are. Shrunk into a desk terminal it read
+ * as a computer with a face on it rather than as the thing from the ward.
  */
 
 // Screen face, from the drawing: sickly green on a dead grey tube. Rendered
@@ -101,6 +106,109 @@ export function buildScreenFace() {
   group.add(mouth);
 
   return { group, eyes, mouth, faceParts };
+}
+
+/** The loose wiring's colours, from the drawing. */
+const WIRE_COLOURS = ['#b23b2e', '#2f4b9c', '#8a9440'];
+
+/**
+ * One loose wire: a wavy tube. The drawing has them sprouting untidily from the
+ * casing in different colours and lengths, which is most of what makes the
+ * thing look torn out of something rather than installed.
+ */
+function buildWire(origin, direction, length, colour) {
+  const points = [];
+  const segments = 6;
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    points.push(
+      new THREE.Vector3(
+        origin.x + direction.x * length * t + Math.sin(t * 7 + origin.x) * 0.12 * t,
+        origin.y + direction.y * length * t + Math.cos(t * 9 + origin.y) * 0.14 * t,
+        origin.z + direction.z * length * t + Math.sin(t * 5) * 0.05
+      )
+    );
+  }
+  const curve = new THREE.CatmullRomCurve3(points);
+  const mesh = new THREE.Mesh(
+    new THREE.TubeGeometry(curve, 20, 0.022, 6, false),
+    new THREE.MeshStandardMaterial({ color: colour, roughness: 0.7, metalness: 0.05 })
+  );
+  mesh.castShadow = true;
+  return mesh;
+}
+
+/**
+ * The television, its face, and the wiring hanging off it.
+ *
+ * The whole set piece, and the only way this character is ever presented. It
+ * was built for the ward and there is a second one at the end of the red hall;
+ * both are this, at this size, because a face crammed into a small monitor is a
+ * different character wearing the same eyes. If it turns up somewhere else, it
+ * turns up in one of these.
+ */
+export function buildTelevision() {
+  const group = new THREE.Group();
+
+  // Wide. The face inside it does not scale with the casing — it stays the
+  // size it was drawn, sitting in the middle of a lot more screen.
+  const width = 3.8;
+  const height = 1.9;
+  const depth = 0.36;
+
+  // Casing: a deep grey box, bezel proud of the screen on all sides.
+  const casing = new THREE.Mesh(
+    new THREE.BoxGeometry(width, height, depth),
+    new THREE.MeshStandardMaterial({
+      ...makeMetalPanelSurface(1.4, 0.8, '#84847d'),
+      metalness: 0.15,
+    })
+  );
+  casing.castShadow = true;
+  casing.receiveShadow = true;
+  group.add(casing);
+
+  // The tube itself, recessed into the bezel.
+  const screen = new THREE.Mesh(
+    new THREE.BoxGeometry(width - 0.5, height - 0.44, 0.06),
+    new THREE.MeshBasicMaterial({ color: '#0b0a0d', toneMapped: false })
+  );
+  screen.position.z = depth / 2 + 0.01;
+  group.add(screen);
+
+  // The face itself lives in screenFace.js: there is one character in this game
+  // and it now has two screens to appear on, so it is built in one place.
+  const { group: face, eyes, mouth, faceParts } = buildScreenFace();
+  face.position.z = depth / 2 + 0.05;
+  group.add(face);
+
+  // Wiring out of the top and bottom of the casing, as in the drawing.
+  const tops = [-0.72, -0.36, 0.08, 0.44, 0.8].map((f) => f * width * 0.5);
+  tops.forEach((x, i) => {
+    const wire = buildWire(
+      new THREE.Vector3(x, height / 2, 0.1),
+      new THREE.Vector3((i - 2) * 0.12, 1, 0.15).normalize(),
+      0.55 + (i % 3) * 0.25,
+      WIRE_COLOURS[i % WIRE_COLOURS.length]
+    );
+    group.add(wire);
+  });
+  [-0.6, -0.16, 0.28, 0.68].map((f) => f * width * 0.5).forEach((x, i) => {
+    const wire = buildWire(
+      new THREE.Vector3(x, -height / 2, 0.1),
+      new THREE.Vector3((i - 1.5) * 0.14, -1, 0.2).normalize(),
+      0.45 + (i % 3) * 0.22,
+      WIRE_COLOURS[(i + 1) % WIRE_COLOURS.length]
+    );
+    group.add(wire);
+  });
+
+  // Its own glow on the wall around it.
+  const glow = new THREE.PointLight(FACE, 2.2, 4.5, 2);
+  glow.position.z = 0.7;
+  group.add(glow);
+
+  return { group, eyes, mouth, glow, screen, faceParts, width, depth };
 }
 
 /**

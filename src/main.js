@@ -7,6 +7,7 @@ import { createDoor } from './door.js';
 import { createPlayerBody } from './playerBody.js';
 import { createMedicalRoom } from './medicalRoom.js';
 import { createGauntlet } from './gauntlet.js';
+import { createExitRoom } from './exitRoom.js';
 import { MACHINE, DOOR, BACK_DOOR, LAYER, SPAWN, MEDICAL, insideBackRoom } from './config.js';
 import { createPlayer } from './player.js';
 import { createWallText } from './wallText.js';
@@ -133,8 +134,16 @@ const gauntlet = createGauntlet({
 });
 room.colliders.push(...gauntlet.colliders);
 
+/**
+ * What is behind the hall's way out. Handed the doorway the hall cut, so the
+ * two halves of that opening cannot end up in different places.
+ */
+const exitRoom = createExitRoom({ scene, doorway: gauntlet.exit });
+room.colliders.push(...exitRoom.colliders);
+
 const interactions = createInteractions(camera, showPrompt);
 for (const target of gauntlet.interactions) interactions.add(target);
+for (const target of exitRoom.interactions) interactions.add(target);
 
 /**
  * What you think, turning round and finding the way you came in is shut.
@@ -414,6 +423,7 @@ function resetSequences() {
   // power until the ward's console gives the back room its own — so it winds
   // back with it, shutters down and the wall parked by the door.
   gauntlet.powerDown();
+  exitRoom.powerDown();
   handoverSaid = false;
   // The loop fires the cutscene the moment a door that has been open closes.
   // Clearing this stops a jump from immediately retriggering it underneath you.
@@ -494,6 +504,7 @@ const SCENES = [
       medical.shutDown();
       room.lightUpBackRoom();
       gauntlet.powerUp();
+      exitRoom.powerUp();
 
       // You are back in your own body by this point, but still connected to the
       // bucket — that never gets taken away — so the mechanic has to be live or
@@ -522,6 +533,7 @@ const SCENES = [
       medical.shutDown();
       room.lightUpBackRoom();
       gauntlet.powerUp();
+      exitRoom.powerUp();
       possession.unlock();
 
       // Both of you inside and facing down the hall. Not on opposite sides of
@@ -535,6 +547,29 @@ const SCENES = [
       friend.collect();
 
       setObjective('Get to the end of the hall');
+    },
+  },
+  {
+    label: '8 · The room behind the hall',
+    hint: 'Through the way out, with the button and the console',
+    go() {
+      resetSequences();
+      medical.openDoor();
+      medical.shutDown();
+      room.lightUpBackRoom();
+      gauntlet.powerUp();
+      exitRoom.powerUp();
+      possession.unlock();
+
+      // Standing just inside it, facing the console at the far end. The hall
+      // behind is left exactly as it was: getting here is what the hall is for,
+      // and a menu entry that also solved it would make that impossible to see.
+      const way = gauntlet.exit;
+      player.teleport({ position: [way.x - 1.4, 0, way.z], yaw: Math.PI / 2, pitch: 0 });
+      friend.spawn(new THREE.Vector3(way.x - 1.4, 0, way.z + 1.2));
+      friend.collect();
+
+      setObjective('See what is in here');
     },
   },
 ];
@@ -718,6 +753,7 @@ renderer.setAnimationLoop((time) => {
   // bucket the camera is in the other lane and the thing the spikes are walking
   // toward is standing still where you left it.
   gauntlet.update(delta, player.position, friend);
+  exitRoom.update(player.position);
   // Only the bucket can get up there, but the check is on position rather than
   // on identity — whatever ends up on the top board presses it. It latches, so
   // this is true on exactly one frame ever.
@@ -732,6 +768,7 @@ renderer.setAnimationLoop((time) => {
       // one lit circle of.
       room.lightUpBackRoom();
       gauntlet.powerUp();
+      exitRoom.powerUp();
       setObjective('Press F to return to your body');
       medical.speak(DOOR_LINES, () => {
         // Then it goes dark and takes its arms back, and the wire is all that
@@ -781,7 +818,7 @@ renderer.setAnimationLoop((time) => {
 
 // Dev-only handle for poking at the scene from the console.
 if (import.meta.env.DEV) {
-  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, wakeUp, possession, painter, monologue };
+  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, wakeUp, possession, painter, monologue };
   window.game.__tvLines = TV_LINES;
   // Console handles for diagnosing silence: game.audio.state() / .test()
   window.game.perf = () => ({

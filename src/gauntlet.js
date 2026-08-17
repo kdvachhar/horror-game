@@ -783,17 +783,13 @@ export function createGauntlet({ scene, onCaught }) {
   solid(END - 1, END, AXIS - HALF - 1, exitLow, {});
   solid(END - 1, END, exitHigh, AXIS + HALF + 1, {});
 
-  // What is through it: a dead landing, lined like the threshold. There is no
-  // level past this yet, and a way out that opens onto the outside of the world
-  // would say so far more loudly than a small dark room does.
+  // What is through it: a landing, lined like the threshold, and then the room
+  // exitRoom.js builds on the far side of it. It used to be capped with a black
+  // plane and a collider — there was no level past this, and a way out that
+  // opened onto the outside of the world would have said so far more loudly
+  // than a small dark room did. There is one now, so the cap is gone and the
+  // near wall of that room is what stops you.
   {
-    const back = new THREE.Mesh(
-      new THREE.PlaneGeometry(EXIT.width, EXIT.height),
-      new THREE.MeshStandardMaterial({ color: '#0c0708', roughness: 0.95 })
-    );
-    back.position.set(END - EXIT.landing, EXIT.height / 2, AXIS);
-    back.rotation.y = Math.PI / 2;
-    group.add(back);
     for (const side of [-1, 1]) {
       const cheek = new THREE.Mesh(new THREE.PlaneGeometry(EXIT.landing, EXIT.height), trim);
       cheek.position.set(END - EXIT.landing / 2, EXIT.height / 2, AXIS + side * EXIT.width / 2);
@@ -808,7 +804,6 @@ export function createGauntlet({ scene, onCaught }) {
     deck.rotation.x = -Math.PI / 2;
     deck.position.set(END - EXIT.landing / 2, 0.003, AXIS);
     group.add(deck);
-    solid(END - EXIT.landing - 1, END - EXIT.landing, AXIS - HALF, AXIS + HALF, {});
   }
 
   // -------------------------------------------------------------- divider ---
@@ -1373,6 +1368,22 @@ export function createGauntlet({ scene, onCaught }) {
     get progress() {
       return stations.map((s) => ({ x: s.x, switch: s.switchOn, plate: s.plateOn }));
     },
+    /**
+     * The way out, in world terms, for whoever builds what is behind it.
+     *
+     * Handed over rather than written down twice. Two files agreeing about one
+     * opening by both being given the same numbers is the only arrangement that
+     * cannot drift apart — the same reason SIDE_DOOR lives in config.js.
+     */
+    get exit() {
+      return {
+        x: END - EXIT.landing,
+        z: AXIS,
+        width: EXIT.width,
+        height: EXIT.height,
+      };
+    },
+
     /** Where to stand you and the bucket when a run has to start over. */
     get entry() {
       return {

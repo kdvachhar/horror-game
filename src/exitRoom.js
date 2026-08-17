@@ -7,6 +7,7 @@ import {
 } from './textures.js';
 import { setObjective, showNote } from './hud.js';
 import { playButtonPress, playWardDoor } from './audio.js';
+import { buildScreenFace, createScreenLife } from './screenFace.js';
 
 /**
  * The room on the other side of the red hall's way out.
@@ -35,59 +36,20 @@ const WALL_TINT = '#8f8d86';
 const FLOOR_TINT = '#7c7a75';
 const TRIM = '#3c4147';
 
-/** What the console has to say for itself, once it is awake. */
-const SCREEN_LINES = [
-  'CORRIDOR 3',
-  'CYCLE COMPLETE',
-  '',
-  'SUBJECT UPRIGHT',
-  'ASSET RECOVERED',
-  '',
-  'PREPARING NEXT ROOM',
-];
-
 /**
- * The screen face, drawn to a canvas.
+ * What it says when you wake it up.
  *
- * Unlit and exempt from tone mapping, the same as the television's face in the
- * ward: ACES lifts hard through the mids, and a green picked at the value you
- * want to read comes out mint. Drawn rather than modelled because a terminal is
- * mostly text, and text out of boxes is a lot of boxes.
+ * The same voice as the television in the ward, because it is the same thing:
+ * it went dark when it had said its piece, and the next screen it appears on is
+ * at the far end of the room it just watched you run. Pleased with itself,
+ * which is the only register this character has.
  */
-function makeScreenTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 384;
-  const ctx = canvas.getContext('2d');
-
-  ctx.fillStyle = '#04120a';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // Scan lines. Cheap, and the single thing that says screen rather than sign.
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-  for (let y = 0; y < canvas.height; y += 4) ctx.fillRect(0, y, canvas.width, 2);
-
-  ctx.font = '600 30px "Courier New", monospace';
-  ctx.textBaseline = 'top';
-  SCREEN_LINES.forEach((line, i) => {
-    if (!line) return;
-    const y = 34 + i * 44;
-    // Drawn twice, the second pass blurred, so the glyphs bloom the way a tube
-    // does instead of sitting on the glass like print.
-    ctx.fillStyle = 'rgba(96, 226, 128, 0.35)';
-    ctx.fillText(line, 40, y + 1);
-    ctx.fillStyle = '#8dffb0';
-    ctx.fillText(line, 38, y);
-  });
-
-  // A cursor, on the line after the last thing it said.
-  ctx.fillStyle = '#8dffb0';
-  ctx.fillRect(38, 34 + SCREEN_LINES.length * 44, 20, 30);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
+const CONSOLE_LINES = [
+  { text: 'Oh — you made it.', hold: 2.2 },
+  { text: 'Corridor three. Both of you, even.', hold: 2.9, eyes: 'closed' },
+  { text: 'I am preparing the next room.', hold: 2.8 },
+  { text: 'Don\u2019t go far.', hold: 2.4, eyes: 'closed' },
+];
 
 export function createExitRoom({ scene, doorway }) {
   const group = new THREE.Group();
@@ -102,6 +64,8 @@ export function createExitRoom({ scene, doorway }) {
   let powered = false;
   let awake = false;
   let entered = false;
+  /** Counts down from the button to the first word. */
+  let wakeIn = 0;
 
   // The near wall is the plane the landing ends on; the room runs on from there.
   const near = doorway.x;
@@ -249,18 +213,43 @@ export function createExitRoom({ scene, doorway }) {
   bezel.position.set(0.27, DESK_TOP + 0.3, -0.35);
   desk.add(bezel);
 
-  const darkGlass = new THREE.MeshStandardMaterial({
-    color: '#0a0f0c',
-    roughness: 0.25,
-    metalness: 0.15,
-  });
-  // Unlit, so it is the value written down and not what the room does to it.
-  const litGlass = new THREE.MeshBasicMaterial({ map: makeScreenTexture(), toneMapped: false });
-
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.38), darkGlass);
+  // The tube: near black and unlit, the same as the television's, so the face
+  // in front of it is the only thing on the glass that has a value.
+  const screen = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.5, 0.38),
+    new THREE.MeshBasicMaterial({ color: '#0b0a0d', toneMapped: false })
+  );
   screen.position.set(0.29, DESK_TOP + 0.3, -0.35);
   screen.rotation.y = Math.PI / 2;
   desk.add(screen);
+
+  /**
+   * And the thing that is on it. The same face as the ward's television, built
+   * by the same code — not a second character, but the one that went dark two
+   * rooms ago, waiting at the end of the one it just watched you run.
+   *
+   * Drawn at the size it was drawn and scaled down as a whole, which is what
+   * the face is built to expect. It has been squeezed into a smaller screen and
+   * it should look it.
+   */
+  const { group: face, eyes, mouth, faceParts } = buildScreenFace();
+  // 0.3 put the eyes on the bezel and the mouth off the bottom of the glass:
+  // drawn, the face stands about 1.2 tall, and this tube is 0.38. At 0.21 it
+  // sits inside it with a margin all round, which is what a face crammed into
+  // somebody else's monitor should look like.
+  face.scale.setScalar(0.21);
+  face.position.set(0.31, DESK_TOP + 0.3, -0.35);
+  face.rotation.y = Math.PI / 2;
+  face.visible = false;
+  desk.add(face);
+
+  // No glow light on this one. The television has one because it is the only
+  // thing lighting the ward when it talks; here there is already a lamp on the
+  // ceiling, and a second light in a forward renderer is paid for by every
+  // surface in the world.
+  const life = createScreenLife({ eyes, mouth, faceParts });
+  /** Eases 0 to 1 as it comes on, so the face arrives rather than appearing. */
+  let lit = 0;
 
   const keyboard = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 0.62), caseMat);
   keyboard.position.set(0.15, DESK_TOP + 0.02, 0.42);
@@ -319,24 +308,26 @@ export function createExitRoom({ scene, doorway }) {
       awake = true;
       playButtonPress();
       playWardDoor(0.6);
-      screen.material = litGlass;
+      face.visible = true;
       ringMat.color.set('#2fd46a');
       ringMat.emissive.set('#12561f');
       cap.position.y = PLINTH_TOP + 0.075;
-      showNote('The console wakes up.', 2.4);
-      setObjective('Read the console');
+      // A beat before it says anything. Screens take a moment to come up, and
+      // the face arriving in silence and *then* speaking is a great deal worse
+      // to be in a room with than one that talks the instant it appears.
+      wakeIn = 1.1;
+      setObjective('Listen');
     },
   });
 
   interactions.push({
-    position: new THREE.Vector3(DESK_X + 0.3, DESK_TOP + 0.3, axis - 0.35),
-    label: 'Read the console',
-    range: 1.6,
+    position: new THREE.Vector3(DESK_X + 0.35, DESK_TOP + 0.3, axis - 0.35),
+    label: 'Ask it again',
+    range: 1.7,
     once: false,
-    enabled: () => powered && awake,
+    enabled: () => powered && awake && wakeIn <= 0 && !life.isSpeaking,
     onInteract() {
-      showNote(SCREEN_LINES.filter(Boolean).join(' · '), 5);
-      setObjective('Wait for the next room');
+      life.speak(CONSOLE_LINES);
     },
   });
 
@@ -366,21 +357,40 @@ export function createExitRoom({ scene, doorway }) {
     powerDown() {
       powered = false;
       awake = false;
+      entered = false;
+      wakeIn = 0;
+      lit = 0;
+      life.stop();
+      face.visible = false;
       group.visible = false;
       lamp.intensity = 0;
       tubeMat.emissive.set('#000000');
-      screen.material = darkGlass;
       ringMat.color.set('#8e1a12');
       ringMat.emissive.set('#000000');
       cap.position.y = PLINTH_TOP + 0.1;
     },
 
-    /** Says the room's one line, the first time you are actually standing in it. */
-    update(bodyPosition) {
-      if (!powered || entered) return;
-      if (!contains(bodyPosition.x, bodyPosition.z)) return;
-      entered = true;
-      setObjective('See what is in here');
+    get isSpeaking() {
+      return life.isSpeaking;
+    },
+
+    update(delta, bodyPosition) {
+      if (!powered) return;
+
+      if (!entered && contains(bodyPosition.x, bodyPosition.z)) {
+        entered = true;
+        setObjective('See what is in here');
+      }
+
+      // The picture coming up, and then the face on it. Both run every frame
+      // rather than only while it is awake, so the blink and the breathing
+      // carry on between the lines instead of freezing mid-sentence.
+      if (awake) lit += (1 - lit) * (1 - Math.exp(-3.2 * delta));
+      if (wakeIn > 0) {
+        wakeIn -= delta;
+        if (wakeIn <= 0) life.speak(CONSOLE_LINES);
+      }
+      life.update(delta, lit);
     },
   };
 }

@@ -753,7 +753,7 @@ renderer.setAnimationLoop((time) => {
   // bucket the camera is in the other lane and the thing the spikes are walking
   // toward is standing still where you left it.
   gauntlet.update(delta, player.position, friend);
-  exitRoom.update(player.position);
+  exitRoom.update(delta, player.position);
   // Only the bucket can get up there, but the check is on position rather than
   // on identity — whatever ends up on the top board presses it. It latches, so
   // this is true on exactly one frame ever.

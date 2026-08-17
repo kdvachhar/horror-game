@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SIDE_DOOR, PLAYER, LAYER } from './config.js';
+import { SIDE_DOOR, DOOR_RED, PLAYER, LAYER } from './config.js';
 import {
   makeWallSurface,
   makeFloorSurface,
@@ -1060,12 +1060,68 @@ export function createGauntlet({ scene, onCaught }) {
   // arrangement as a station's with the anchor at the wall instead of a switch.
   buildClimb(FINAL_CLIMB, END + 1.1, PLAYER_SIDE, CLIMB_DEPTH);
 
-  // The way out, held shut by the same button.
-  const exitDoor = new THREE.Mesh(
-    new THREE.BoxGeometry(0.16, EXIT.height - 0.04, EXIT.width - 0.04),
-    new THREE.MeshStandardMaterial({ color: '#5d2723', roughness: 0.6, metalness: 0.4 })
-  );
+  /**
+   * The way out, held shut by the same button.
+   *
+   * Built out of the red door's kit — see DOOR_RED — rather than a colour of its
+   * own. It had one, at a metalness of 0.4, and under six red lamps a finish
+   * that glossy came back orange: the two doors at the ends of this hall are
+   * meant to be the same door, and they were plainly not.
+   *
+   * A group rather than a single slab, because the rest of the kit is the rail,
+   * the hazard stripe and the steel bar, and the leaf on its own is just a red
+   * rectangle. Everything hangs off the leaf's centre, which is what rises, so
+   * the heights below are written as their real height less that.
+   */
+  const exitDoor = new THREE.Group();
   const exitShut = (EXIT.height - 0.04) / 2;
+
+  const exitLeaf = new THREE.Mesh(
+    new THREE.BoxGeometry(0.16, EXIT.height - 0.04, EXIT.width - 0.04),
+    new THREE.MeshStandardMaterial({
+      color: DOOR_RED.leaf,
+      roughness: DOOR_RED.roughness,
+      metalness: DOOR_RED.metalness,
+    })
+  );
+  exitLeaf.castShadow = true;
+  exitLeaf.receiveShadow = true;
+  exitDoor.add(exitLeaf);
+
+  {
+    const doorTrim = new THREE.MeshStandardMaterial({
+      color: DOOR_RED.trim,
+      roughness: 0.5,
+      metalness: 0.2,
+    });
+    const doorHazard = new THREE.MeshStandardMaterial({ color: DOOR_RED.hazard, roughness: 0.7 });
+    // The face you meet it on is +x, into the hall.
+    const face = 0.08;
+
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.1, EXIT.width - 0.24), doorTrim);
+    rail.position.set(face + 0.015, 1.35 - exitShut, 0);
+    exitDoor.add(rail);
+
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.26, EXIT.width - 0.16), doorHazard);
+    stripe.position.set(face + 0.012, 0.22 - exitShut, 0);
+    exitDoor.add(stripe);
+
+    const bar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.032, 0.032, EXIT.width - 0.42, 10),
+      doorTrim
+    );
+    bar.rotation.x = Math.PI / 2;
+    bar.position.set(face + 0.05, 1.05 - exitShut, 0);
+    bar.castShadow = true;
+    exitDoor.add(bar);
+
+    for (const bz of [-1, 1]) {
+      const mount = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.05, 0.05), doorTrim);
+      mount.position.set(face + 0.01, 1.05 - exitShut, bz * ((EXIT.width - 0.44) / 2));
+      exitDoor.add(mount);
+    }
+  }
+
   exitDoor.position.set(END + 0.08, exitShut, AXIS);
   group.add(exitDoor);
   // Gated on where the door actually is rather than on the flag, so it stops

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ROOM, FIXTURE_HEIGHT, MACHINE, DOOR, BACK_DOOR, SIDE_DOOR, BACK_ROOM, LAYER } from './config.js';
+import { ROOM, FIXTURE_HEIGHT, MACHINE, DOOR, BACK_DOOR, SIDE_DOOR, DOOR_RED, BACK_ROOM, LAYER } from './config.js';
 import {
   makeWallSurface,
   makeFloorSurface,
@@ -63,12 +63,17 @@ function buildSideDoor() {
   const { width, height } = SIDE_DOOR;
   const half = width / 2;
 
-  // Authored dark, the same as the ward's green door and for the same reason:
-  // this is lit and tone mapped, and ACES lifts hard through the mids, so a red
-  // picked at the value you want it to read as comes out closer to pink.
-  const leafMat = new THREE.MeshStandardMaterial({ color: '#4a0f0c', roughness: 0.66, metalness: 0.08 });
-  const trim = new THREE.MeshStandardMaterial({ color: '#3b4240', roughness: 0.5, metalness: 0.2 });
-  const hazard = new THREE.MeshStandardMaterial({ color: '#8d7a2e', roughness: 0.7 });
+  // The finish lives in config with the door's dimensions — see DOOR_RED —
+  // because the way out at the far end of the hall through here is built from
+  // the same kit by another file, and a shared fact written twice is a shared
+  // fact that drifts.
+  const leafMat = new THREE.MeshStandardMaterial({
+    color: DOOR_RED.leaf,
+    roughness: DOOR_RED.roughness,
+    metalness: DOOR_RED.metalness,
+  });
+  const trim = new THREE.MeshStandardMaterial({ color: DOOR_RED.trim, roughness: 0.5, metalness: 0.2 });
+  const hazard = new THREE.MeshStandardMaterial({ color: DOOR_RED.hazard, roughness: 0.7 });
 
   for (const side of [-1, 1]) {
     // Hinged at the outer jamb. Turning the group by -side * swing sends both

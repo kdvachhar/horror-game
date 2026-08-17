@@ -124,6 +124,29 @@ export const SIDE_DOOR = {
 };
 
 /**
+ * What the red door is made of, for the doors at both ends of the hall behind
+ * it.
+ *
+ * Shared for the same reason SIDE_DOOR is: two files build these, and a pair of
+ * doors meant to be the same kit stop being it the moment one of them is
+ * retuned. The way out at the far end used to be its own colour with a metalness
+ * of 0.4, and under six red lamps that read as orange — a different door, in a
+ * hall where the doors being the same is the only thing saying you are still
+ * inside the same building.
+ *
+ * Authored dark, like everything else in this project that is lit: ACES lifts
+ * hard through the mids, and a red picked at the value you want it to read as
+ * comes out pink.
+ */
+export const DOOR_RED = {
+  leaf: '#4a0f0c',
+  trim: '#3b4240',
+  hazard: '#8d7a2e',
+  roughness: 0.66,
+  metalness: 0.08,
+};
+
+/**
  * Whether a world position is standing in the back room.
  *
  * The test used to be `z < DOOR.z` — everything past the hall's far wall was

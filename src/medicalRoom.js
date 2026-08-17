@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MEDICAL, BACK_ROOM, BACK_DOOR, DOOR, LAYER } from './config.js';
+import { MEDICAL, BACK_ROOM, BACK_DOOR, DOOR, SIDE_DOOR, LAYER } from './config.js';
 import {
   makeWallSurface,
   makeFloorSurface,
@@ -231,6 +231,42 @@ const WIRE_PATH = [
   // is placed off DOOR rather than off a number that happens to match it.
   [DOOR.width / 2 + 0.5 + 0.9 - MEDICAL.center[0], 0.35, LIT_ROOM.far - 0.15],
   [DOOR.width / 2 + 0.5 + 0.9 - MEDICAL.center[0], 0.95, LIT_ROOM.far - 0.04],
+];
+
+/**
+ * The leg of it that goes to the red hall.
+ *
+ * The run above ends where it always did, at the port beside the doorway you
+ * were carried through, and this tees off it and crosses to the red door in
+ * the side wall. Two legs rather than a reroute, because each is doing a
+ * different job and the trunk's job is not finished: in act one you follow it
+ * across a black room by the one circle of light in the middle, and the place
+ * that circle crosses it is the only thing telling you the cable goes on. Bend
+ * the whole run north to the red door and it never passes under the lamp at
+ * all, and the dark room loses the only readable thing in it.
+ *
+ * The branch is what the wire is for after the power comes back. That is the
+ * beat where the ward goes quiet and the objective becomes *follow the black
+ * wire* again, and until now the only thing the wire pointed at was the way
+ * you had already come. This points at the door the room actually wants you to
+ * open, and then goes under it — see gauntlet.js, which picks it up on the
+ * other side and runs it the length of the hall.
+ *
+ * It tees at a waypoint the trunk already has rather than at a point of its
+ * own, so the junction cannot drift off the cable it is spliced into.
+ */
+const WIRE_TEE = [3.4, WIRE_RADIUS, 13.0];
+const WIRE_BRANCH = [
+  WIRE_TEE,
+  [1.0, WIRE_RADIUS, 12.6],
+  [-1.9, WIRE_RADIUS, 12.2],
+  [-4.8, WIRE_RADIUS, 11.7],
+  [-7.4, WIRE_RADIUS, 11.35],
+  // Under the red door, half a metre off the middle of the opening so it comes
+  // through on the side of the hall it is going to run down. The last point is
+  // the one gauntlet.js starts its own run from, in world terms — the two are
+  // written down in different files and have to meet in the threshold.
+  [SIDE_DOOR.x + 0.1 - MEDICAL.center[0], WIRE_RADIUS, SIDE_DOOR.z - 0.5 - MEDICAL.center[2]],
 ];
 
 
@@ -809,18 +845,53 @@ function buildBlackWire() {
   // when the wire stopped at the store room and one every four once it ran the
   // length of the lit room, which is far enough apart to stop reading as a run.
   const clip = clinicalMaterial('#3a3d3f', 0.6);
-  const clips = Math.round(curve.getLength() / 2.5);
-  for (let i = 1; i < clips; i++) {
-    const at = curve.getPointAt(i / clips);
-    if (at.y > 0.2) continue;
-    const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.06), clip);
-    saddle.position.set(at.x, 0.015, at.z);
-    saddle.rotation.y = Math.random() * Math.PI;
-    // Each clip belongs to whichever room it is screwed down in, same as the
-    // cable it holds.
-    if (at.z >= HALLWAY.far) saddle.layers.set(LAYER.DARK);
-    group.add(saddle);
+  function clipsAlong(along) {
+    const count = Math.round(along.getLength() / 2.5);
+    for (let i = 1; i < count; i++) {
+      const at = along.getPointAt(i / count);
+      if (at.y > 0.2) continue;
+      const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.06), clip);
+      saddle.position.set(at.x, 0.015, at.z);
+      saddle.rotation.y = Math.random() * Math.PI;
+      // Each clip belongs to whichever room it is screwed down in, same as the
+      // cable it holds.
+      if (at.z >= HALLWAY.far) saddle.layers.set(LAYER.DARK);
+      group.add(saddle);
+    }
   }
+  clipsAlong(curve);
+
+  // The branch to the red hall. One piece rather than two, because unlike the
+  // trunk it never leaves the back room: it is all on the dark pass until the
+  // power comes back and the layer sweep in lightUpBackRoom carries it over
+  // with everything else in there.
+  const branch = new THREE.CatmullRomCurve3(
+    WIRE_BRANCH.map((p) => new THREE.Vector3(...p))
+  );
+  const branchWire = new THREE.Mesh(
+    new THREE.TubeGeometry(branch, 90, WIRE_RADIUS, 6, false),
+    new THREE.MeshStandardMaterial({
+      color: '#141517',
+      roughness: 0.75,
+      metalness: 0.05,
+      fog: false,
+    })
+  );
+  branchWire.receiveShadow = true;
+  branchWire.layers.set(LAYER.DARK);
+  group.add(branchWire);
+  clipsAlong(branch);
+
+  // The splice, so the tee is a fitting and not two cables that happen to
+  // touch. Sat on the trunk's own waypoint — see WIRE_TEE.
+  const junction = new THREE.Mesh(
+    new THREE.BoxGeometry(0.3, 0.11, 0.22),
+    clinicalMaterial('#3a3d3f', 0.6)
+  );
+  junction.position.set(WIRE_TEE[0], 0.055, WIRE_TEE[2]);
+  junction.rotation.y = 0.22;
+  junction.layers.set(LAYER.DARK);
+  group.add(junction);
 
   // Where it leaves: a socket in the far wall, the same fitting as the arms'.
   // Both in the dark room, at the far end of it.

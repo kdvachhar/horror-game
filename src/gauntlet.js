@@ -1082,14 +1082,22 @@ export function createGauntlet({ scene, onCaught }) {
   // ------------------------------------------------------------ the wire ---
 
   /**
-   * The black wire, picked up again on this side of the wall.
+   * The black wire, carried on into the hall.
    *
-   * In the medical wing it runs from the television to a port beside the hall
-   * doorway and stops, which is the only place in the level it can stop: it
-   * goes into the wall, and what you do next is find the far side of that wall.
-   * This is the far side of it. Same gauge, same black, same fittings at both
-   * ends, so the thing coming out of the near wall here reads as the thing that
-   * went into the wall there rather than as a second cable.
+   * This is one end of an actual cable and not a matching prop: medicalRoom.js
+   * runs the branch of it across the back room to the red door, and the last
+   * point of that list and the first point of this one are the same place in
+   * the world, written down in two files because the two rooms are built by two
+   * of them. It comes in under the door rather than out of a fitting — the
+   * leaves fold back flat against the wall, so there is nothing in the opening
+   * for it to get past.
+   *
+   * It started life as a separate run that came out of a port in the near wall,
+   * on the story that the wire had gone into the wall on the medical side and
+   * this was the far face of it. It is not: that port is beside the *other*
+   * doorway, twenty metres away across the back room, and the two were never
+   * the same cable. A wire the player is told to follow is exactly the wrong
+   * thing to be loose about.
    *
    * It has a job beyond continuity. **At the fork it picks your lane.** The
    * hall splits into two and nothing else in the room tells you which half is
@@ -1112,17 +1120,22 @@ export function createGauntlet({ scene, onCaught }) {
    * on the other.
    */
   const WIRE_END_Z = AXIS - 1.2;
-  const WIRE_PORT_Z = AXIS - SIDE_DOOR.width / 2 - 0.55;
+  /**
+   * Where it crosses the threshold. Half a metre off the middle of the opening,
+   * on the side of the hall it is about to run down, and the same number
+   * medicalRoom.js ends its branch on — if these two disagree the cable has a
+   * kink in the doorway that neither file can see.
+   */
+  const WIRE_DOOR_Z = AXIS - 0.5;
 
   {
     const r = WIRE_RADIUS;
     const curve = new THREE.CatmullRomCurve3(
       [
-        // Out of the near wall beside the doorway, on your side of it, and down
-        // to the floor.
-        [NEAR - 0.05, 0.95, WIRE_PORT_Z],
-        [NEAR - 0.16, 0.52, WIRE_PORT_Z - 0.04],
-        [NEAR - 0.5, r, WIRE_PORT_Z + 0.06],
+        // Under the red door, starting where the back room's half stops.
+        [SIDE_DOOR.x + 0.1, r, WIRE_DOOR_Z],
+        [NEAR + 0.45, r, WIRE_DOOR_Z - 0.05],
+        [NEAR - 0.6, r, WIRE_DOOR_Z - 0.2],
         // Across the open end of the hall, taking your side before the fork
         // rather than at it.
         [FORK + 3.4, r, AXIS - 0.95],
@@ -1186,27 +1199,14 @@ export function createGauntlet({ scene, onCaught }) {
       group.add(saddle);
     }
 
-    // The fitting it comes out of, which is the one it went into on the other
-    // side of this wall.
     const fittingMat = new THREE.MeshStandardMaterial({
       color: '#4a4d4c',
       roughness: 0.6,
       metalness: 0.05,
     });
-    const port = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.045, 10, 20), fittingMat);
-    port.position.set(NEAR - 0.05, 0.95, WIRE_PORT_Z);
-    port.rotation.y = Math.PI / 2;
-    group.add(port);
 
-    const socket = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.14, 0.14, 0.12, 16),
-      new THREE.MeshStandardMaterial({ color: '#101112', roughness: 0.9 })
-    );
-    socket.rotation.z = Math.PI / 2;
-    socket.position.set(NEAR - 0.02, 0.95, WIRE_PORT_Z);
-    group.add(socket);
-
-    // And the one it goes into, on the panel at the top.
+    // The fitting it goes into, on the panel at the top. The only one in here:
+    // the other end of this run is a doorway, not a wall.
     // A torus is born in the xy plane, so this one already faces the way the
     // wire arrives — along z. Turned flat it read as a washer lying on nothing.
     const tail = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.03, 8, 16), fittingMat);

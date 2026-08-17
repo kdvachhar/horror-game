@@ -136,6 +136,16 @@ const LANE_WALK = laneNear(FRIEND_SIDE) + FRIEND_SIDE * 0.6;
 
 const SHUTTER_HEIGHT = HEIGHT - 0.6;
 const SHUTTER_THICK = 0.14;
+/**
+ * How far a shut shutter hangs clear of the floor.
+ *
+ * For the wire, which runs the length of this lane and has to get under three
+ * of these. The ward door in the medical wing is hung the same way and for the
+ * same reason. It changes nothing about the gate: the collider is on the open
+ * flag rather than on where the curtain is, so this is fourteen centimetres of
+ * daylight and nothing else.
+ */
+const SHUTTER_GAP = 0.14;
 /** How long a shutter takes to roll up. */
 const SHUTTER_SECONDS = 1.1;
 
@@ -327,8 +337,12 @@ function buildShutter() {
     metalness: 0.2,
   });
 
-  // The curtain, which is the part that moves.
+  // The curtain, which is the part that moves. It rests clear of the floor
+  // rather than on it — see SHUTTER_GAP — and this is where that rest is set,
+  // so a shutter is hung correctly from the moment it is built rather than from
+  // the first time the room is wound back.
   const curtain = new THREE.Group();
+  curtain.position.y = SHUTTER_GAP;
   group.add(curtain);
 
   const face = new THREE.Mesh(
@@ -1065,6 +1079,141 @@ export function createGauntlet({ scene, onCaught }) {
     enabled: () => exitDoor.position.y < exitShut + EXIT.height * 0.6,
   });
 
+  // ------------------------------------------------------------ the wire ---
+
+  /**
+   * The black wire, picked up again on this side of the wall.
+   *
+   * In the medical wing it runs from the television to a port beside the hall
+   * doorway and stops, which is the only place in the level it can stop: it
+   * goes into the wall, and what you do next is find the far side of that wall.
+   * This is the far side of it. Same gauge, same black, same fittings at both
+   * ends, so the thing coming out of the near wall here reads as the thing that
+   * went into the wall there rather than as a second cable.
+   *
+   * It has a job beyond continuity. **At the fork it picks your lane.** The
+   * hall splits into two and nothing else in the room tells you which half is
+   * yours before you commit to one; the wire drifts left out of the doorway and
+   * runs the foot of the divider on the player's side the whole way down. And
+   * where it ends is the answer to the room: up the end wall and into the last
+   * button, so from the floor of the end chamber you can look up and see what
+   * you are climbing towards.
+   *
+   * It lies on the floor and the spike wall passes straight over it. That is
+   * the right way round — the cable was run first and the trap was installed on
+   * top of it, and a wire that dodged the wall would be a wire that knew.
+   */
+  const WIRE_RADIUS = 0.055;
+  /** Off the divider, clear of both the gantries and the shutters' travel. */
+  const wireZ = (out) => laneNear(PLAYER_SIDE) + PLAYER_SIDE * (0.35 + out);
+  /**
+   * Where it climbs the end wall. Threaded between two things: the way out
+   * starts 0.35 away on one side, and the final gantry's top pad ends 0.25 away
+   * on the other.
+   */
+  const WIRE_END_Z = AXIS - 1.2;
+  const WIRE_PORT_Z = AXIS - SIDE_DOOR.width / 2 - 0.55;
+
+  {
+    const r = WIRE_RADIUS;
+    const curve = new THREE.CatmullRomCurve3(
+      [
+        // Out of the near wall beside the doorway, on your side of it, and down
+        // to the floor.
+        [NEAR - 0.05, 0.95, WIRE_PORT_Z],
+        [NEAR - 0.16, 0.52, WIRE_PORT_Z - 0.04],
+        [NEAR - 0.5, r, WIRE_PORT_Z + 0.06],
+        // Across the open end of the hall, taking your side before the fork
+        // rather than at it.
+        [FORK + 3.4, r, AXIS - 0.95],
+        [FORK + 1.2, r, wireZ(-0.15)],
+        // Then the length of the divider. The wander is slack: a cable run by
+        // hand along a wall does not hold a line, and one that does reads as
+        // painted on.
+        [FORK - 1.5, r, wireZ(0.08)],
+        [STATIONS[0] + 1, r, wireZ(-0.06)],
+        [STATIONS[0] - 2.5, r, wireZ(0.1)],
+        [STATIONS[1] + 2, r, wireZ(0)],
+        [STATIONS[1] - 2, r, wireZ(0.12)],
+        [STATIONS[2] + 2.5, r, wireZ(-0.05)],
+        [STATIONS[2] - 1.5, r, wireZ(0.09)],
+        [DIVIDER_END + 1.5, r, wireZ(0.02)],
+        // Past the end of the divider it has the whole chamber, but it holds
+        // this line until it is through the final gantry: two of those pads
+        // stand 0.8 out into the lane, and a wire that crossed to the wall any
+        // earlier would run underneath one of them.
+        [DIVIDER_END - 1.5, r, wireZ(-0.05)],
+        [END + 3.2, r, wireZ(-0.05)],
+        // The gap between the third pad and the top one is the only place it
+        // can cross, so it crosses there.
+        [END + 2.4, r, WIRE_END_Z + 0.3],
+        // Up the end wall — the spike wall stops 0.9 short of this, so nothing
+        // that moves ever touches it — and across to the button at the top.
+        [END + 0.45, r, WIRE_END_Z],
+        [END + 0.16, 0.6, WIRE_END_Z],
+        [END + 0.16, 3.4, WIRE_END_Z],
+        [END + 0.16, FINAL_Y - 0.1, WIRE_END_Z - 0.15],
+        [END + 0.16, FINAL_Y, FINAL_Z + 0.34],
+      ].map((p) => new THREE.Vector3(...p))
+    );
+
+    const wire = new THREE.Mesh(
+      // 150 along and 6 around: a segment every 28cm on a 42m run, and six
+      // sides on a tube five centimetres thick. At 220 by 8 this one cable was
+      // a third of the triangles in the hall, for a shape nobody can see the
+      // facets of from the far side of a corridor.
+      new THREE.TubeGeometry(curve, 150, r, 6, false),
+      new THREE.MeshStandardMaterial({ color: '#141517', roughness: 0.75, metalness: 0.05 })
+    );
+    wire.receiveShadow = true;
+    group.add(wire);
+
+    // Clips, so it reads as run rather than dropped. Only the ones lying on the
+    // floor: a saddle sitting in mid-air up the end wall would be a saddle
+    // screwed to nothing.
+    const clipMat = new THREE.MeshStandardMaterial({
+      color: '#3a3d3f',
+      roughness: 0.6,
+      metalness: 0.05,
+    });
+    const clips = Math.round(curve.getLength() / 3.5);
+    for (let i = 1; i < clips; i++) {
+      const at = curve.getPointAt(i / clips);
+      if (at.y > 0.2) continue;
+      const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.06), clipMat);
+      saddle.position.set(at.x, 0.015, at.z);
+      saddle.rotation.y = Math.random() * Math.PI;
+      group.add(saddle);
+    }
+
+    // The fitting it comes out of, which is the one it went into on the other
+    // side of this wall.
+    const fittingMat = new THREE.MeshStandardMaterial({
+      color: '#4a4d4c',
+      roughness: 0.6,
+      metalness: 0.05,
+    });
+    const port = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.045, 10, 20), fittingMat);
+    port.position.set(NEAR - 0.05, 0.95, WIRE_PORT_Z);
+    port.rotation.y = Math.PI / 2;
+    group.add(port);
+
+    const socket = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.14, 0.14, 0.12, 16),
+      new THREE.MeshStandardMaterial({ color: '#101112', roughness: 0.9 })
+    );
+    socket.rotation.z = Math.PI / 2;
+    socket.position.set(NEAR - 0.02, 0.95, WIRE_PORT_Z);
+    group.add(socket);
+
+    // And the one it goes into, on the panel at the top.
+    // A torus is born in the xy plane, so this one already faces the way the
+    // wire arrives — along z. Turned flat it read as a washer lying on nothing.
+    const tail = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.03, 8, 16), fittingMat);
+    tail.position.set(END + 0.16, FINAL_Y, FINAL_Z + 0.34);
+    group.add(tail);
+  }
+
   // ----------------------------------------------------------- spike wall ---
 
   const spikes = buildSpikeWall();
@@ -1164,7 +1313,7 @@ export function createGauntlet({ scene, onCaught }) {
       for (const side of [PLAYER_SIDE, FRIEND_SIDE]) {
         const shutter = station.shutters[side];
         shutter.lift = 0;
-        shutter.curtain.position.y = 0;
+        shutter.curtain.position.y = SHUTTER_GAP;
       }
       station.plate.lid.position.y = 0.105;
     }
@@ -1391,7 +1540,7 @@ export function createGauntlet({ scene, onCaught }) {
             shutter.lift = want > shutter.lift
               ? Math.min(want, shutter.lift + step)
               : Math.max(want, shutter.lift - step);
-            shutter.curtain.position.y = shutter.lift * SHUTTER_HEIGHT;
+            shutter.curtain.position.y = SHUTTER_GAP + shutter.lift * SHUTTER_HEIGHT;
           }
         }
 

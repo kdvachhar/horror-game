@@ -1061,6 +1061,22 @@ export function createGauntlet({ scene, onCaught }) {
   buildClimb(FINAL_CLIMB, END + 1.1, PLAYER_SIDE, CLIMB_DEPTH);
 
   /**
+   * How far the way out slides, and which way.
+   *
+   * To +z, and that is not a free choice. The -z half of the end wall carries
+   * the last switch at x END + 0.14, the top of its climb, and the wire's tail
+   * fitting at END + 0.16 — all of them standing proud of a wall the leaf is
+   * itself 0.16 proud of, so a leaf sent that way travels straight through the
+   * three things the end of this hall is about. The +z half is bare.
+   *
+   * 1.72 is barely more than it has to be: half the leaf plus half the opening
+   * is 1.68, and the hall wall is 2.6 from the axis, which parks the far edge
+   * 0.05 short of the corner. There is no room here for a pair of leaves
+   * parting — one of them would run out of wall.
+   */
+  const EXIT_SLIDE = 1.72;
+
+  /**
    * The way out, held shut by the same button.
    *
    * Built out of the red door's kit — see DOOR_RED — rather than a colour of its
@@ -1070,8 +1086,8 @@ export function createGauntlet({ scene, onCaught }) {
    *
    * A group rather than a single slab, because the rest of the kit is the rail,
    * the hazard stripe and the steel bar, and the leaf on its own is just a red
-   * rectangle. Everything hangs off the leaf's centre, which is what rises, so
-   * the heights below are written as their real height less that.
+   * rectangle. Everything hangs off the leaf's centre, so the heights below are
+   * written as their real height less that.
    */
   const exitDoor = new THREE.Group();
   const exitShut = (EXIT.height - 0.04) / 2;
@@ -1120,15 +1136,59 @@ export function createGauntlet({ scene, onCaught }) {
       mount.position.set(face + 0.01, 1.05 - exitShut, bz * ((EXIT.width - 0.44) / 2));
       exitDoor.add(mount);
     }
+
+    // Hangers, up off the top edge to the track. They travel with the leaf —
+    // they are what is holding it — and they are most of what says this thing
+    // goes sideways before it ever moves. Without them the leaf is a slab with
+    // nothing above it that slides for no visible reason.
+    for (const bz of [-1, 1]) {
+      const hanger = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.19, 0.14), doorTrim);
+      hanger.position.set(-0.02, EXIT.height + 0.07 - exitShut, bz * 0.6);
+      hanger.castShadow = true;
+      exitDoor.add(hanger);
+    }
   }
 
   exitDoor.position.set(END + 0.08, exitShut, AXIS);
   group.add(exitDoor);
-  // Gated on where the door actually is rather than on the flag, so it stops
-  // being solid as it clears your head and not two seconds before.
-  solid(END, END + 0.2, exitLow, exitHigh, {
-    enabled: () => exitDoor.position.y < exitShut + EXIT.height * 0.6,
-  });
+
+  // The track it hangs from, on the wall above and long enough to hold the
+  // leaf at both ends of its travel — a rail that stopped at the opening would
+  // leave an open door hanging off the end of nothing.
+  {
+    const trackNear = exitLow - 0.12;
+    // Stopped just short of the corner rather than a hanger's width past the
+    // parked leaf: the two are within a couple of centimetres of each other
+    // here, and the wall is the one that cannot give.
+    const trackFar = AXIS + HALF - 0.04;
+    const track = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.11, trackFar - trackNear),
+      new THREE.MeshStandardMaterial({ color: DOOR_RED.trim, roughness: 0.5, metalness: 0.2 })
+    );
+    // Flush with the wall face, so it does not poke out of the far side of it.
+    track.position.set(END + 0.05, EXIT.height + 0.13, (trackNear + trackFar) / 2);
+    track.castShadow = true;
+    group.add(track);
+  }
+
+  /**
+   * The leaf is solid wherever it happens to be, rather than a fixed box across
+   * the opening that switches itself off once the door is far enough along.
+   *
+   * It slides across the inside face of the end wall and parks there standing
+   * 0.16 proud of it, so a gate on the flag would leave you walking through a
+   * door you are looking straight at. The box moves with it instead. The player
+   * and the friend both read `colliders` fresh every frame, so mutating it is
+   * enough — nothing has to be told.
+   */
+  const exitBox = { minX: END, maxX: END + 0.2, minZ: AXIS, maxZ: AXIS };
+  colliders.push(exitBox);
+  const carryExitBox = () => {
+    const half = (EXIT.width - 0.04) / 2;
+    exitBox.minZ = exitDoor.position.z - half;
+    exitBox.maxZ = exitDoor.position.z + half;
+  };
+  carryExitBox();
 
   // ------------------------------------------------------------ the wire ---
 
@@ -1370,7 +1430,8 @@ export function createGauntlet({ scene, onCaught }) {
     }
     finalPanel.lampMat.emissive.set('#000000');
     finalPanel.halo.material.color.set(SWITCH_IDLE);
-    exitDoor.position.y = exitShut;
+    exitDoor.position.z = AXIS;
+    carryExitBox();
   }
 
   return {
@@ -1628,7 +1689,8 @@ export function createGauntlet({ scene, onCaught }) {
       }
 
       if (solved) {
-        exitDoor.position.y += (EXIT.height + 0.4 - exitDoor.position.y) * Math.min(1, delta * 2.2);
+        exitDoor.position.z += (AXIS + EXIT_SLIDE - exitDoor.position.z) * Math.min(1, delta * 2.2);
+        carryExitBox();
       }
     },
   };

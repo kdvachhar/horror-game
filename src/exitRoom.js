@@ -363,23 +363,44 @@ export function createExitRoom({ scene, doorway }) {
 
   // ----------------------------------------------------------------- button ---
 
-  const PLINTH_X = near - 2.4;
-  const PLINTH_TOP = 1.02;
+  /**
+   * On the wall beside the set, rather than on a plinth out in the room.
+   *
+   * It stood on the floor by the door first, which put six metres between the
+   * thing you press and the thing that answers: you pushed a button, and then
+   * watched a screen come on at the other end of the room. Beside it you are at
+   * arm's length from the face when it opens its eyes, and the arms come out of
+   * the wall on either side of where you are standing. The walk up to the set
+   * is now the walk to the button, which is the same walk either way — but you
+   * arrive before it wakes rather than after.
+   *
+   * In the gap between the casing and the near arm's port, and the gap is
+   * narrow: the set reaches 1.9 from the middle of that wall and the port ring
+   * is 0.43 across its tube, so there are 0.57 of bare wall between them and
+   * this is the middle of it. Centred on 2.4 the plate touched the ring.
+   */
+  const BUTTON_Z = axis + 2.185;
+  const BUTTON_Y = 1.3;
+  /** How far off the wall the face of it stands. */
+  const BUTTON_OUT = 0.11;
 
-  const plinth = new THREE.Mesh(new THREE.BoxGeometry(0.5, PLINTH_TOP, 0.5), deskMat);
-  plinth.position.set(PLINTH_X, PLINTH_TOP / 2, axis);
-  plinth.castShadow = true;
-  plinth.receiveShadow = true;
-  group.add(plinth);
-  solid(PLINTH_X - 0.25, PLINTH_X + 0.25, axis - 0.25, axis + 0.25, { top: PLINTH_TOP });
+  const backplate = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.4, 0.4), deskMat);
+  backplate.position.set(far + 0.035, BUTTON_Y, BUTTON_Z);
+  backplate.castShadow = true;
+  backplate.receiveShadow = true;
+  group.add(backplate);
 
+  // A quarter turn on everything below: a cylinder is born standing up, and a
+  // button on a wall lies on its side pointing into the room.
   const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 0.06, 16), trimMat);
-  collar.position.set(PLINTH_X, PLINTH_TOP + 0.03, axis);
+  collar.rotation.z = Math.PI / 2;
+  collar.position.set(far + BUTTON_OUT - 0.06, BUTTON_Y, BUTTON_Z);
   group.add(collar);
 
   const capMat = new THREE.MeshStandardMaterial({ color: '#5e1410', roughness: 0.45 });
   const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.09, 16), capMat);
-  cap.position.set(PLINTH_X, PLINTH_TOP + 0.1, axis);
+  cap.rotation.z = Math.PI / 2;
+  cap.position.set(far + BUTTON_OUT, BUTTON_Y, BUTTON_Z);
   group.add(cap);
 
   // The state light is a ring round the cap and not the cap itself. Red to
@@ -392,12 +413,12 @@ export function createExitRoom({ scene, doorway }) {
     emissive: '#000000',
   });
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.155, 0.022, 8, 20), ringMat);
-  ring.rotation.x = Math.PI / 2;
-  ring.position.set(PLINTH_X, PLINTH_TOP + 0.055, axis);
+  ring.rotation.y = Math.PI / 2;
+  ring.position.set(far + BUTTON_OUT - 0.045, BUTTON_Y, BUTTON_Z);
   group.add(ring);
 
   interactions.push({
-    position: new THREE.Vector3(PLINTH_X, PLINTH_TOP + 0.1, axis),
+    position: new THREE.Vector3(far + BUTTON_OUT, BUTTON_Y, BUTTON_Z),
     label: 'Press the button',
     range: 1.5,
     once: false,
@@ -409,7 +430,8 @@ export function createExitRoom({ scene, doorway }) {
       playWardDoor(0.6);
       ringMat.color.set('#2fd46a');
       ringMat.emissive.set('#12561f');
-      cap.position.y = PLINTH_TOP + 0.075;
+      // It goes in, rather than down.
+      cap.position.x = far + BUTTON_OUT - 0.025;
       // A beat before it says anything. Screens take a moment to come up, and
       // the face arriving in silence and *then* speaking is a great deal worse
       // to be in a room with than one that talks the instant it appears.
@@ -466,7 +488,7 @@ export function createExitRoom({ scene, doorway }) {
       tubeMat.emissive.set('#000000');
       ringMat.color.set('#8e1a12');
       ringMat.emissive.set('#000000');
-      cap.position.y = PLINTH_TOP + 0.1;
+      cap.position.x = far + BUTTON_OUT;
     },
 
     get isSpeaking() {

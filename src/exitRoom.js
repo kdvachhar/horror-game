@@ -9,6 +9,7 @@ import { setObjective, showNote } from './hud.js';
 import { playButtonPress, playWardDoor } from './audio.js';
 import { buildTelevision, createScreenLife } from './screenFace.js';
 import { createWallArms } from './wallArms.js';
+import { blackWireMaterial, buildWirePort } from './wire.js';
 
 /**
  * The room on the other side of the red hall's way out.
@@ -283,6 +284,82 @@ export function createExitRoom({ scene, doorway }) {
   const conduit = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 1.5, 6), trimMat);
   conduit.position.set(far + 0.12, 0.75, axis - 0.9);
   group.add(conduit);
+
+  // ------------------------------------------------------------- the wire ---
+
+  /**
+   * The black wire, arriving.
+   *
+   * The far end of the cable that comes out of the television in the ward. It
+   * crosses the back room, goes under the red door, runs the whole length of the
+   * red hall at the foot of the divider, and goes into the wall beside the way
+   * out; this is it coming out of the other face of that wall and going into the
+   * set on the end wall in here.
+   *
+   * That is the only reason it is worth having. Two screens with the same face
+   * on them are a repeated prop; two screens with one cable between them are one
+   * thing in two places, and the cable is the only part of that claim the player
+   * can check. It is the last thing you walked past on the way in.
+   *
+   * The hole is not written down here. gauntlet.js hands its z, its height and
+   * the cable's thickness over with the doorway, because it is the same hole
+   * seen from the other side and a second opinion about where it is would put a
+   * kink inside a wall that neither file can see.
+   */
+  {
+    const { z: portZ, y: portY, radius: r } = doorway.wire;
+
+    const port = buildWirePort();
+    port.position.set(near - 0.02, portY, portZ);
+    // Turned to face into the room: the hall's one faces back up the hall.
+    port.rotation.y = Math.PI;
+    group.add(port);
+
+    // Out of the wall, down to the floor, along the room a little wide of the
+    // desk, and up the far wall into the underside of the casing among the
+    // loose wires already hanging off it.
+    const RUN_Z = axis - 1.45;
+    const curve = new THREE.CatmullRomCurve3(
+      [
+        [near - 0.14, portY, portZ],
+        [near - 0.55, 0.24, portZ - 0.08],
+        [near - 1.3, r, axis - 1.36],
+        [near - 3.2, r, RUN_Z - 0.06],
+        [far + 2.2, r, RUN_Z + 0.05],
+        [far + 0.62, r, RUN_Z],
+        [far + 0.16, 0.26, RUN_Z],
+        [far + 0.1, 0.86, RUN_Z],
+        // Six centimetres past the bottom edge of the casing, so it ends inside
+        // the set rather than against it.
+        [far + 0.13, 1.16, RUN_Z + 0.05],
+      ].map((p) => new THREE.Vector3(...p))
+    );
+
+    const wire = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, 90, r, 6, false),
+      blackWireMaterial()
+    );
+    wire.castShadow = true;
+    wire.receiveShadow = true;
+    group.add(wire);
+
+    // Clips on the floor run only — a saddle screwed to mid-air up the wall
+    // would be a saddle screwed to nothing.
+    const clipMat = new THREE.MeshStandardMaterial({
+      color: '#3a3d3f',
+      roughness: 0.6,
+      metalness: 0.05,
+    });
+    const clips = Math.round(curve.getLength() / 2.5);
+    for (let i = 1; i < clips; i++) {
+      const at = curve.getPointAt(i / clips);
+      if (at.y > 0.2) continue;
+      const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.06), clipMat);
+      saddle.position.set(at.x, 0.015, at.z);
+      saddle.rotation.y = Math.random() * Math.PI;
+      group.add(saddle);
+    }
+  }
 
   // ----------------------------------------------------------------- button ---
 

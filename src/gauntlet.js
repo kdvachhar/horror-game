@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { SIDE_DOOR, DOOR_RED, PLAYER, LAYER } from './config.js';
+import { WIRE_RADIUS, blackWireMaterial, buildWirePort } from './wire.js';
 import {
   makeWallSurface,
   makeFloorSurface,
@@ -1213,24 +1214,35 @@ export function createGauntlet({ scene, onCaught }) {
    * It has a job beyond continuity. **At the fork it picks your lane.** The
    * hall splits into two and nothing else in the room tells you which half is
    * yours before you commit to one; the wire drifts left out of the doorway and
-   * runs the foot of the divider on the player's side the whole way down. And
-   * where it ends is the answer to the room: up the end wall and into the last
-   * button, so from the floor of the end chamber you can look up and see what
-   * you are climbing towards.
+   * runs the foot of the divider on the player's side the whole way down.
+   *
+   * It used to climb the end wall and finish at the last button, which made it
+   * a sign pointing at the thing you have to reach. It goes through the end wall
+   * instead now, because the far end of this cable is the television in the room
+   * behind — the same screen, the same character, wired to the one in the ward
+   * by an actual cable you have walked the whole length of. Losing the arrow was
+   * worth that: the button is a lit panel on a lit wall at the top of a climb
+   * you can see all of, and it was never hard to find.
    *
    * It lies on the floor and the spike wall passes straight over it. That is
    * the right way round — the cable was run first and the trap was installed on
    * top of it, and a wire that dodged the wall would be a wire that knew.
    */
-  const WIRE_RADIUS = 0.055;
   /** Off the divider, clear of both the gantries and the shutters' travel. */
   const wireZ = (out) => laneNear(PLAYER_SIDE) + PLAYER_SIDE * (0.35 + out);
   /**
-   * Where it climbs the end wall. Threaded between two things: the way out
+   * Where it meets the end wall. Threaded between two things: the way out
    * starts 0.35 away on one side, and the final gantry's top pad ends 0.25 away
    * on the other.
    */
   const WIRE_END_Z = AXIS - 1.2;
+  /**
+   * How high up the wall it goes in. Low, so that the rise out of the floor is
+   * short and you can see both the cable and the fitting from standing height
+   * without looking up — and so the run on the far side comes out of the wall at
+   * a height that means something to a room with a desk in it.
+   */
+  const WIRE_PORT_Y = 0.55;
   /**
    * Where it crosses the threshold. Half a metre off the middle of the opening,
    * on the side of the hall it is about to run down, and the same number
@@ -1271,13 +1283,12 @@ export function createGauntlet({ scene, onCaught }) {
         // The gap between the third pad and the top one is the only place it
         // can cross, so it crosses there.
         [END + 2.4, r, WIRE_END_Z + 0.3],
-        // Up the end wall — the spike wall stops 0.9 short of this, so nothing
-        // that moves ever touches it — and across to the button at the top.
-        [END + 0.45, r, WIRE_END_Z],
-        [END + 0.16, 0.6, WIRE_END_Z],
-        [END + 0.16, 3.4, WIRE_END_Z],
-        [END + 0.16, FINAL_Y - 0.1, WIRE_END_Z - 0.15],
-        [END + 0.16, FINAL_Y, FINAL_Z + 0.34],
+        // And a short rise off the floor into the wall. It leaves the floor
+        // after the spike wall's last position — that stops 0.9 short of here —
+        // so nothing that moves ever touches anything but the flat of it.
+        [END + 0.6, r, WIRE_END_Z],
+        [END + 0.32, 0.2, WIRE_END_Z],
+        [END + 0.14, WIRE_PORT_Y, WIRE_END_Z],
       ].map((p) => new THREE.Vector3(...p))
     );
 
@@ -1287,7 +1298,7 @@ export function createGauntlet({ scene, onCaught }) {
       // a third of the triangles in the hall, for a shape nobody can see the
       // facets of from the far side of a corridor.
       new THREE.TubeGeometry(curve, 150, r, 6, false),
-      new THREE.MeshStandardMaterial({ color: '#141517', roughness: 0.75, metalness: 0.05 })
+      blackWireMaterial()
     );
     wire.receiveShadow = true;
     group.add(wire);
@@ -1310,19 +1321,13 @@ export function createGauntlet({ scene, onCaught }) {
       group.add(saddle);
     }
 
-    const fittingMat = new THREE.MeshStandardMaterial({
-      color: '#4a4d4c',
-      roughness: 0.6,
-      metalness: 0.05,
-    });
-
-    // The fitting it goes into, on the panel at the top. The only one in here:
-    // the other end of this run is a doorway, not a wall.
-    // A torus is born in the xy plane, so this one already faces the way the
-    // wire arrives — along z. Turned flat it read as a washer lying on nothing.
-    const tail = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.03, 8, 16), fittingMat);
-    tail.position.set(END + 0.16, FINAL_Y, FINAL_Z + 0.34);
-    group.add(tail);
+    // The port it goes into, beside the way out. exitRoom.js puts the same
+    // fitting on the other face of this wall, at the same height and the same
+    // z, and runs the cable on from there — it is handed both numbers with the
+    // doorway, so the two halves cannot end up describing different holes.
+    const port = buildWirePort();
+    port.position.set(END + 0.02, WIRE_PORT_Y, WIRE_END_Z);
+    group.add(port);
   }
 
   // ----------------------------------------------------------- spike wall ---
@@ -1498,6 +1503,12 @@ export function createGauntlet({ scene, onCaught }) {
         z: AXIS,
         width: EXIT.width,
         height: EXIT.height,
+        /**
+         * And where the black wire goes into the wall this doorway is cut
+         * through, so whoever builds the far side can pick it up out of the
+         * same hole rather than guessing at one.
+         */
+        wire: { z: WIRE_END_Z, y: WIRE_PORT_Y, radius: WIRE_RADIUS },
       };
     },
 

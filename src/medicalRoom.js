@@ -14,6 +14,7 @@ import {
 import { buildHand } from './glove.js';
 import { buildTelevision, createScreenLife } from './screenFace.js';
 import { createWallArms } from './wallArms.js';
+import { WIRE_RADIUS, blackWireMaterial } from './wire.js';
 import { playButtonPress, playWardDoor } from './audio.js';
 
 /**
@@ -205,7 +206,6 @@ if (import.meta.env?.DEV) {
  */
 const SHARED_WALL_GAP = 0.03;
 
-const WIRE_RADIUS = 0.055;
 const WIRE_PATH = [
   // Out of the television, down the wall.
   [0.45, 1.05, -5.15],
@@ -455,14 +455,7 @@ function buildBlackWire() {
         8,
         false
       ),
-      new THREE.MeshStandardMaterial({
-        color: '#141517',
-        roughness: 0.75,
-        metalness: 0.05,
-        // Fog is distance tinting and takes no notice of light, so on an unlit
-        // cable in an unlit room it is the only thing you would see of it.
-        fog: !inDarkRoom,
-      })
+      blackWireMaterial({ fog: !inDarkRoom })
     );
     half.castShadow = true;
     half.receiveShadow = true;

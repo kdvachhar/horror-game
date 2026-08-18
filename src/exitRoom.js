@@ -364,43 +364,45 @@ export function createExitRoom({ scene, doorway }) {
   // ----------------------------------------------------------------- button ---
 
   /**
-   * On the wall beside the set, rather than on a plinth out in the room.
+   * On the right-hand wall — right as you come in, which is the only way in.
    *
-   * It stood on the floor by the door first, which put six metres between the
-   * thing you press and the thing that answers: you pushed a button, and then
-   * watched a screen come on at the other end of the room. Beside it you are at
-   * arm's length from the face when it opens its eyes, and the arms come out of
-   * the wall on either side of where you are standing. The walk up to the set
-   * is now the walk to the button, which is the same walk either way — but you
-   * arrive before it wakes rather than after.
+   * It has been three places now and each move was the same argument. On a
+   * plinth in the middle of the floor it put six metres between the thing you
+   * press and the thing that answers; on the end wall beside the set it was
+   * close, but wedged into 0.57 of bare wall between the casing and an arm port
+   * with nothing either side of it to spare. Here it has the whole wall, it is
+   * on your right hand as you walk in, and it is still level with the set: you
+   * turn to press it and the face comes on beside you rather than behind you.
    *
-   * In the gap between the casing and the near arm's port, and the gap is
-   * narrow: the set reaches 1.9 from the middle of that wall and the port ring
-   * is 0.43 across its tube, so there are 0.57 of bare wall between them and
-   * this is the middle of it. Centred on 2.4 the plate touched the ring.
+   * The wall runs the depth of the room and there is nothing else on it, so the
+   * only number worth arguing about is how far down it goes. Two metres in from
+   * the end wall keeps it in the half of the room the console is in, which is
+   * where you are looking when you arrive.
    */
-  const BUTTON_Z = axis + 2.185;
+  const BUTTON_WALL_Z = axis - HALF_WIDTH;
+  const BUTTON_X = far + 2.0;
   const BUTTON_Y = 1.3;
   /** How far off the wall the face of it stands. */
   const BUTTON_OUT = 0.11;
 
-  const backplate = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.4, 0.4), deskMat);
-  backplate.position.set(far + 0.035, BUTTON_Y, BUTTON_Z);
+  const backplate = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.07), deskMat);
+  backplate.position.set(BUTTON_X, BUTTON_Y, BUTTON_WALL_Z + 0.035);
   backplate.castShadow = true;
   backplate.receiveShadow = true;
   group.add(backplate);
 
-  // A quarter turn on everything below: a cylinder is born standing up, and a
-  // button on a wall lies on its side pointing into the room.
+  // A quarter turn on the two cylinders: one is born standing up, and a button
+  // on a wall lies on its side pointing into the room. The ring needs none —
+  // a torus is born in the xy plane, which is this wall.
   const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 0.06, 16), trimMat);
-  collar.rotation.z = Math.PI / 2;
-  collar.position.set(far + BUTTON_OUT - 0.06, BUTTON_Y, BUTTON_Z);
+  collar.rotation.x = Math.PI / 2;
+  collar.position.set(BUTTON_X, BUTTON_Y, BUTTON_WALL_Z + BUTTON_OUT - 0.06);
   group.add(collar);
 
   const capMat = new THREE.MeshStandardMaterial({ color: '#5e1410', roughness: 0.45 });
   const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.09, 16), capMat);
-  cap.rotation.z = Math.PI / 2;
-  cap.position.set(far + BUTTON_OUT, BUTTON_Y, BUTTON_Z);
+  cap.rotation.x = Math.PI / 2;
+  cap.position.set(BUTTON_X, BUTTON_Y, BUTTON_WALL_Z + BUTTON_OUT);
   group.add(cap);
 
   // The state light is a ring round the cap and not the cap itself. Red to
@@ -413,12 +415,11 @@ export function createExitRoom({ scene, doorway }) {
     emissive: '#000000',
   });
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.155, 0.022, 8, 20), ringMat);
-  ring.rotation.y = Math.PI / 2;
-  ring.position.set(far + BUTTON_OUT - 0.045, BUTTON_Y, BUTTON_Z);
+  ring.position.set(BUTTON_X, BUTTON_Y, BUTTON_WALL_Z + BUTTON_OUT - 0.045);
   group.add(ring);
 
   interactions.push({
-    position: new THREE.Vector3(far + BUTTON_OUT, BUTTON_Y, BUTTON_Z),
+    position: new THREE.Vector3(BUTTON_X, BUTTON_Y, BUTTON_WALL_Z + BUTTON_OUT),
     label: 'Press the button',
     range: 1.5,
     once: false,
@@ -431,7 +432,7 @@ export function createExitRoom({ scene, doorway }) {
       ringMat.color.set('#2fd46a');
       ringMat.emissive.set('#12561f');
       // It goes in, rather than down.
-      cap.position.x = far + BUTTON_OUT - 0.025;
+      cap.position.z = BUTTON_WALL_Z + BUTTON_OUT - 0.025;
       // A beat before it says anything. Screens take a moment to come up, and
       // the face arriving in silence and *then* speaking is a great deal worse
       // to be in a room with than one that talks the instant it appears.
@@ -488,7 +489,7 @@ export function createExitRoom({ scene, doorway }) {
       tubeMat.emissive.set('#000000');
       ringMat.color.set('#8e1a12');
       ringMat.emissive.set('#000000');
-      cap.position.x = far + BUTTON_OUT;
+      cap.position.z = BUTTON_WALL_Z + BUTTON_OUT;
     },
 
     get isSpeaking() {

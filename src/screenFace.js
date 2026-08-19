@@ -82,7 +82,7 @@ export function buildScreenFace() {
     eye.add(closed);
 
     group.add(eye);
-    eyes.push({ group: eye, open, closed });
+    eyes.push({ group: eye, open, cap, closed });
     faceParts.push(cap, stem, closed);
   }
 
@@ -232,6 +232,8 @@ export function createScreenLife({ eyes, mouth, faceParts, glow = null, glowLeve
   // 1 is open, 0 is shut. Eased, so it reads as eyes closing rather than the
   // eyes simply being replaced by two dashes between frames.
   let eyesOpen = 1;
+  // And how hard it is scowling, on lines that ask for it.
+  let browed = 0;
 
   return {
     speak(lines, onFinished) {
@@ -263,6 +265,22 @@ export function createScreenLife({ eyes, mouth, faceParts, glow = null, glowLeve
       }
       if (glow) glow.intensity = glowLevel * level * lit;
 
+      /**
+       * The frown, on any line that asks for one.
+       *
+       * The eyes lean into each other rather than growing brows above
+       * themselves. Brows were the first attempt and they had nowhere to go:
+       * the caps already reach within a finger's width of the top of the glass,
+       * and a bar above them sat on the bezel — the face drawn on the casing,
+       * which is the one mistake this character cannot survive twice.
+       *
+       * Leaning costs no room and the cap is a brow already: tip the plug and
+       * its wide top bar comes down over the inside corner of the eye, which is
+       * the whole of an angry face. It works shut as well as open, because it
+       * is the eye that turns and not something stuck on the front of it.
+       */
+      browed += ((speech.line?.frown ? 1 : 0) - browed) * (1 - Math.exp(-9 * delta));
+
       // It watches. The eyes track slowly from side to side.
       const look = Math.sin(time * 0.55) * 0.07;
 
@@ -275,6 +293,15 @@ export function createScreenLife({ eyes, mouth, faceParts, glow = null, glowLeve
       eyes.forEach((eye, i) => {
         eye.group.position.x = (i === 0 ? -0.42 : 0.42) + look;
 
+        // The cap turns and drops, and the stem stays where it is. Leaning the
+        // whole plug was the first go and it read as two eyes falling towards
+        // each other rather than as a scowl — it is the bar across the top that
+        // is doing the work, and it does it best over a stem that has not
+        // moved. Inner ends down, so the pair make a V.
+        const turn = i === 0 ? -1 : 1;
+        eye.cap.rotation.z = turn * 0.5 * browed;
+        eye.cap.position.y = 0.3 - 0.06 * browed;
+
         // The open eye squashes shut and the arc grows in behind it, so the
         // two swap over mid-blink rather than one popping in on the other.
         eye.open.scale.y = Math.max(0.001, eyesOpen);
@@ -282,7 +309,12 @@ export function createScreenLife({ eyes, mouth, faceParts, glow = null, glowLeve
 
         const shut = Math.min(1, Math.max(0, (0.5 - eyesOpen) / 0.42));
         eye.closed.visible = shut > 0.01;
-        eye.closed.scale.set(shut, shut, 1);
+        // And the shut eye turns over when it is scowling. Flat edge down with
+        // the curve on top is a face pleased with itself; the same arc the
+        // other way up is the same face not. Flipped by taking the scale
+        // through zero rather than by spinning it, so it redraws itself
+        // inverted instead of rolling over on its side on the way.
+        eye.closed.scale.set(shut, shut * (1 - 2 * browed), 1);
       });
 
       // The mouth is shaped to the syllable actually being spoken: a rounded
@@ -296,7 +328,7 @@ export function createScreenLife({ eyes, mouth, faceParts, glow = null, glowLeve
       // 0.3 keeps the lips together rather than collapsing the mouth to a line.
       mouth.scale.set(mouthWide, 0.3 + mouthOpen * 1.5, 1);
 
-      return { level, mouthOpen, mouthWide, eyesOpen };
+      return { level, mouthOpen, mouthWide, eyesOpen, browed };
     },
   };
 }

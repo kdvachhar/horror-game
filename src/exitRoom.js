@@ -57,24 +57,26 @@ const TRIM = '#3c4147';
  * that on request is a menu rather than a character.
  */
 const CONSOLE_LINES = [
-  { text: 'You made it.', hold: 1.6 },
-  { text: 'Sorry about the trouble getting here.', hold: 2.0, eyes: 'closed' },
-  { text: 'That spike wall used to be a scanner.', hold: 2.0 },
-  { text: 'It would close the door and send the children back.', hold: 2.6 },
+  { text: 'You made it.', hold: 1.6, frown: true },
+  { text: 'Sorry about the trouble getting here.', hold: 2.0, eyes: 'closed', frown: true },
+  { text: 'That spike wall used to be a scanner.', hold: 2.0, frown: true },
+  { text: 'It would close the door and send the children back.', hold: 2.6, frown: true },
   // Split at the comma rather than mid-clause. The voice takes its pauses from
   // the punctuation, so a line cut anywhere else is heard as a stumble.
   {
     text: 'Eventually, the smarter experiments replaced it with spikes,',
     hold: 1.2,
     arms: 'crossed',
+    frown: true,
   },
   {
     text: 'to kill all the remaining people in the building.',
     hold: 2.8,
     arms: 'crossed',
     eyes: 'closed',
+    frown: true,
   },
-  { text: 'Anyway. Go through this door to your next challenge.', hold: 2.6 },
+  { text: 'Anyway. Go through this door to your next challenge.', hold: 2.6, frown: true },
 ];
 
 export function createExitRoom({ scene, doorway }) {

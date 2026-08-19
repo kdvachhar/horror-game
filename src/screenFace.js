@@ -313,21 +313,11 @@ export function createScreenLife({ eyes, mouth, faceParts, glow = null, glowLeve
       eyes.forEach((eye, i) => {
         eye.group.position.x = (i === 0 ? -0.42 : 0.42) + look;
 
-        /**
-         * The cap turns and drops, and the stem stays where it is.
-         *
-         * Inner ends *up*, which is the whole difference between the two faces
-         * that can be made out of a pair of tilted bars: inner ends down is
-         * angry, and this thing is not angry with you. It is sorry, in the way
-         * something is sorry when it is explaining what it did.
-         *
-         * Leaning the whole plug was an earlier go and it read as two eyes
-         * falling towards each other — it is the bar across the top doing the
-         * work, and it does it best over a stem that has not moved.
-         */
-        const turn = i === 0 ? 1 : -1;
-        eye.cap.rotation.z = turn * 0.45 * browed;
-        eye.cap.position.y = 0.3 - 0.05 * browed;
+        // The eyes are left alone. The caps used to turn with the frown — down
+        // for a scowl first, then up when that came out angry — and both were
+        // the same mistake: this face says one thing at a time. The mouth is
+        // what turns over, and a pair of brows editorialising over the top of
+        // it is a second opinion nobody asked the face for.
 
         // The open eye squashes shut and the arc grows in behind it, so the
         // two swap over mid-blink rather than one popping in on the other.

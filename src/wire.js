@@ -104,6 +104,20 @@ const PULSE_SPEED = 5.5;
  * Asymmetric on purpose. A symmetrical blob has no direction and reads as a
  * bead on a string; the tail is what makes it a thing travelling.
  */
+/**
+ * How bright the charge is, `t` of the way through one pulse. Head at 0.5,
+ * sharp in front and smeared behind.
+ *
+ * A function rather than a shape baked into the canvas, because the far end of
+ * the run has to be able to ask what is arriving *right now* — see `arrival`.
+ * Reading it back off the texture would mean reading a pixel; this is the same
+ * number the pixel was drawn from.
+ */
+function pulseProfile(t) {
+  const d = t - 0.5;
+  return d > 0 ? Math.exp(-((d / 0.03) ** 2)) : Math.exp(-((-d / 0.1) ** 1.3));
+}
+
 function pulseTexture() {
   const width = 128;
   const canvas = document.createElement('canvas');
@@ -112,11 +126,7 @@ function pulseTexture() {
   const ctx = canvas.getContext('2d');
   const image = ctx.createImageData(width, 1);
   for (let i = 0; i < width; i++) {
-    const t = i / width;
-    // Head at 0.5, sharp in front and smeared behind.
-    const d = t - 0.5;
-    const level = d > 0 ? Math.exp(-((d / 0.03) ** 2)) : Math.exp(-((-d / 0.1) ** 1.3));
-    const v = Math.round(255 * Math.min(1, level));
+    const v = Math.round(255 * Math.min(1, pulseProfile(i / width)));
     image.data.set([v, v, v, 255], i * 4);
   }
   ctx.putImageData(image, 0, 0);
@@ -156,6 +166,27 @@ export function chargeWire(mesh, metres) {
   mesh.material.needsUpdate = true;
 
   strands.push({ material: mesh.material, map, metres });
+
+  return {
+    /**
+     * What is arriving at the far end of this stretch this frame, 0 to 1.
+     *
+     * The charge has to land on something. A pulse that travels the length of
+     * the building and then stops being drawn at the last vertex is a pulse
+     * that goes nowhere; whatever is on the end of the cable asks this every
+     * frame and does something with it — in the room behind the hall the face
+     * brightens on every one, which is the whole point of the cable being
+     * plugged into it.
+     *
+     * The value at u = 1 is the pattern at repeat + offset, and the fraction of
+     * that is where in a pulse the end of the cable currently sits.
+     */
+    arrival() {
+      if (level === 0) return 0;
+      const at = metres / PULSE_SPACING + travelled / PULSE_SPACING;
+      return level * pulseProfile(at - Math.floor(at));
+    },
+  };
 }
 
 /** Turn the whole run on or off. It fades rather than snapping. */

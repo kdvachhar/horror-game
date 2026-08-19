@@ -7,7 +7,7 @@ import {
 } from './textures.js';
 import { setObjective, showNote } from './hud.js';
 import { playButtonPress, playWardDoor } from './audio.js';
-import { buildTelevision, createScreenLife } from './screenFace.js';
+import { buildTelevision, createScreenLife, FACE } from './screenFace.js';
 import { createWallArms } from './wallArms.js';
 import { blackWireMaterial, buildWirePort, chargeWire, setWireCurrent } from './wire.js';
 
@@ -228,6 +228,13 @@ export function createExitRoom({ scene, doorway }) {
   television.group.rotation.y = Math.PI / 2;
   group.add(television.group);
 
+  // The dead tube's own colour, kept so the charge landing can be measured from
+  // it rather than from a second copy of the number screenFace.js picked — and
+  // what it lifts towards, which is the face's green because it is the face's
+  // charge arriving.
+  const screenBase = television.screen.material.color.clone();
+  const SURGE = new THREE.Color(FACE);
+
   // Its glow is part of the set, so it comes with it — that is a second light
   // in this room and it is not free, because in a forward renderer every light
   // is shaded on every surface in the world. It is worth it: the green thrown
@@ -306,6 +313,22 @@ export function createExitRoom({ scene, doorway }) {
    * seen from the other side and a second opinion about where it is would put a
    * kink inside a wall that neither file can see.
    */
+  /**
+   * What is landing at the end of the cable, this frame. Driven into the face
+   * below — the charge does not stop at the last vertex, it goes into him.
+   */
+  let arrival = () => 0;
+  /**
+   * The last charge to land, decaying.
+   *
+   * Held rather than read straight off the cable. The pulse has a hard front —
+   * eleven centimetres of head on a run travelling five and a half metres a
+   * second — so a raw read is one frame bright and gone, which at speed is a
+   * dropped frame rather than a flash. It takes the peak instantly and lets go
+   * of it slowly, which is what a tube does anyway.
+   */
+  let surge = 0;
+
   {
     const { z: portZ, y: portY, radius: r } = doorway.wire;
 
@@ -342,7 +365,7 @@ export function createExitRoom({ scene, doorway }) {
     wire.castShadow = true;
     wire.receiveShadow = true;
     group.add(wire);
-    chargeWire(wire, curve.getLength());
+    ({ arrival } = chargeWire(wire, curve.getLength()));
 
     // Clips on the floor run only — a saddle screwed to mid-air up the wall
     // would be a saddle screwed to nothing.
@@ -489,6 +512,7 @@ export function createExitRoom({ scene, doorway }) {
       entered = false;
       wakeIn = 0;
       lit = 0;
+      surge = 0;
       life.stop();
       group.visible = false;
       lamp.intensity = 0;
@@ -522,7 +546,25 @@ export function createExitRoom({ scene, doorway }) {
         wakeIn -= delta;
         if (wakeIn <= 0) life.speak(CONSOLE_LINES);
       }
-      life.update(delta, lit);
+      /**
+       * And the charge goes into him.
+       *
+       * Every pulse that reaches the end of the cable lands in the set: the
+       * face brightens with it and throws more green on the wall behind, and
+       * the tube it is drawn on lifts out of black for as long as the head is
+       * arriving. One every two thirds of a second, which is the cable's own
+       * rhythm rather than a second one invented here — it is the same number
+       * running down the wire past your feet, so the two read as cause and
+       * effect rather than as two things blinking.
+       *
+       * It is fed in through `lit`, the same fade the picture comes up on. The
+       * face has one brightness and this is it; giving the surge its own would
+       * mean two things claiming the same pixels.
+       */
+      const landed = arrival();
+      surge = landed > surge ? landed : surge + (landed - surge) * (1 - Math.exp(-6 * delta));
+      life.update(delta, lit * (1 + surge * 0.9));
+      television.screen.material.color.copy(screenBase).lerp(SURGE, surge * lit * 0.3);
       // The arms come out of the wall with the picture and go back into it if
       // the room is ever wound down, which is the same movement the ward uses
       // when the thing has said its piece — run backwards to arrive.

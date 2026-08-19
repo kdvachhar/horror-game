@@ -231,23 +231,6 @@ export function buildTelevision() {
  * shutdown fade and anything else attached to it, and hands the fade in as
  * `lit` each frame.
  */
-/**
- * Where the three blocks of the mouth go when the face turns its mouth down.
- *
- * The widest one stays put and becomes the line of the mouth; the other two are
- * pulled out to its ends, shortened, and turned so their outer ends drop. Three
- * blocks are all there are, and a frown needs a bar and two corners, so the
- * taper is taken apart and rebuilt as one rather than having new parts added to
- * the face for one expression.
- *
- * [x, y, how much of its own width to keep, turn]
- */
-const FROWN_STEPS = [
-  [0, 0.1, 1, 0],
-  [-0.3, 0.0, 0.42, 0.6],
-  [0.3, 0.0, 0.84, -0.6],
-];
-
 export function createScreenLife({ eyes, mouth, faceParts, glow = null, glowLevel = 2.2 }) {
   // The three blocks, taken off the mouth rather than handed in beside it: the
   // caller already passes the group they are in, and a second parameter naming
@@ -324,14 +307,21 @@ export function createScreenLife({ eyes, mouth, faceParts, glow = null, glowLeve
       eyes.forEach((eye, i) => {
         eye.group.position.x = (i === 0 ? -0.42 : 0.42) + look;
 
-        // The cap turns and drops, and the stem stays where it is. Leaning the
-        // whole plug was the first go and it read as two eyes falling towards
-        // each other rather than as a scowl — it is the bar across the top that
-        // is doing the work, and it does it best over a stem that has not
-        // moved. Inner ends down, so the pair make a V.
-        const turn = i === 0 ? -1 : 1;
-        eye.cap.rotation.z = turn * 0.5 * browed;
-        eye.cap.position.y = 0.3 - 0.06 * browed;
+        /**
+         * The cap turns and drops, and the stem stays where it is.
+         *
+         * Inner ends *up*, which is the whole difference between the two faces
+         * that can be made out of a pair of tilted bars: inner ends down is
+         * angry, and this thing is not angry with you. It is sorry, in the way
+         * something is sorry when it is explaining what it did.
+         *
+         * Leaning the whole plug was an earlier go and it read as two eyes
+         * falling towards each other — it is the bar across the top doing the
+         * work, and it does it best over a stem that has not moved.
+         */
+        const turn = i === 0 ? 1 : -1;
+        eye.cap.rotation.z = turn * 0.45 * browed;
+        eye.cap.position.y = 0.3 - 0.05 * browed;
 
         // The open eye squashes shut and the arc grows in behind it, so the
         // two swap over mid-blink rather than one popping in on the other.
@@ -359,17 +349,25 @@ export function createScreenLife({ eyes, mouth, faceParts, glow = null, glowLeve
       // 0.3 keeps the lips together rather than collapsing the mouth to a line.
       mouth.scale.set(mouthWide, 0.3 + mouthOpen * 1.5, 1);
 
-      // And the mouth itself turns down on a line that asks for it. Eased from
-      // the taper to the frown and back rather than swapped, so the corners are
-      // seen to be pulled down — a mouth that arrives already frowning is a
-      // different mouth, and this one has to still be talking through it.
+      /**
+       * And the mouth turns over on a line that asks for it.
+       *
+       * The frown is the mouth it already has, upside down: the same three
+       * blocks in the same widths, with the widest at the bottom instead of the
+       * top. Nothing is added and nothing is reshaped — the steps just trade
+       * heights, so the taper that pointed down points up.
+       *
+       * That was worth backing up to. The first frown pulled the two narrow
+       * blocks out to the ends of the wide one and turned them down into a bar
+       * with corners, which is a frown out of a different drawing: a face this
+       * simple has one mouth, and every expression it has must be that mouth
+       * moved rather than a second one wearing its colour.
+       *
+       * Eased rather than swapped, so the steps are seen to cross over each
+       * other, and it goes on talking the whole way through.
+       */
       mouthSteps.forEach((step, i) => {
-        const [fx, fy, fw, turn] = FROWN_STEPS[i];
-        const rest = MOUTH_STEPS[i];
-        step.position.x = fx * browed;
-        step.position.y = rest[2] + (fy - rest[2]) * browed;
-        step.scale.x = 1 + (fw - 1) * browed;
-        step.rotation.z = turn * browed;
+        step.position.y = MOUTH_STEPS[i][2] * (1 - 2 * browed);
       });
 
       return { level, mouthOpen, mouthWide, eyesOpen, browed };

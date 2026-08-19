@@ -9,7 +9,7 @@ import { setObjective, showNote } from './hud.js';
 import { playButtonPress, playWardDoor } from './audio.js';
 import { buildTelevision, createScreenLife } from './screenFace.js';
 import { createWallArms } from './wallArms.js';
-import { blackWireMaterial, buildWirePort } from './wire.js';
+import { blackWireMaterial, buildWirePort, chargeWire, setWireCurrent } from './wire.js';
 
 /**
  * The room on the other side of the red hall's way out.
@@ -342,6 +342,7 @@ export function createExitRoom({ scene, doorway }) {
     wire.castShadow = true;
     wire.receiveShadow = true;
     group.add(wire);
+    chargeWire(wire, curve.getLength());
 
     // Clips on the floor run only — a saddle screwed to mid-air up the wall
     // would be a saddle screwed to nothing.
@@ -433,6 +434,11 @@ export function createExitRoom({ scene, doorway }) {
       ringMat.emissive.set('#12561f');
       // It goes in, rather than down.
       cap.position.z = BUTTON_WALL_Z + BUTTON_OUT - 0.025;
+      // And the cable comes alive, the whole way back to the ward. It is the
+      // one thing in the room that answers the button *before* the screen does
+      // — the charge is already running past your feet and out of the door
+      // while the tube is still coming up.
+      setWireCurrent(true);
       // A beat before it says anything. Screens take a moment to come up, and
       // the face arriving in silence and *then* speaking is a great deal worse
       // to be in a room with than one that talks the instant it appears.
@@ -490,6 +496,10 @@ export function createExitRoom({ scene, doorway }) {
       ringMat.color.set('#8e1a12');
       ringMat.emissive.set('#000000');
       cap.position.z = BUTTON_WALL_Z + BUTTON_OUT;
+      // The cable goes dead with it. It reaches into three rooms this one
+      // cannot see, and a run winding back with a charge still travelling down
+      // it would leave the whole building lit by a button that is out.
+      setWireCurrent(false);
     },
 
     get isSpeaking() {

@@ -14,7 +14,7 @@ import {
 import { buildHand } from './glove.js';
 import { buildTelevision, createScreenLife } from './screenFace.js';
 import { createWallArms } from './wallArms.js';
-import { WIRE_RADIUS, blackWireMaterial } from './wire.js';
+import { WIRE_RADIUS, blackWireMaterial, chargeWire } from './wire.js';
 import { playButtonPress, playWardDoor } from './audio.js';
 
 /**
@@ -447,20 +447,20 @@ function buildBlackWire() {
     [samples.slice(cut), true],
   ]) {
     if (points.length < 2) continue;
+    const path = new THREE.CatmullRomCurve3(points);
     const half = new THREE.Mesh(
-      new THREE.TubeGeometry(
-        new THREE.CatmullRomCurve3(points),
-        points.length,
-        WIRE_RADIUS,
-        8,
-        false
-      ),
+      new THREE.TubeGeometry(path, points.length, WIRE_RADIUS, 8, false),
       blackWireMaterial({ fog: !inDarkRoom })
     );
     half.castShadow = true;
     half.receiveShadow = true;
     if (inDarkRoom) half.layers.set(LAYER.DARK);
     group.add(half);
+    // Both halves take the current. The one in the dark room takes it too —
+    // emissive owes nothing to the lights, so a charge crossing that floor
+    // shows up in the dark pass, which is the only thing in act one that ever
+    // will besides the spotlight.
+    chargeWire(half, path.getLength());
   }
 
   // Cable clips every so often, so it reads as run rather than dropped. Count

@@ -29,6 +29,7 @@ import { createWakeUp } from './wakeUp.js';
 import { createPossession } from './possession.js';
 import { createPainter } from './painter.js';
 import { createSpeechRunner } from './voice.js';
+import { updateWireCurrent } from './wire.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 
@@ -754,6 +755,10 @@ renderer.setAnimationLoop((time) => {
   // toward is standing still where you left it.
   gauntlet.update(delta, player.position, friend);
   exitRoom.update(delta, player.position);
+  // The black wire runs through four of these rooms and belongs to none of
+  // them, so the charge in it is driven from here rather than from whichever
+  // room happens to have switched it on. It costs nothing while it is off.
+  updateWireCurrent(delta);
   // Only the bucket can get up there, but the check is on position rather than
   // on identity — whatever ends up on the top board presses it. It latches, so
   // this is true on exactly one frame ever.

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { SIDE_DOOR, DOOR_RED, PLAYER, LAYER } from './config.js';
-import { WIRE_RADIUS, blackWireMaterial, buildWirePort } from './wire.js';
+import { WIRE_RADIUS, blackWireMaterial, buildWirePort, chargeWire } from './wire.js';
 import {
   makeWallSurface,
   makeFloorSurface,
@@ -1302,6 +1302,7 @@ export function createGauntlet({ scene, onCaught }) {
     );
     wire.receiveShadow = true;
     group.add(wire);
+    chargeWire(wire, curve.getLength());
 
     // Clips, so it reads as run rather than dropped. Only the ones lying on the
     // floor: a saddle sitting in mid-air up the end wall would be a saddle

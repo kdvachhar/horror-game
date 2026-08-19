@@ -41,6 +41,24 @@ export function screenMaterial(color) {
 }
 
 /**
+ * The mouth at rest: a stepped block, widest at the top and narrowing downward.
+ *
+ * Narrow, not short. It keeps its full height — step height and step spacing
+ * are the same number, so the three stay contiguous — and it is the width of
+ * each step that comes in.
+ *
+ * At module scope because the frown is written as a departure from this and has
+ * to be able to find its way back.
+ *
+ * [width, height, y]
+ */
+const MOUTH_STEPS = [
+  [0.54, 0.14, 0.14],
+  [0.36, 0.14, 0],
+  [0.18, 0.14, -0.14],
+];
+
+/**
  * Two eyes and a mouth, built at the size they were drawn.
  *
  * The face does not scale with whatever it is sitting in — on the television it
@@ -86,18 +104,10 @@ export function buildScreenFace() {
     faceParts.push(cap, stem, closed);
   }
 
-  // Mouth: a stepped block, widest at the top and narrowing downward.
+  // Mouth: MOUTH_STEPS, above.
   const mouth = new THREE.Group();
   mouth.position.y = -0.42;
-  // Narrow, not short. The mouth keeps its full height — step height and step
-  // spacing are the same number, so the three stay contiguous — and it is the
-  // width of each step that comes in.
-  const steps = [
-    [0.54, 0.14, 0.14],
-    [0.36, 0.14, 0],
-    [0.18, 0.14, -0.14],
-  ];
-  for (const [w, h, y] of steps) {
+  for (const [w, h, y] of MOUTH_STEPS) {
     const step = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.04), screenMaterial(FACE));
     step.position.y = y;
     mouth.add(step);
@@ -221,7 +231,28 @@ export function buildTelevision() {
  * shutdown fade and anything else attached to it, and hands the fade in as
  * `lit` each frame.
  */
+/**
+ * Where the three blocks of the mouth go when the face turns its mouth down.
+ *
+ * The widest one stays put and becomes the line of the mouth; the other two are
+ * pulled out to its ends, shortened, and turned so their outer ends drop. Three
+ * blocks are all there are, and a frown needs a bar and two corners, so the
+ * taper is taken apart and rebuilt as one rather than having new parts added to
+ * the face for one expression.
+ *
+ * [x, y, how much of its own width to keep, turn]
+ */
+const FROWN_STEPS = [
+  [0, 0.1, 1, 0],
+  [-0.3, 0.0, 0.42, 0.6],
+  [0.3, 0.0, 0.84, -0.6],
+];
+
 export function createScreenLife({ eyes, mouth, faceParts, glow = null, glowLevel = 2.2 }) {
+  // The three blocks, taken off the mouth rather than handed in beside it: the
+  // caller already passes the group they are in, and a second parameter naming
+  // its own children is a parameter somebody adds a screen without.
+  const mouthSteps = mouth.children;
   const speech = createSpeechRunner();
   let time = 0;
   // Eased rather than snapped to. The schedule steps between shapes instantly
@@ -327,6 +358,19 @@ export function createScreenLife({ eyes, mouth, faceParts, glow = null, glowLeve
 
       // 0.3 keeps the lips together rather than collapsing the mouth to a line.
       mouth.scale.set(mouthWide, 0.3 + mouthOpen * 1.5, 1);
+
+      // And the mouth itself turns down on a line that asks for it. Eased from
+      // the taper to the frown and back rather than swapped, so the corners are
+      // seen to be pulled down — a mouth that arrives already frowning is a
+      // different mouth, and this one has to still be talking through it.
+      mouthSteps.forEach((step, i) => {
+        const [fx, fy, fw, turn] = FROWN_STEPS[i];
+        const rest = MOUTH_STEPS[i];
+        step.position.x = fx * browed;
+        step.position.y = rest[2] + (fy - rest[2]) * browed;
+        step.scale.x = 1 + (fw - 1) * browed;
+        step.rotation.z = turn * browed;
+      });
 
       return { level, mouthOpen, mouthWide, eyesOpen, browed };
     },

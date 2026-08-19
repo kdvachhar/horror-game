@@ -44,18 +44,37 @@ const FLOOR_TINT = '#7c7a75';
 const TRIM = '#3c4147';
 
 /**
- * What it says when you wake it up.
+ * What it says when you wake it up, and the only thing it says.
  *
  * The same voice as the television in the ward, because it is the same thing:
  * it went dark when it had said its piece, and the next screen it appears on is
  * at the far end of the room it just watched you run. Pleased with itself,
- * which is the only register this character has.
+ * which is the only register this character has — it apologises for the hall in
+ * the same breath as it explains what the hall was for, and what it was for is
+ * the worst thing anything in this game has said out loud.
+ *
+ * Then it goes out, and there is no asking it again. A thing that will repeat
+ * that on request is a menu rather than a character.
  */
 const CONSOLE_LINES = [
-  { text: 'Oh — you made it.', hold: 2.2 },
-  { text: 'Corridor three. Both of you, even.', hold: 2.9, eyes: 'closed', arms: 'crossed' },
-  { text: 'I am preparing the next room.', hold: 2.8 },
-  { text: 'Don\u2019t go far.', hold: 2.4, eyes: 'closed' },
+  { text: 'You made it.', hold: 1.6 },
+  { text: 'Sorry about the trouble getting here.', hold: 2.0, eyes: 'closed' },
+  { text: 'That spike wall used to be a scanner.', hold: 2.0 },
+  { text: 'It would close the door and send the children back.', hold: 2.6 },
+  // Split at the comma rather than mid-clause. The voice takes its pauses from
+  // the punctuation, so a line cut anywhere else is heard as a stumble.
+  {
+    text: 'Eventually, the smarter experiments replaced it with spikes,',
+    hold: 1.2,
+    arms: 'crossed',
+  },
+  {
+    text: 'to kill all the remaining people in the building.',
+    hold: 2.8,
+    arms: 'crossed',
+    eyes: 'closed',
+  },
+  { text: 'Anyway. Go through this door to your next challenge.', hold: 2.6 },
 ];
 
 export function createExitRoom({ scene, doorway }) {
@@ -73,6 +92,16 @@ export function createExitRoom({ scene, doorway }) {
   let entered = false;
   /** Counts down from the button to the first word. */
   let wakeIn = 0;
+  /**
+   * True from the last word to the end of time.
+   *
+   * It says its piece once and goes out — the same exit the ward's set makes,
+   * which is how you know it is the same thing making it. Kept separate from
+   * `awake` because the two are not opposites here: it is awake right up until
+   * it isn't, and what the arms and the picture do on the way out is run off
+   * this rather than off the button being un-pressed, which never happens.
+   */
+  let shutting = false;
 
   // The near wall is the plane the landing ends on; the room runs on from there.
   const near = doorway.x;
@@ -470,18 +499,11 @@ export function createExitRoom({ scene, doorway }) {
     },
   });
 
-  interactions.push({
-    // On the set itself rather than on the desk under it: it is the thing you
-    // would be talking to.
-    position: new THREE.Vector3(far + 0.4, 2.05, axis),
-    label: 'Ask it again',
-    range: 2.1,
-    once: false,
-    enabled: () => powered && awake && wakeIn <= 0 && !life.isSpeaking,
-    onInteract() {
-      life.speak(CONSOLE_LINES);
-    },
-  });
+  // There used to be an 'Ask it again' target on the set itself. It goes out
+  // the moment it stops talking now, so the only window that prompt could ever
+  // have appeared in is the second and a half it takes the picture to fade —
+  // and a prompt that flickers up on a screen going dark, offering to replay
+  // what you were just told, is worse than no prompt at all.
 
   /** Inside the room at all. Used to decide when to say you have arrived. */
   const contains = (x, z) =>
@@ -511,6 +533,7 @@ export function createExitRoom({ scene, doorway }) {
       awake = false;
       entered = false;
       wakeIn = 0;
+      shutting = false;
       lit = 0;
       surge = 0;
       life.stop();
@@ -541,10 +564,24 @@ export function createExitRoom({ scene, doorway }) {
       // The picture coming up, and then the face on it. Both run every frame
       // rather than only while it is awake, so the blink and the breathing
       // carry on between the lines instead of freezing mid-sentence.
-      if (awake) lit += (1 - lit) * (1 - Math.exp(-3.2 * delta));
+      // Up when it wakes, and back down when it is done — slower going out than
+      // coming in, because a tube takes a moment to let go of the picture and
+      // an instant cut would read as the power failing rather than as it
+      // choosing to leave.
+      if (awake && !shutting) lit += (1 - lit) * (1 - Math.exp(-3.2 * delta));
+      if (shutting) lit -= lit * (1 - Math.exp(-1.5 * delta));
       if (wakeIn > 0) {
         wakeIn -= delta;
-        if (wakeIn <= 0) life.speak(CONSOLE_LINES);
+        if (wakeIn <= 0) {
+          life.speak(CONSOLE_LINES, () => {
+            shutting = true;
+            // And the cable goes quiet with it. The charge running down it is
+            // this thing moving about the building; a screen that has gone out
+            // with a current still arriving in it has not gone anywhere.
+            setWireCurrent(false);
+            setObjective('Go through the door');
+          });
+        }
       }
       /**
        * And the charge goes into him.
@@ -571,7 +608,7 @@ export function createExitRoom({ scene, doorway }) {
       wallArms.update(delta, {
         speaking: life.isSpeaking,
         cross: life.line?.arms === 'crossed',
-        retract: !awake,
+        retract: !awake || shutting,
       });
     },
   };

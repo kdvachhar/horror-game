@@ -69,11 +69,14 @@ const CONSOLE_LINES = [
     arms: 'crossed',
     frown: true,
   },
+  // The only line in the building with the brows on it — and the eyes have to
+  // be open for that, so this one lost the shut-eyed delivery it had. It is the
+  // better reading anyway: it says this one looking at you.
   {
     text: 'to kill all the remaining people in the building.',
     hold: 2.8,
     arms: 'crossed',
-    eyes: 'closed',
+    brows: 'angry',
     frown: true,
   },
   { text: 'Anyway. Go through this door to your next challenge.', hold: 2.6, frown: true },

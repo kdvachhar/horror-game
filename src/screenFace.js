@@ -254,6 +254,9 @@ export function createScreenLife({ eyes, mouth, faceParts, glow = null, glowLeve
   let eyesOpen = 1;
   // And how hard it is scowling, on lines that ask for it.
   let browed = 0;
+  // Brows down, which is a separate thing from the mouth and asked for a line
+  // at a time. Almost nothing gets it.
+  let angry = 0;
 
   return {
     speak(lines, onFinished) {
@@ -300,6 +303,8 @@ export function createScreenLife({ eyes, mouth, faceParts, glow = null, glowLeve
        * is the eye that turns and not something stuck on the front of it.
        */
       browed += ((speech.line?.frown ? 1 : 0) - browed) * (1 - Math.exp(-9 * delta));
+      // Faster than the mouth. A frown settles onto a face; this arrives.
+      angry += ((speech.line?.brows === 'angry' ? 1 : 0) - angry) * (1 - Math.exp(-14 * delta));
 
       // It watches. The eyes track slowly from side to side.
       const look = Math.sin(time * 0.55) * 0.07;
@@ -313,11 +318,21 @@ export function createScreenLife({ eyes, mouth, faceParts, glow = null, glowLeve
       eyes.forEach((eye, i) => {
         eye.group.position.x = (i === 0 ? -0.42 : 0.42) + look;
 
-        // The eyes are left alone. The caps used to turn with the frown — down
-        // for a scowl first, then up when that came out angry — and both were
-        // the same mistake: this face says one thing at a time. The mouth is
-        // what turns over, and a pair of brows editorialising over the top of
-        // it is a second opinion nobody asked the face for.
+        /**
+         * The caps turn down, inner ends first, on a line that asks for it.
+         *
+         * Not on the frown. The frown is the mouth, and brows that came down
+         * with it every time were a second opinion running over the top of
+         * every sentence. This is its own cue and it is meant to be rare: one
+         * line in the building has it, and it is the one where the thing on the
+         * screen stops apologising and tells you what the corridor was for.
+         *
+         * It is the bar across the top that does the work — the stem stays
+         * where it is. Leaning the whole plug was an earlier go and it read as
+         * two eyes falling towards each other.
+         */
+        eye.cap.rotation.z = (i === 0 ? -1 : 1) * 0.5 * angry;
+        eye.cap.position.y = 0.3 - 0.05 * angry;
 
         // The open eye squashes shut and the arc grows in behind it, so the
         // two swap over mid-blink rather than one popping in on the other.
@@ -366,7 +381,7 @@ export function createScreenLife({ eyes, mouth, faceParts, glow = null, glowLeve
         step.position.y = MOUTH_STEPS[i][2] * (1 - 2 * browed);
       });
 
-      return { level, mouthOpen, mouthWide, eyesOpen, browed };
+      return { level, mouthOpen, mouthWide, eyesOpen, browed, angry };
     },
   };
 }

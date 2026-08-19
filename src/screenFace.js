@@ -47,15 +47,21 @@ export function screenMaterial(color) {
  * are the same number, so the three stay contiguous — and it is the width of
  * each step that comes in.
  *
+ * Widened by half again on top of the drawn widths. The eyes sit 0.42 out from
+ * the middle and are 0.28 across, so the face is 1.12 wide at the top and was
+ * 0.54 at the mouth — which on a tube this size read as a small mouth a long
+ * way under a pair of big eyes rather than as a face. The ratios between the
+ * three are untouched at 3:2:1.
+ *
  * At module scope because the frown is written as a departure from this and has
  * to be able to find its way back.
  *
  * [width, height, y]
  */
 const MOUTH_STEPS = [
-  [0.54, 0.14, 0.14],
-  [0.36, 0.14, 0],
-  [0.18, 0.14, -0.14],
+  [0.86, 0.14, 0.14],
+  [0.58, 0.14, 0],
+  [0.29, 0.14, -0.14],
 ];
 
 /**

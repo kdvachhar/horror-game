@@ -257,15 +257,11 @@ export function createExitRoom({ scene, doorway }) {
     deck.receiveShadow = true;
     group.add(deck);
 
-    // The dark at the end of it, and something to stop you in it.
-    const cap = new THREE.Mesh(
-      new THREE.PlaneGeometry(WAY_ON.width, WAY_ON.height),
-      new THREE.MeshBasicMaterial({ color: '#000000', toneMapped: false, fog: false })
-    );
-    cap.position.set(midX, WAY_ON.height / 2, zEnd);
-    cap.rotation.y = Math.PI;
-    group.add(cap);
-    solid(wayLow, wayHigh, zEnd, zEnd + 1, {});
+    // It used to be capped: a black plane across the end and a collider behind
+    // it, so the passage went nowhere and said so quietly. orangeRoom.js is
+    // built on the far end of it now — see `wayOn` — so the cap is gone and the
+    // near wall of that room is what you come out into. Only the sides are
+    // still solid, so you cannot walk out through the length of it.
     solid(far - 1, wayLow, wayZ, zEnd + 1, {});
     solid(wayHigh, near + 1, wayZ, zEnd + 1, {});
   }
@@ -694,6 +690,15 @@ export function createExitRoom({ scene, doorway }) {
 
     get isAwake() {
       return awake;
+    },
+
+    /**
+     * The far end of the passage behind the orange door, for whatever gets
+     * built on the other side of it. Handed over the same way the hall handed
+     * this room its doorway: one opening, one set of numbers.
+     */
+    get wayOn() {
+      return { x: midX, z: wayZ + WAY_ON.depth, width: WAY_ON.width, height: WAY_ON.height };
     },
 
     /** On the same switch as the hall — it is the far end of the same circuit. */

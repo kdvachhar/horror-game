@@ -8,6 +8,7 @@ import { createPlayerBody } from './playerBody.js';
 import { createMedicalRoom } from './medicalRoom.js';
 import { createGauntlet } from './gauntlet.js';
 import { createExitRoom } from './exitRoom.js';
+import { createOrangeRoom } from './orangeRoom.js';
 import { MACHINE, DOOR, BACK_DOOR, LAYER, SPAWN, MEDICAL, insideBackRoom } from './config.js';
 import { createPlayer } from './player.js';
 import { createWallText } from './wallText.js';
@@ -142,9 +143,28 @@ room.colliders.push(...gauntlet.colliders);
 const exitRoom = createExitRoom({ scene, doorway: gauntlet.exit });
 room.colliders.push(...exitRoom.colliders);
 
+/**
+ * And the orange room past that, with the swing set in it.
+ *
+ * Handed the far end of the exit room's passage, and the two bodies and the
+ * possession, because it is the first room in this game that moves either of
+ * them: a rider on a swing is put where the seat is every frame, and which body
+ * that is depends on which one you are wearing.
+ */
+const orangeRoom = createOrangeRoom({
+  scene,
+  passage: exitRoom.wayOn,
+  camera,
+  player,
+  friend,
+  possession: { get isPossessing() { return possession.isPossessing; } },
+});
+room.colliders.push(...orangeRoom.colliders);
+
 const interactions = createInteractions(camera, showPrompt);
 for (const target of gauntlet.interactions) interactions.add(target);
 for (const target of exitRoom.interactions) interactions.add(target);
+for (const target of orangeRoom.interactions) interactions.add(target);
 
 /**
  * What you think, turning round and finding the way you came in is shut.
@@ -783,6 +803,10 @@ renderer.setAnimationLoop((time) => {
       });
     });
   }
+  // Before the camera is written, and after both bodies have had their own
+  // update: a rider on a swing is put where the seat is, and if that is the
+  // bucket then the view below has to be taken from where it has just been put.
+  orangeRoom.update(delta);
   // The view has to be written after the body it is attached to has moved, or
   // it trails a frame behind everything you do.
   possession.applyCamera();
@@ -823,7 +847,7 @@ renderer.setAnimationLoop((time) => {
 
 // Dev-only handle for poking at the scene from the console.
 if (import.meta.env.DEV) {
-  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, wakeUp, possession, painter, monologue };
+  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, wakeUp, possession, painter, monologue };
   window.game.__tvLines = TV_LINES;
   // Console handles for diagnosing silence: game.audio.state() / .test()
   window.game.perf = () => ({

@@ -1387,6 +1387,38 @@ export function createGauntlet({ scene, onCaught }) {
   spikes.group.position.x = spikeX;
   spikes.group.visible = false;
 
+  /**
+   * Whether the wall is out in the hall at all, rather than parked by the door.
+   *
+   * One test, used by both the thing that draws it and the thing that makes it
+   * solid. Parked it is invisible — it sits across the way in, and a wall of
+   * spikes you walk through to get into the room they are in teaches you they
+   * are scenery in the one moment the room has to teach you they are not — and
+   * an invisible box across the doorway is worse than either.
+   */
+  const spikeOut = () => spikeX < SPIKE_HOME - 0.01;
+
+  /**
+   * Where it is standing, once it has stopped.
+   *
+   * Solid only when it is dead. A box on a wall that is still coming would
+   * shove you up the hall in front of it, and being *pushed along* by the thing
+   * chasing you is the one thing it must never do — you would arrive at the far
+   * end riding it. Stopped, it is a wall: it stands in the corridor with its
+   * points a metre from your face and it is the way back that is shut now.
+   *
+   * The plate is 0.34 through and the spikes stand 0.68 off the front of it, so
+   * the wall runs from 0.85 ahead of where it stopped to 0.17 behind.
+   */
+  const spikeBox = {
+    minX: SPIKE_HOME - 0.85,
+    maxX: SPIKE_HOME + 0.17,
+    minZ: AXIS - HALF,
+    maxZ: AXIS + HALF,
+    enabled: () => solved && spikeOut(),
+  };
+  colliders.push(spikeBox);
+
   interactions.push({
     position: new THREE.Vector3(END + 1.1, FINAL_Y, laneFar(PLAYER_SIDE) - PLAYER_SIDE * 0.25),
     label: 'Press the button',
@@ -1397,6 +1429,10 @@ export function createGauntlet({ scene, onCaught }) {
       if (solved) return;
       solved = true;
       armed = false;
+      // It stops where it is, so this is where it will be standing. Written
+      // once here rather than followed every frame: it does not move again.
+      spikeBox.minX = spikeX - 0.85;
+      spikeBox.maxX = spikeX + 0.17;
       playButtonPress();
       playWardDoor();
       finalPanel.lampMat.emissive.set(SWITCH_DONE);
@@ -1610,17 +1646,22 @@ export function createGauntlet({ scene, onCaught }) {
           const range = Math.abs(bodyPosition.x - spikeX) / 7;
           playSpikeGrind(1 / (1 + range * range));
         }
-      } else if (spikeX < SPIKE_HOME) {
-        // Withdrawing, fast, once the last button is in or you have backed out.
+      } else if (!solved && spikeX < SPIKE_HOME) {
+        // Withdrawing, fast, because you backed out of the door — the run is
+        // off and the trap goes back to the start to wait for you.
+        //
+        // Not when the last button is in. It used to scuttle home then too,
+        // which took the room's own line back: it says *the wall stops*, and a
+        // wall that stops and then leaves has not stopped, it has finished.
+        // Stood dead in the corridor where it ran out of orders, it is the
+        // thirty seconds you just spent, standing still where you can look at
+        // it — and the way back you no longer have.
         spikeX = Math.min(SPIKE_HOME, spikeX + 9 * delta);
       }
       spikes.group.position.x = spikeX;
-      // Only there once it is coming. Parked, it would sit across the way in
-      // and you would walk through a wall of spikes to get into the room they
-      // are in — which teaches you they are scenery in the one moment the room
-      // has to teach you they are not. It appears behind you, six metres back,
-      // while you are facing the other way.
-      spikes.group.visible = armed || spikeX < SPIKE_HOME - 0.01;
+      // It appears behind you, six metres back, while you are facing the other
+      // way — and stays there once it has stopped.
+      spikes.group.visible = armed || spikeOut();
       spikes.filler.visible = spikeX > FORK;
 
       // Caught. The body counts wherever you happen to be looking from, and so

@@ -147,6 +147,27 @@ export const DOOR_RED = {
 };
 
 /**
+ * And the orange one, on the left wall of the room behind the hall: the way on
+ * to whatever is next.
+ *
+ * The same kit in a different colour, and the colour is the whole job it does.
+ * Every door you have been through so far has been red, and red is the way you
+ * came; this is the first one that is not, and it opens on its own when the
+ * thing on the screen has finished with you.
+ *
+ * Authored dark like the red one — it is under a white lamp rather than red
+ * ones, which is more light, not less, and ACES lifts hard through the mids.
+ * A leaf picked at the orange you want it to read as comes out apricot.
+ */
+export const DOOR_ORANGE = {
+  leaf: '#7c3a10',
+  trim: '#3b4240',
+  hazard: '#8d7a2e',
+  roughness: 0.66,
+  metalness: 0.08,
+};
+
+/**
  * Whether a world position is standing in the back room.
  *
  * The test used to be `z < DOOR.z` — everything past the hall's far wall was

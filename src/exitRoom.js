@@ -5,6 +5,7 @@ import {
   makeCeilingSurface,
   worldRepeat,
 } from './textures.js';
+import { DOOR_ORANGE } from './config.js';
 import { setObjective, showNote } from './hud.js';
 import { playButtonPress, playWardDoor } from './audio.js';
 import { buildTelevision, createScreenLife, FACE } from './screenFace.js';
@@ -141,18 +142,17 @@ export function createExitRoom({ scene, doorway }) {
   ceiling.position.set(midX, HEIGHT, axis);
   group.add(ceiling);
 
-  // The two long walls, and the far one.
-  for (const side of [-1, 1]) {
+  // The right-hand wall, whole — the left one has a door in it and is built
+  // below with the rest of that.
+  {
     const wall = new THREE.Mesh(
       new THREE.PlaneGeometry(DEPTH, HEIGHT),
       new THREE.MeshStandardMaterial({ ...wallSurface, color: WALL_TINT })
     );
-    wall.position.set(midX, HEIGHT / 2, axis + side * HALF_WIDTH);
-    wall.rotation.y = side === 1 ? Math.PI : 0;
+    wall.position.set(midX, HEIGHT / 2, axis - HALF_WIDTH);
     wall.receiveShadow = true;
     group.add(wall);
-    solid(far - 1, near + 1, Math.min(axis + side * HALF_WIDTH, axis + side * (HALF_WIDTH + 1)),
-      Math.max(axis + side * HALF_WIDTH, axis + side * (HALF_WIDTH + 1)), {});
+    solid(far - 1, near + 1, axis - HALF_WIDTH - 1, axis - HALF_WIDTH, {});
   }
 
   const back = new THREE.Mesh(
@@ -188,6 +188,178 @@ export function createExitRoom({ scene, doorway }) {
   // a box would put a ceiling across the doorway you walk through.
   solid(near, near + 1, axis - HALF_WIDTH, openLow, {});
   solid(near, near + 1, openHigh, axis + HALF_WIDTH, {});
+
+  // ------------------------------------------------------------- the way on ---
+
+  /**
+   * The orange door in the left-hand wall, and the dark it opens onto.
+   *
+   * Left as you come in, which is the wall you are facing when you turn from
+   * the screen. It is shut and unremarkable for the whole of the scene — the
+   * room reads as a dead end with a television in it — and it opens on its own
+   * the moment the thing on the screen goes out, which is the last instruction
+   * it gives you.
+   *
+   * Orange because every door in this building so far has been red, and red is
+   * the way you came. See DOOR_ORANGE.
+   */
+  const WAY_ON = { width: 1.8, height: 2.5, depth: 2.6, slide: 1.86 };
+  const wayZ = axis + HALF_WIDTH;
+  const wayLow = midX - WAY_ON.width / 2;
+  const wayHigh = midX + WAY_ON.width / 2;
+
+  // The wall it is cut into, in three pieces.
+  for (const [pw, ph, px, py] of [
+    [wayLow - far, HEIGHT, (far + wayLow) / 2, HEIGHT / 2],
+    [near - wayHigh, HEIGHT, (wayHigh + near) / 2, HEIGHT / 2],
+    [WAY_ON.width, HEIGHT - WAY_ON.height, midX, (HEIGHT + WAY_ON.height) / 2],
+  ]) {
+    if (pw <= 0 || ph <= 0) continue;
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(pw, ph),
+      new THREE.MeshStandardMaterial({ ...wallSurface, color: WALL_TINT })
+    );
+    mesh.position.set(px, py, wayZ);
+    mesh.rotation.y = Math.PI;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+  solid(far - 1, wayLow, wayZ, wayZ + 1, {});
+  solid(wayHigh, near + 1, wayZ, wayZ + 1, {});
+
+  /**
+   * What is through it: a lined passage that stops in the dark.
+   *
+   * Not a wall you can see. A door that opens onto a flat black plane at arm's
+   * length says there is nothing built past this, which is true and is the last
+   * thing the scene should be saying out loud — it has just promised you a next
+   * challenge. Two and a half metres of concrete going out of the light says
+   * the same thing the corridor past the ward said: it carries on, and you
+   * cannot see how far.
+   */
+  {
+    const liner = new THREE.MeshStandardMaterial({ color: '#3a3833', roughness: 0.9 });
+    const zEnd = wayZ + WAY_ON.depth;
+    for (const [x, turn] of [[wayLow, 0], [wayHigh, Math.PI]]) {
+      const cheek = new THREE.Mesh(new THREE.PlaneGeometry(WAY_ON.depth, WAY_ON.height), liner);
+      cheek.position.set(x, WAY_ON.height / 2, wayZ + WAY_ON.depth / 2);
+      cheek.rotation.y = Math.PI / 2 + turn;
+      group.add(cheek);
+    }
+    const lid = new THREE.Mesh(new THREE.PlaneGeometry(WAY_ON.width, WAY_ON.depth), liner);
+    lid.rotation.x = Math.PI / 2;
+    lid.position.set(midX, WAY_ON.height, wayZ + WAY_ON.depth / 2);
+    group.add(lid);
+
+    const deck = new THREE.Mesh(new THREE.PlaneGeometry(WAY_ON.width, WAY_ON.depth), liner);
+    deck.rotation.x = -Math.PI / 2;
+    deck.position.set(midX, 0.003, wayZ + WAY_ON.depth / 2);
+    deck.receiveShadow = true;
+    group.add(deck);
+
+    // The dark at the end of it, and something to stop you in it.
+    const cap = new THREE.Mesh(
+      new THREE.PlaneGeometry(WAY_ON.width, WAY_ON.height),
+      new THREE.MeshBasicMaterial({ color: '#000000', toneMapped: false, fog: false })
+    );
+    cap.position.set(midX, WAY_ON.height / 2, zEnd);
+    cap.rotation.y = Math.PI;
+    group.add(cap);
+    solid(wayLow, wayHigh, zEnd, zEnd + 1, {});
+    solid(far - 1, wayLow, wayZ, zEnd + 1, {});
+    solid(wayHigh, near + 1, wayZ, zEnd + 1, {});
+  }
+
+  /**
+   * The leaf. The red door's kit in orange, and it slides, like the way out of
+   * the hall does — the doors in this building do not swing, they are pulled
+   * aside by something you never see.
+   */
+  const wayDoor = new THREE.Group();
+  const waySit = (WAY_ON.height - 0.04) / 2;
+  {
+    const leafMat = new THREE.MeshStandardMaterial({
+      color: DOOR_ORANGE.leaf,
+      roughness: DOOR_ORANGE.roughness,
+      metalness: DOOR_ORANGE.metalness,
+    });
+    const doorTrim = new THREE.MeshStandardMaterial({
+      color: DOOR_ORANGE.trim,
+      roughness: 0.5,
+      metalness: 0.2,
+    });
+    const doorHazard = new THREE.MeshStandardMaterial({ color: DOOR_ORANGE.hazard, roughness: 0.7 });
+
+    const leaf = new THREE.Mesh(
+      new THREE.BoxGeometry(WAY_ON.width - 0.04, WAY_ON.height - 0.04, 0.16),
+      leafMat
+    );
+    leaf.castShadow = true;
+    leaf.receiveShadow = true;
+    wayDoor.add(leaf);
+
+    // The face you meet it on is -z, into the room.
+    const face = -0.08;
+    const rail = new THREE.Mesh(
+      new THREE.BoxGeometry(WAY_ON.width - 0.24, 0.1, 0.03),
+      doorTrim
+    );
+    rail.position.set(0, 1.35 - waySit, face - 0.015);
+    wayDoor.add(rail);
+
+    const stripe = new THREE.Mesh(
+      new THREE.BoxGeometry(WAY_ON.width - 0.16, 0.26, 0.012),
+      doorHazard
+    );
+    stripe.position.set(0, 0.22 - waySit, face - 0.012);
+    wayDoor.add(stripe);
+
+    const bar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.032, 0.032, WAY_ON.width - 0.42, 10),
+      doorTrim
+    );
+    bar.rotation.z = Math.PI / 2;
+    bar.position.set(0, 1.05 - waySit, face - 0.05);
+    bar.castShadow = true;
+    wayDoor.add(bar);
+
+    for (const bx of [-1, 1]) {
+      const mount = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.1), doorTrim);
+      mount.position.set(bx * ((WAY_ON.width - 0.44) / 2), 1.05 - waySit, face - 0.01);
+      wayDoor.add(mount);
+    }
+
+    // Hangers up to a track, the same arrangement the way out of the hall has.
+    for (const bx of [-1, 1]) {
+      const hanger = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.19, 0.05), doorTrim);
+      hanger.position.set(bx * 0.6, WAY_ON.height + 0.07 - waySit, -0.02);
+      hanger.castShadow = true;
+      wayDoor.add(hanger);
+    }
+
+    const trackNear = wayHigh + 0.12;
+    const trackFar = midX - WAY_ON.slide - (WAY_ON.width - 0.04) / 2 - 0.06;
+    const track = new THREE.Mesh(
+      new THREE.BoxGeometry(trackNear - trackFar, 0.11, 0.1),
+      doorTrim
+    );
+    track.position.set((trackNear + trackFar) / 2, WAY_ON.height + 0.13, wayZ - 0.05);
+    track.castShadow = true;
+    group.add(track);
+  }
+  wayDoor.position.set(midX, waySit, wayZ - 0.08);
+  group.add(wayDoor);
+
+  // Solid wherever the leaf is, the same as the hall's: it parks against the
+  // inside face of the wall and stands proud of it.
+  const wayBox = { minX: midX, maxX: midX, minZ: wayZ - 0.2, maxZ: wayZ };
+  colliders.push(wayBox);
+  const carryWayDoor = () => {
+    const half = (WAY_ON.width - 0.04) / 2;
+    wayBox.minX = wayDoor.position.x - half;
+    wayBox.maxX = wayDoor.position.x + half;
+  };
+  carryWayDoor();
 
   // ------------------------------------------------------------------ light ---
 
@@ -541,6 +713,8 @@ export function createExitRoom({ scene, doorway }) {
       shutting = false;
       lit = 0;
       surge = 0;
+      wayDoor.position.x = midX;
+      carryWayDoor();
       life.stop();
       group.visible = false;
       lamp.intensity = 0;
@@ -575,11 +749,24 @@ export function createExitRoom({ scene, doorway }) {
       // choosing to leave.
       if (awake && !shutting) lit += (1 - lit) * (1 - Math.exp(-3.2 * delta));
       if (shutting) lit -= lit * (1 - Math.exp(-1.5 * delta));
+
+      // The orange door drawing back. Slower than the way out of the hall,
+      // which is a thing that has just been unlocked in a hurry; this one is
+      // being opened for you.
+      if (shutting && wayDoor.position.x > midX - WAY_ON.slide + 0.005) {
+        wayDoor.position.x += (midX - WAY_ON.slide - wayDoor.position.x) * Math.min(1, delta * 1.5);
+        carryWayDoor();
+      }
       if (wakeIn > 0) {
         wakeIn -= delta;
         if (wakeIn <= 0) {
           life.speak(CONSOLE_LINES, () => {
             shutting = true;
+            // And the way on opens, on the same beat. It is the only thing in
+            // the room that outlives the screen: the last thing it says is to
+            // go through that door, and the door answers rather than the
+            // player having to go and find a switch for it.
+            playWardDoor(0.5);
             // And the cable goes quiet with it. The charge running down it is
             // this thing moving about the building; a screen that has gone out
             // with a current still arriving in it has not gone anywhere.

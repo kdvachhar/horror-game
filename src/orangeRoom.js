@@ -46,21 +46,37 @@ const TRIM = '#3c3a37';
 /**
  * The swing, as a pendulum.
  *
- * 1.55 metres of rope under a beam at 2.85 gives a seat at 1.3 — high enough
- * that you climb onto it — and a period of two and a half seconds, which is
- * long enough to get out of one body and into the other between one pass of the
- * button and the next. A short swing would make this a reflex test, and the
- * thing being tested is whether you can think in two bodies at once.
+ * Nearly two metres of rope under a beam at 2.85 leaves the seats at 0.9, down
+ * where a swing seat actually hangs — you step over one rather than climb onto
+ * it, and the drop from the beam is long enough that the whole set reads as a
+ * swing rather than as two planks slung under a girder. The buttons are on the
+ * ceiling, so the longer the rope the further the arc has to carry a rider to
+ * reach one, which is the trade: low seats are a harder swing.
+ *
+ * A period of about three seconds falls out of that length, which is what makes
+ * the puzzle possible at all — long enough to get out of one body and into the
+ * other between one pass of the button and the next. A short swing would make
+ * this a reflex test, and the thing being tested is whether you can think in
+ * two bodies at once.
  */
-const ROPE = 1.55;
+const ROPE = 1.95;
 const GRAVITY = 9.8;
 /**
- * Light. The swing you are not on has to still be swinging when you get back
- * to it — this loses about a fifth of its amplitude a minute, so an unattended
- * swing stays over the button for long enough to be worth leaving up there,
- * and not so long that a botched attempt never settles.
+ * Very light, and it has to be. The swing you are not on has to still be
+ * clearing its button when you get back to it, and there is only the margin
+ * between MAX_ANGLE and HIT_ANGLE to lose before it stops counting — with the
+ * buttons up under the ceiling that margin is a quarter of a radian, not a
+ * whole arc. At this rate a swing left at the top of its arc goes on hitting
+ * for about half a minute, which is a dismount, a walk across the room, a
+ * mount and half a dozen kicks with a little to spare.
+ *
+ * It was four times this once, when the buttons were low enough that a swing
+ * barely driven still reached them. Playing it through with the buttons raised,
+ * the bucket's swing died at ten seconds and mine reached its button at fifty:
+ * two swings that were never once over their buttons at the same moment, and
+ * no amount of timing on the player's part could have fixed it.
  */
-const DAMPING = 0.055;
+const DAMPING = 0.014;
 /**
  * What one press of E is worth, in radians a second, at the bottom of the arc.
  *
@@ -68,16 +84,33 @@ const DAMPING = 0.055;
  * the bottom is worth all of this and a press at the top is worth almost
  * nothing. That is the whole skill of a swing and it is worth having: pressing
  * in rhythm gets you up in five or six, mashing it gets you nowhere.
+ *
+ * Worth more per kick than it was, because the button it is aimed at is higher:
+ * at the old value the climb took nine kicks, and nine kicks three seconds
+ * apart is half a minute of holding a rhythm before anything happens.
  */
-const PUMP = 0.55;
-/** Past this it would go over the top, which is not a swing any more. */
-const MAX_ANGLE = 1.0;
+const PUMP = 0.7;
+/**
+ * Past this it would go over the top, which is not a swing any more.
+ *
+ * The gap between this and HIT_ANGLE is the whole margin an unattended swing
+ * has to lose before it stops counting, so it is set as much by that as by what
+ * a swing looks like — and a rider's head at this angle is still a hand's width
+ * under the ceiling.
+ */
+const MAX_ANGLE = 1.4;
 
 /**
  * How far along the arc the button is — near the top of it, so hitting one at
  * all means a swing driven nearly all the way up.
+ *
+ * Sixty-four degrees, and it is this steep because of where the buttons are:
+ * they sit under the ceiling now and the seats hang low, so the arc has to
+ * carry a rider most of the way to horizontal before their boots are anywhere
+ * near one. Six or seven kicks in rhythm, against about four for the shallower
+ * arc it used to be.
  */
-const HIT_ANGLE = 0.85;
+const HIT_ANGLE = 1.12;
 /**
  * How close together the two hits have to be. Generous — the point is the
  * phase of two three-second pendulums, and asking for tenths on top of that
@@ -274,9 +307,10 @@ export function createOrangeRoom({ scene, passage, camera, player, friend, posse
      *
      * Worked out from the arc rather than placed by eye: the seat at HIT_ANGLE
      * is here, and a rider's legs carry on past it along the tangent, so this
-     * is where the boots go. It hangs a little below the ceiling on a stem so
-     * there is something to actually connect with — flush with the plaster it
-     * read as a mark on the ceiling rather than as a thing to kick.
+     * is where the boots go. It hangs on a stem so there is something to
+     * actually connect with — flush with the plaster it read as a mark on the
+     * ceiling rather than as a thing to kick — but the stem is a hand's length
+     * now rather than half a metre, because the arc reaches this much higher.
      */
     const seatZ = setZ + Math.sin(HIT_ANGLE) * ROPE;
     const seatY = BEAM_Y - Math.cos(HIT_ANGLE) * ROPE;

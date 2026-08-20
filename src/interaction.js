@@ -32,7 +32,15 @@ export function createInteractions(camera, onActiveChange) {
 
   return {
     add(target) {
-      targets.push({ range: 4.5, facing: 0.45, once: true, spent: false, ...target });
+      // Defaults filled in on the object itself rather than into a copy of it.
+      // A copy flattens accessors, and a target is allowed to have one: the
+      // swings offer a label that changes with what pressing E would currently
+      // do, and spread would freeze that to whatever it said when it was added.
+      target.range ??= 4.5;
+      target.facing ??= 0.45;
+      target.once ??= true;
+      target.spent = false;
+      targets.push(target);
     },
 
     update() {

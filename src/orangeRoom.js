@@ -31,7 +31,13 @@ import { DOOR_ORANGE } from './config.js';
 
 const DEPTH = 11;
 const HALF_WIDTH = 6;
-const HEIGHT = 6;
+/**
+ * Low. Lower than any room in the building, and low on purpose: the buttons are
+ * on the ceiling, and a ceiling you can kick is a ceiling that is already too
+ * close to your head. The swing set stands under it with a hand's width to
+ * spare, which is not how a swing set is meant to look.
+ */
+const HEIGHT = 3.0;
 
 const WALL_TINT = '#7b4a24';
 const FLOOR_TINT = '#6a4526';
@@ -40,13 +46,13 @@ const TRIM = '#3c3a37';
 /**
  * The swing, as a pendulum.
  *
- * Long and slow on purpose: at 2.6 metres the period is a little over three
- * seconds, which is long enough to get out of one body and into the other
- * between one pass of the button and the next. A short swing would make this a
- * reflex test, and the thing being tested is whether you can think in two
- * bodies at once.
+ * 1.55 metres of rope under a beam at 2.85 gives a seat at 1.3 — high enough
+ * that you climb onto it — and a period of two and a half seconds, which is
+ * long enough to get out of one body and into the other between one pass of the
+ * button and the next. A short swing would make this a reflex test, and the
+ * thing being tested is whether you can think in two bodies at once.
  */
-const ROPE = 2.6;
+const ROPE = 1.55;
 const GRAVITY = 9.8;
 /**
  * Light. The swing you are not on has to still be swinging when you get back
@@ -55,13 +61,23 @@ const GRAVITY = 9.8;
  * and not so long that a botched attempt never settles.
  */
 const DAMPING = 0.055;
-/** How hard a rider can drive it, in radians per second squared. */
-const PUMP = 1.35;
+/**
+ * What one press of E is worth, in radians a second, at the bottom of the arc.
+ *
+ * Scaled by the cosine of where the swing is when you press it, so a press at
+ * the bottom is worth all of this and a press at the top is worth almost
+ * nothing. That is the whole skill of a swing and it is worth having: pressing
+ * in rhythm gets you up in five or six, mashing it gets you nowhere.
+ */
+const PUMP = 0.55;
 /** Past this it would go over the top, which is not a swing any more. */
-const MAX_ANGLE = 0.95;
+const MAX_ANGLE = 1.0;
 
-/** How far along the arc the button sits. */
-const HIT_ANGLE = 0.62;
+/**
+ * How far along the arc the button is — near the top of it, so hitting one at
+ * all means a swing driven nearly all the way up.
+ */
+const HIT_ANGLE = 0.85;
 /**
  * How close together the two hits have to be. Generous — the point is the
  * phase of two three-second pendulums, and asking for tenths on top of that
@@ -69,7 +85,9 @@ const HIT_ANGLE = 0.62;
  */
 const WINDOW = 0.55;
 
-const BEAM_Y = 3.5;
+const BEAM_Y = 2.85;
+/** How far a rider's feet reach past the seat, along the arc. */
+const LEGS = 0.75;
 
 export function createOrangeRoom({ scene, passage, camera, player, friend, possession }) {
   const group = new THREE.Group();
@@ -164,21 +182,27 @@ export function createOrangeRoom({ scene, passage, camera, player, friend, posse
   // lights are built with the room and never added or removed, because the
   // number of them in the scene is compiled into every material that can be lit.
   const trimMat = new THREE.MeshStandardMaterial({ color: TRIM, roughness: 0.6, metalness: 0.3 });
+  // Against the side walls and flush to the ceiling rather than down the middle
+  // of it: the middle of this ceiling is where the swings' arcs finish, and a
+  // shade hanging into that is a shade a rider kicks off on the way past.
   const lamps = [];
-  for (const z of [near + DEPTH * 0.3, near + DEPTH * 0.75]) {
-    const shade = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.34, 12, 1, true), trimMat);
-    shade.position.set(axis, HEIGHT - 0.3, z);
+  for (const [x, z] of [
+    [axis - HALF_WIDTH + 0.5, near + DEPTH * 0.32],
+    [axis + HALF_WIDTH - 0.5, near + DEPTH * 0.72],
+  ]) {
+    const shade = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.2, 12, 1, true), trimMat);
+    shade.position.set(x, HEIGHT - 0.1, z);
     group.add(shade);
 
     const bulb = new THREE.Mesh(
-      new THREE.SphereGeometry(0.11, 10, 8),
+      new THREE.SphereGeometry(0.09, 10, 8),
       new THREE.MeshBasicMaterial({ color: '#ffbb66', toneMapped: false })
     );
-    bulb.position.set(axis, HEIGHT - 0.44, z);
+    bulb.position.set(x, HEIGHT - 0.18, z);
     group.add(bulb);
 
-    const lamp = new THREE.PointLight(0xffa347, 34, 30, 2);
-    lamp.position.set(axis, HEIGHT - 0.5, z);
+    const lamp = new THREE.PointLight(0xffa347, 30, 26, 2);
+    lamp.position.set(x, HEIGHT - 0.24, z);
     group.add(lamp);
     lamps.push(lamp);
   }
@@ -244,30 +268,40 @@ export function createOrangeRoom({ scene, passage, camera, player, friend, posse
     seat.castShadow = true;
     pivot.add(seat);
 
-    // The button, on a post at the far end of the arc — where the seat gets to
-    // when the swing is up. It is not reachable on foot: 1.2 off the floor is
-    // easy to walk into, so the post is set where a standing body cannot be.
-    const hitZ = setZ + Math.sin(HIT_ANGLE) * ROPE;
-    const hitY = BEAM_Y - Math.cos(HIT_ANGLE) * ROPE;
+    /**
+     * The button, on the ceiling, where a rider's feet come up at the top of
+     * the arc.
+     *
+     * Worked out from the arc rather than placed by eye: the seat at HIT_ANGLE
+     * is here, and a rider's legs carry on past it along the tangent, so this
+     * is where the boots go. It hangs a little below the ceiling on a stem so
+     * there is something to actually connect with — flush with the plaster it
+     * read as a mark on the ceiling rather than as a thing to kick.
+     */
+    const seatZ = setZ + Math.sin(HIT_ANGLE) * ROPE;
+    const seatY = BEAM_Y - Math.cos(HIT_ANGLE) * ROPE;
+    const hitZ = seatZ + Math.cos(HIT_ANGLE) * LEGS;
+    const hitY = seatY + Math.sin(HIT_ANGLE) * LEGS;
 
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, hitY, 8), frameMat);
-    post.position.set(x, hitY / 2, hitZ + 0.28);
-    post.castShadow = true;
-    group.add(post);
-    solid(x - 0.12, x + 0.12, hitZ + 0.16, hitZ + 0.4, {});
+    const stem = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.05, 0.05, HEIGHT - hitY - 0.06, 8),
+      frameMat
+    );
+    stem.position.set(x, (HEIGHT + hitY + 0.06) / 2, hitZ);
+    group.add(stem);
 
     const padMat = new THREE.MeshStandardMaterial({
       color: '#5e1410',
       roughness: 0.45,
       emissive: '#000000',
     });
-    const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.09, 16), padMat);
-    pad.rotation.x = Math.PI / 2;
-    pad.position.set(x, hitY, hitZ + 0.17);
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.09, 16), padMat);
+    pad.position.set(x, hitY + 0.06, hitZ);
     group.add(pad);
 
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.23, 0.025, 8, 20), trimMat);
-    ring.position.set(x, hitY, hitZ + 0.16);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.025, 8, 20), trimMat);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(x, hitY + 0.06, hitZ);
     group.add(ring);
 
     return {
@@ -433,6 +467,7 @@ export function createOrangeRoom({ scene, passage, camera, player, friend, posse
     swing.rider = who;
     if (who === 'bucket') friend.setFollowing(false);
     playButtonPress(0.5);
+    showNote('E to pump. Space to get off.', 3.4);
     if (!entered) return;
     setObjective(
       swings.every((s) => s.rider)
@@ -455,23 +490,63 @@ export function createOrangeRoom({ scene, passage, camera, player, friend, posse
     }
   }
 
+  /**
+   * E gets you on, and from then until you leave it is the pump — a press
+   * rather than a hold, the way you kick a swing instead of leaning on it.
+   *
+   * Nothing else is on E, which took a redesign to get right. Getting off was
+   * on it too at first, offered whenever the swing was stopped, and that is
+   * every swing before it has been started: the first press of E on a parked
+   * swing took you straight back off it, so it could never be started at all.
+   * Space gets you off now — you jump off a swing — and the note on the way in
+   * says so, because a control nobody is told about is not a control.
+   *
+   * The label is a getter, which is why interaction.js fills its defaults in on
+   * the target rather than into a copy: a copy freezes accessors at whatever
+   * they said when the room was built.
+   */
   for (const swing of swings) {
+    const stopped = () => Math.abs(swing.angle) < 0.22 && Math.abs(swing.rate) < 0.5;
     interactions.push({
       position: seatOf(swing),
-      label: 'Get on the swing',
-      range: 2.2,
-      once: false,
-      enabled: () => !solved && !swing.rider && Math.abs(swing.angle) < 0.25,
-      onInteract: () => mount(swing),
-    });
-    interactions.push({
-      position: seatOf(swing),
-      label: 'Get off',
+      get label() {
+        return swing.rider === driver() ? 'Pump' : 'Get on the swing';
+      },
       range: 2.4,
       once: false,
-      enabled: () => swing.rider === driver(),
-      onInteract: () => dismount(swing),
+      enabled: () => {
+        if (swing.rider === driver()) return true;
+        return !solved && !swing.rider && stopped();
+      },
+      onInteract() {
+        if (swing.rider === driver()) pump(swing);
+        else mount(swing);
+      },
     });
+  }
+
+  // Off the swing, whichever of you is on one. Not routed through the
+  // interaction system: that is E's, and E is the pump.
+  window.addEventListener('keydown', (event) => {
+    if (event.code !== 'Space' || event.repeat) return;
+    if (/^(INPUT|TEXTAREA)$/.test(event.target?.tagName ?? '')) return;
+    const who = driver();
+    const swing = swings.find((s) => s.rider === who);
+    if (swing) dismount(swing);
+  });
+
+  /**
+   * A kick, worth the most at the bottom of the arc and almost nothing at the
+   * top — which is how a swing actually works, and the only reason the timing
+   * of the press matters at all.
+   *
+   * From a standing start it goes toward the button, because a swing that
+   * needed a direction before it had one would never start.
+   */
+  function pump(swing) {
+    const way = Math.abs(swing.rate) < 0.05 ? 1 : Math.sign(swing.rate);
+    swing.rate += PUMP * Math.cos(swing.angle) * way;
+    playButtonPress(0.35);
   }
 
   /** Inside the room at all. */
@@ -509,23 +584,11 @@ export function createOrangeRoom({ scene, passage, camera, player, friend, posse
       }
 
       for (const swing of swings) {
-        /**
-         * A pendulum, and a rider leaning into it.
-         *
-         * The keys are read straight off the player, whichever body is on the
-         * seat — the same live key state the friend is driven with. Forward
-         * drives the swing toward the button and back drives it away from it,
-         * fixed to the room rather than to where the rider is looking: a swing
-         * that reversed its controls when you turned your head to watch the
-         * other one would be unusable, and watching the other one is the whole
-         * job.
-         */
-        let push = 0;
-        if (swing.rider && swing.rider === driver() && player.isEnabled) {
-          if (player.input.forward) push += PUMP;
-          if (player.input.back) push -= PUMP;
-        }
-        const accel = -(GRAVITY / ROPE) * Math.sin(swing.angle) - DAMPING * swing.rate + push;
+        // A pendulum, left to itself. Everything a rider does to it arrives as
+        // an impulse from `pump` rather than as a force held down here, so the
+        // swing is the same object whether anybody is on it or not.
+        
+        const accel = -(GRAVITY / ROPE) * Math.sin(swing.angle) - DAMPING * swing.rate;
         swing.rate += accel * delta;
         swing.angle += swing.rate * delta;
         if (Math.abs(swing.angle) > MAX_ANGLE) {
@@ -574,10 +637,13 @@ export function createOrangeRoom({ scene, passage, camera, player, friend, posse
         if (swing.rider === 'you') {
           player.position.set(swing.seatAt.x, swing.seatAt.y + 0.08, swing.seatAt.z);
           if (!possession.isPossessing) {
+            // The head goes up the rope, not straight up off the seat. On a
+            // swing you lean back with the arc, and at the top of this one a
+            // head held vertically would be through a ceiling three metres up.
             camera.position.set(
               player.position.x,
-              player.position.y + 1.1,
-              player.position.z
+              player.position.y + Math.cos(swing.angle) * 1.1,
+              player.position.z - Math.sin(swing.angle) * 1.1
             );
             camera.rotation.set(player.lookPitch, player.lookYaw, 0, 'YXZ');
           }

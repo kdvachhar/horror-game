@@ -75,8 +75,15 @@ const GRAVITY = 9.8;
  * the bucket's swing died at ten seconds and mine reached its button at fifty:
  * two swings that were never once over their buttons at the same moment, and
  * no amount of timing on the player's part could have fixed it.
+ *
+ * Halved again since, to take the clock out of it altogether. Half a minute was
+ * enough to cross the room and get the second swing up, which meant a player
+ * who did all of it right first time made it and a player who fumbled a mount
+ * or misjudged a couple of kicks lost the first swing and started over — and
+ * starting over is the least interesting thing this puzzle can ask for. A
+ * minute is long enough that the swing you left is simply still there.
  */
-const DAMPING = 0.014;
+const DAMPING = 0.007;
 /**
  * What one press of E is worth, in radians a second, at the bottom of the arc.
  *
@@ -87,9 +94,11 @@ const DAMPING = 0.014;
  *
  * Worth more per kick than it was, because the button it is aimed at is higher:
  * at the old value the climb took nine kicks, and nine kicks three seconds
- * apart is half a minute of holding a rhythm before anything happens.
+ * apart is half a minute of holding a rhythm before anything happens. Three
+ * kicks now — the climb is the part everyone gets right, and every second of
+ * it is a second of the other swing's arc that has gone by.
  */
-const PUMP = 0.7;
+const PUMP = 0.85;
 /**
  * Past this it would go over the top, which is not a swing any more.
  *
@@ -112,11 +121,19 @@ const MAX_ANGLE = 1.4;
  */
 const HIT_ANGLE = 1.12;
 /**
- * How close together the two hits have to be. Generous — the point is the
- * phase of two three-second pendulums, and asking for tenths on top of that
- * would be asking for the same thing twice.
+ * How close together the two hits have to be.
+ *
+ * Wide, and deliberately wider than it needs to be. The thing being asked for
+ * is that you get two pendulums swinging together, and you can see and hear
+ * whether you have: the pad flashes and the button sounds on every pass. Once
+ * a player has understood that much, making them land it inside half a second
+ * is not a second idea, it is the same idea with a stopwatch on it. At better
+ * than a second either way you can be visibly nearly right and have it count,
+ * which is most of what separates a puzzle from a knack.
  */
-const WINDOW = 0.55;
+const WINDOW = 1.1;
+/** Missed, but close enough to be worth saying so. Once. See the hit test. */
+const NEARLY = 2.4;
 
 const BEAM_Y = 2.85;
 /** How far a rider's feet reach past the seat, along the arc. */
@@ -166,6 +183,8 @@ export function createOrangeRoom({
 
   let entered = false;
   let solved = false;
+  /** Whether the near-miss hint has been given. It is given once. */
+  let missedNote = false;
   /** The room's own clock, in seconds, for comparing the two hits. */
   let clock = 0;
 
@@ -694,11 +713,21 @@ export function createOrangeRoom({
           playButtonPress(0.8);
           swing.lastHit = clock;
           const other = swings.find((s) => s !== swing);
-          if (clock - other.lastHit <= WINDOW) {
+          const gap = clock - other.lastHit;
+          if (gap <= WINDOW) {
             solved = true;
             playWardDoor();
             setObjective('Go through');
             showNote('Both at once. Something opens at the far end.', 3.4);
+          } else if (!missedNote && gap <= NEARLY) {
+            // Once, and only when the two are already in the same neighbourhood.
+            // Two buttons that go off a couple of seconds apart look from the
+            // seat like two buttons going off, and a player can be most of the
+            // way to having this and read it as nothing happening. Saying so the
+            // first time it nearly lands is the difference between a puzzle you
+            // are working on and one you think is broken.
+            missedNote = true;
+            showNote('Close. They have to go off together.', 3.2);
           }
         }
         if (swing.angle < HIT_ANGLE - 0.08) swing.armed = true;

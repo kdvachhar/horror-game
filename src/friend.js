@@ -62,6 +62,14 @@ const PUPIL_TRAVEL = EYE_RADIUS - PUPIL_RADIUS;
 const EYE_SPACING = 0.15;
 /** Height of the eyes above the feet — the upper third of the bucket. */
 const EYE_HEIGHT = LEG_HEIGHT + BODY_HEIGHT * 0.62;
+
+// Sitting down, on a swing seat. The root stays on the seat and the barrel
+// comes down onto it, so what was a leg's length of clearance underneath is
+// gone and the legs go out in front instead of under. See sit().
+const SEATED_BODY_Y = 0.02;
+const SEATED_HIP_Y = 0.1;
+/** Thighs forward and a little down, which is where its boots reach from. */
+const SEATED_LEG = -1.15;
 /** Lift off the surface so they never z-fight with the face beneath. */
 const EYE_LIFT = 0.006;
 /** Velocity kept when a pupil hits the rim. Low: they thud, they don't ping. */
@@ -267,6 +275,8 @@ export function createFriend(scene) {
   let listenerLevel = 1;
   let lastStep = 0;
   let stepCooldown = 0;
+  /** Riding something that says where it is. See sit(). */
+  let seated = false;
 
   let driven = false;
   let driveYaw = 0;
@@ -423,6 +433,25 @@ export function createFriend(scene) {
 
     // Small counter-bob on the body, dipping as each leg passes under it.
     body.position.y = LEG_HEIGHT + Math.abs(Math.cos(walkPhase)) * 0.035 * (swing / 0.7);
+  }
+
+  /**
+   * Undo sit(): upright, legs back under it, eyes back up the barrel.
+   *
+   * Called both when whatever was carrying it puts it down and by spawn(), so
+   * a bucket teleported off a swing by anything else in the game cannot end up
+   * walking around the building in a sitting position.
+   */
+  function standUp() {
+    if (!seated) return;
+    seated = false;
+    mesh.rotation.set(0, yaw, 0);
+    body.position.y = LEG_HEIGHT;
+    eyeGroup.position.y = 0;
+    for (const hip of legs) {
+      hip.position.y = LEG_HEIGHT;
+      hip.rotation.x = 0;
+    }
   }
 
   /**
@@ -712,6 +741,7 @@ export function createFriend(scene) {
     spawn(at, initialVelocity) {
       active = true;
       following = false;
+      standUp();
       // A bucket that has just been put somewhere new has not been getting
       // nowhere there. Carrying the old counters over meant one that had given
       // up hopping stayed given up after being respawned across the level.
@@ -775,9 +805,14 @@ export function createFriend(scene) {
       return grounded;
     },
 
-    /** Where the camera sits when you are inside it — its own eye line. */
+    /**
+     * Where the camera sits when you are inside it — its own eye line, measured
+     * from wherever the body has been put. Sitting down drops it by the legs
+     * it is no longer standing on, so the view is at the eyes rather than a
+     * foot above the barrel they are stuck to.
+     */
     get eyeHeight() {
-      return EYE_HEIGHT;
+      return seated ? EYE_HEIGHT - LEG_HEIGHT + SEATED_BODY_Y : EYE_HEIGHT;
     },
 
     /** How far the view should still be held back after a step up. */
@@ -829,6 +864,57 @@ export function createFriend(scene) {
       Object.assign(driveInput, input);
     },
 
+    /**
+     * Sit it on something that carries it — the swings in the orange room.
+     *
+     * `at` is the seat, `lean` is how far that seat is tilted, and `facing` is
+     * the way the thing is travelling. Called every frame by whatever is doing
+     * the carrying, and it is the last word on where this body is: while it is
+     * seated update() stops simulating, because a bucket that keeps falling and
+     * colliding while something else decides where it is spends the whole ride
+     * being caught and put back.
+     *
+     * The barrel is dropped so it rests on the seat rather than standing a
+     * leg's length above it, and the legs come out in front — which is both how
+     * anything sits down and, at the top of the arc, what puts its boots on the
+     * button it is aimed at. The eyes go down with the barrel: they hang off the
+     * root rather than off the body, so nothing else would move them.
+     */
+    sit(at, lean, facing = 0) {
+      seated = true;
+      following = false;
+      position.copy(at);
+      velocity.set(0, 0, 0);
+      prevVelocity.set(0, 0, 0);
+      yaw = facing;
+      mesh.position.copy(at);
+      // rotation.x is the outermost turn in the default XYZ order, so this is a
+      // tilt about the world axis applied to an already-yawed body — and it is
+      // about the root, which is sitting on the seat, so the body pivots where
+      // it is resting rather than swinging off the plank.
+      mesh.rotation.set(lean, facing, 0);
+      body.position.y = SEATED_BODY_Y;
+      eyeGroup.position.y = SEATED_BODY_Y - LEG_HEIGHT;
+      for (const hip of legs) {
+        hip.position.y = SEATED_HIP_Y;
+        hip.rotation.x = SEATED_LEG;
+      }
+    },
+
+    /** Back on its feet, wherever it has been left. */
+    stand() {
+      standUp();
+    },
+
+    get isSeated() {
+      return seated;
+    },
+
+    /** How far it is leaning, for whoever is looking out of it. */
+    get lean() {
+      return seated ? mesh.rotation.x : 0;
+    },
+
     jump() {
       if (!grounded) return;
       velocity.y = DRIVE_JUMP;
@@ -838,6 +924,16 @@ export function createFriend(scene) {
 
     update(delta, camera, targetPosition, colliders) {
       if (!active) return;
+
+      // Sitting on something. Everything below this decides where the body goes
+      // on its own, and none of it is welcome on a swing — see sit(). The eyes
+      // still work, so it watches you go past.
+      if (seated) {
+        const seatedRange = camera.position.distanceTo(position) / 4;
+        listenerLevel = 1 / (1 + seatedRange * seatedRange);
+        if (!driven) updateEyes(delta, camera);
+        return;
+      }
 
       if (driven) drive(delta);
       else if (following) follow(delta, targetPosition);

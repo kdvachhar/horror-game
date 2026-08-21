@@ -122,7 +122,34 @@ const BEAM_Y = 2.85;
 /** How far a rider's feet reach past the seat, along the arc. */
 const LEGS = 0.75;
 
-export function createOrangeRoom({ scene, passage, camera, player, friend, possession }) {
+/**
+ * Which way a rider faces on the seat: toward the buttons, which is +z, which
+ * is zero in both bodies' own reckoning — the bucket's eyes are on its +z face,
+ * and your own body has no face, only legs, which go out the same way.
+ */
+const RIDE_YAW = 0;
+/** Eye line above the seat, along the rope. A sitting height, not a standing one. */
+const SEAT_EYE = 0.78;
+/**
+ * How much of the swing's lean the view takes.
+ *
+ * Not all of it. Riding to the top of this arc lies you back eighty degrees,
+ * and a view that went with that would be pointing at the ceiling however you
+ * held the mouse. A third of it reads as rocking with the swing while leaving
+ * the aim where you put it. The same share is used from inside the bucket —
+ * see possession.applyCamera.
+ */
+const VIEW_LEAN = 0.35;
+
+export function createOrangeRoom({
+  scene,
+  passage,
+  camera,
+  player,
+  playerBody,
+  friend,
+  possession,
+}) {
   const group = new THREE.Group();
   scene.add(group);
 
@@ -346,6 +373,8 @@ export function createOrangeRoom({ scene, passage, camera, player, friend, posse
       padMat,
       angle: 0,
       rate: 0,
+      /** The angle as a mesh tilt — the same arc, in the renderer's sign. */
+      lean: 0,
       /** Null, 'you' or 'bucket'. */
       rider: null,
       /** Latches so one pass of the button is one press. */
@@ -514,12 +543,19 @@ export function createOrangeRoom({ scene, passage, camera, player, friend, posse
     const who = swing.rider;
     swing.rider = null;
     if (who === 'you') {
+      // Its own body again: walking, falling, standing upright, and holding
+      // the camera. teleport clears the momentum the seat had at the moment
+      // you stepped off it.
+      player.setCarried(false);
+      playerBody.setSeated(null);
       player.teleport({
         position: [swing.standAt.x, 0, swing.standAt.z],
         yaw: player.lookYaw,
         pitch: player.lookPitch,
       });
     } else if (who === 'bucket') {
+      // spawn() stands it back up — a bucket put down anywhere is a bucket on
+      // its feet.
       friend.spawn(swing.standAt);
     }
   }
@@ -630,7 +666,19 @@ export function createOrangeRoom({ scene, passage, camera, player, friend, posse
           swing.rate = 0;
         }
 
-        swing.pivot.rotation.x = swing.angle;
+        // The seat, twice: once as the thing you can see, once as the point a
+        // rider is put on. They have to be the same place, and the sign here is
+        // the whole reason they are.
+        //
+        // A turn about x by a positive angle carries a point hanging below the
+        // pivot toward -z, and `seatAt` below sends it toward +z, so the plank
+        // used to swing out over the room while whoever was sitting on it flew
+        // the other way — measured at 2.8 metres apart at the top of the arc,
+        // with the buttons on the rider's side. Negating it is what makes the
+        // seat and the seated agree, and everything else in the room is written
+        // from the same convention: positive is toward the buttons.
+        swing.lean = -swing.angle;
+        swing.pivot.rotation.x = swing.lean;
         swing.seatAt.set(
           swing.x,
           BEAM_Y - Math.cos(swing.angle) * ROPE,
@@ -665,25 +713,42 @@ export function createOrangeRoom({ scene, passage, camera, player, friend, posse
           swing.padMat.emissive.setStyle('#a8410c').multiplyScalar(swing.lamp / 0.35);
         }
 
-        // And whoever is on it goes where the seat is. Written after both
-        // bodies have had their own update, so this is the last word on where
-        // they are — neither of them knows it is on a swing.
+        // And whoever is on it rides it. Written after both bodies have had
+        // their own update, so this is the last word on where they are and how
+        // they are sitting — neither of them knows what a swing is, they are
+        // simply being carried by one.
         if (swing.rider === 'you') {
-          player.position.set(swing.seatAt.x, swing.seatAt.y + 0.08, swing.seatAt.z);
+          // Every frame rather than once on the way on: coming back into this
+          // body with F hands it control again, and it would start walking
+          // around underneath you while you sat there.
+          player.setCarried(true);
+          player.position.set(swing.seatAt.x, swing.seatAt.y, swing.seatAt.z);
+          playerBody.setSeated({ lean: swing.lean, yaw: RIDE_YAW });
           if (!possession.isPossessing) {
-            // The head goes up the rope, not straight up off the seat. On a
-            // swing you lean back with the arc, and at the top of this one a
-            // head held vertically would be through a ceiling three metres up.
+            // The head goes up the rope, not straight up off the seat: sitting
+            // on a swing you lean back with the arc, and at the top of this one
+            // a head held vertically would be through a ceiling three metres up.
+            // A seated eye line, not a standing one — the rest of the body is
+            // folded up on the plank.
             camera.position.set(
               player.position.x,
-              player.position.y + Math.cos(swing.angle) * 1.1,
-              player.position.z - Math.sin(swing.angle) * 1.1
+              player.position.y + Math.cos(swing.angle) * SEAT_EYE,
+              player.position.z - Math.sin(swing.angle) * SEAT_EYE
             );
-            camera.rotation.set(player.lookPitch, player.lookYaw, 0, 'YXZ');
+            // And the view leans with it, by a share of the angle. See the same
+            // sum in possession.applyCamera, which does this for the other body.
+            camera.rotation.set(
+              player.lookPitch - swing.lean * VIEW_LEAN,
+              player.lookYaw,
+              0,
+              'YXZ'
+            );
           }
         } else if (swing.rider === 'bucket') {
-          friend.position.set(swing.seatAt.x, swing.seatAt.y + 0.1, swing.seatAt.z);
-          friend.mesh.position.copy(friend.position);
+          // Everything about where the bucket is and how it is folded, in one
+          // call — including that it stops falling, which it was doing all the
+          // way through every ride. See friend.sit().
+          friend.sit(swing.seatAt, swing.lean, RIDE_YAW);
           // It is not stuck, it is sitting down. Without this the rescue that
           // teleports a wedged bucket back to you fires within a few seconds
           // of it being left on a swing.

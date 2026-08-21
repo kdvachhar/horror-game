@@ -18,6 +18,14 @@ import { DOOR, LAYER, PLAYER } from './config.js';
 const SHOULDER = 1.42;
 const HIP = 0.92;
 
+// Sitting down. The thighs come forward and a little under the horizontal, the
+// shins hang back down off the knee, and the arms drop to the ropes. SEAT_SINK
+// is how far the hips settle into the plank rather than balancing on top of it.
+const SEAT_THIGH = -1.35;
+const SEAT_SHIN = 1.0;
+const SEAT_ARM = -0.32;
+const SEAT_SINK = 0.06;
+
 function limb(radius, length, material) {
   const joint = new THREE.Group();
   const bone = new THREE.Mesh(new THREE.CapsuleGeometry(radius, length, 4, 8), material);
@@ -84,6 +92,8 @@ export function createPlayerBody(scene) {
 
   let phase = 0;
   let layer = null;
+  /** Null, or { lean, yaw } while it is sitting on something. See setSeated. */
+  let seated = null;
   // Held while you are driving something else. The look is shared between both
   // bodies, so without this your own body pirouettes on the spot as you look
   // around from inside the bucket.
@@ -99,34 +109,83 @@ export function createPlayerBody(scene) {
       heldYaw = on ? yaw : null;
     },
 
+    /**
+     * Sit it down on something that moves, or stand it back up with null.
+     *
+     * `lean` is how far that thing is tilted and `yaw` is the way it travels —
+     * a body on a swing faces along the arc, not wherever you happened to be
+     * looking when you stepped out of it.
+     *
+     * This matters more here than it looks: the one place in the game you sit
+     * down is the swing puzzle, and the whole point of that puzzle is that you
+     * leave your body swinging and watch it from across the room through the
+     * bucket's eyes. A body standing to attention on a plank at forty degrees
+     * is the thing you would be looking at.
+     */
+    setSeated(at) {
+      seated = at;
+    },
+
     update(delta, pose) {
-      group.position.set(pose.x, pose.y, pose.z);
-      // Yaw only. The body stands upright however far up or down you look.
-      group.rotation.y = heldYaw ?? pose.yaw;
-
-      // Gait is driven by distance covered, the same as the footstep cadence,
-      // so the shadow's stride matches the sound.
-      const moving = pose.grounded && pose.speed > 0.4;
-      phase += moving ? pose.speed * delta * 3.4 : 0;
-
-      const swing = moving ? Math.min(1, pose.speed / PLAYER.runSpeed) * 0.85 : 0;
-      const rest = moving ? 0 : 0.08;
-
-      for (const { upper, lower, side } of arms) {
-        upper.rotation.x = Math.sin(phase) * swing * side;
-        lower.rotation.x = Math.max(0, -Math.sin(phase) * side) * swing * 0.7 + rest;
+      // Sitting: the hips go on the seat, not the feet, so the figure rests on
+      // the plank instead of hovering a leg's length above it.
+      //
+      // The root is still at the feet and the lean turns about the root, so the
+      // root has to be placed a hip's height back *along the body's own axis*
+      // rather than straight down — put it straight down and the hips swing
+      // clear of the plank as the swing tilts, three quarters of a metre off it
+      // at the top of the arc. What is left over is SEAT_SINK, which settles
+      // the figure into the seat rather than balancing it on top.
+      if (seated) {
+        const drop = HIP + SEAT_SINK;
+        group.position.set(
+          pose.x,
+          pose.y - Math.cos(seated.lean) * drop,
+          pose.z - Math.sin(seated.lean) * drop
+        );
+      } else {
+        group.position.set(pose.x, pose.y, pose.z);
       }
-      for (const { upper, lower, side } of legs) {
-        upper.rotation.x = -Math.sin(phase) * swing * side;
-        // Knees only bend one way.
-        lower.rotation.x = Math.max(0, Math.sin(phase) * side) * swing * 0.9;
-      }
+      // Yaw only, standing — the body stays upright however far up or down you
+      // look. Seated, rotation.x is the outer turn of the default XYZ order, so
+      // it leans the already-yawed body about the world axis.
+      group.rotation.set(seated ? seated.lean : 0, seated ? seated.yaw : heldYaw ?? pose.yaw, 0);
 
-      // Airborne: tuck up rather than keep marching.
-      if (!pose.grounded) {
+      if (seated) {
         for (const { upper, lower } of legs) {
-          upper.rotation.x = -0.5;
-          lower.rotation.x = 0.9;
+          upper.rotation.x = SEAT_THIGH;
+          lower.rotation.x = SEAT_SHIN;
+        }
+        for (const { upper, lower } of arms) {
+          // Hands down on the ropes, which are either side of the hips.
+          upper.rotation.x = SEAT_ARM;
+          lower.rotation.x = 0.55;
+        }
+      } else {
+        // Gait is driven by distance covered, the same as the footstep cadence,
+        // so the shadow's stride matches the sound.
+        const moving = pose.grounded && pose.speed > 0.4;
+        phase += moving ? pose.speed * delta * 3.4 : 0;
+
+        const swing = moving ? Math.min(1, pose.speed / PLAYER.runSpeed) * 0.85 : 0;
+        const rest = moving ? 0 : 0.08;
+
+        for (const { upper, lower, side } of arms) {
+          upper.rotation.x = Math.sin(phase) * swing * side;
+          lower.rotation.x = Math.max(0, -Math.sin(phase) * side) * swing * 0.7 + rest;
+        }
+        for (const { upper, lower, side } of legs) {
+          upper.rotation.x = -Math.sin(phase) * swing * side;
+          // Knees only bend one way.
+          lower.rotation.x = Math.max(0, Math.sin(phase) * side) * swing * 0.9;
+        }
+
+        // Airborne: tuck up rather than keep marching.
+        if (!pose.grounded) {
+          for (const { upper, lower } of legs) {
+            upper.rotation.x = -0.5;
+            lower.rotation.x = 0.9;
+          }
         }
       }
 

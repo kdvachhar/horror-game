@@ -32,6 +32,8 @@ export function createPlayer(camera, domElement, colliders) {
   // taking control back never needs a resync.
   let controlled = true;
   let jumpListener = null;
+  /** Sitting on something that moves. See setCarried(). */
+  let carried = false;
 
   // Vertical state. position.y is the player's feet.
   let verticalVelocity = 0;
@@ -227,6 +229,26 @@ export function createPlayer(camera, domElement, colliders) {
     setControlled(on) {
       controlled = on;
     },
+
+    /**
+     * Sat on something that moves, and carried by it — the swings in the orange
+     * room. Distinct from setControlled: this body is still yours and still
+     * answers F, it simply is not walking anywhere. Whatever is carrying it
+     * writes both the position and the view every frame.
+     *
+     * Without it the movement below fights the carrier every frame. The keys
+     * still push: sitting on a swing with W held, this body reported 5.6m/s of
+     * travel while going nowhere, which is the number the shadow body's gait
+     * and the footstep cadence are both driven by. And gravity still pulls, so
+     * it spends the ride falling out of the seat and being put back into it.
+     */
+    setCarried(on) {
+      carried = on;
+      if (!on) return;
+      velocity.set(0, 0, 0);
+      verticalVelocity = 0;
+      grounded = true;
+    },
     /**
      * The feet, in world space. Live — not a copy.
      *
@@ -285,6 +307,9 @@ export function createPlayer(camera, domElement, colliders) {
     },
     update(delta) {
       if (!enabled) return;
+      // Being carried — see setCarried(). Nothing below this belongs to a body
+      // that is not walking anywhere.
+      if (carried) return;
       forward.set(-Math.sin(yaw), 0, -Math.cos(yaw));
       right.set(Math.cos(yaw), 0, -Math.sin(yaw));
 

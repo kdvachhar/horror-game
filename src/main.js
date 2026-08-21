@@ -156,6 +156,9 @@ const orangeRoom = createOrangeRoom({
   passage: exitRoom.wayOn,
   camera,
   player,
+  // The shadow body, because it is the one you see riding: the puzzle has you
+  // leave yourself swinging and watch from inside the bucket.
+  playerBody,
   friend,
   possession: { get isPossessing() { return possession.isPossessing; } },
 });
@@ -728,7 +731,6 @@ renderer.setAnimationLoop((time) => {
   debugMenu.update(delta);
   monologue.update(delta);
   player.update(delta);
-  playerBody.update(delta, player.pose);
   // Routes the keys to whoever is being driven. Before the friend's update, so
   // it steers on this frame's input rather than last frame's.
   possession.update();
@@ -807,6 +809,12 @@ renderer.setAnimationLoop((time) => {
   // update: a rider on a swing is put where the seat is, and if that is the
   // bucket then the view below has to be taken from where it has just been put.
   orangeRoom.update(delta);
+  // After that, not before it, and for the same reason the view is: the shadow
+  // body is drawn where the player is, and on a swing the player is wherever
+  // the room has just put them. Updated ahead of the rooms it lagged a frame
+  // behind the body it belongs to, which on the fastest part of an arc is the
+  // best part of a foot.
+  playerBody.update(delta, player.pose);
   // The view has to be written after the body it is attached to has moved, or
   // it trails a frame behind everything you do.
   possession.applyCamera();

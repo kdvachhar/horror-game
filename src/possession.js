@@ -19,6 +19,9 @@
  * the floor with your own body stood across the room, not off a caption.
  */
 
+/** How much of a seated body's lean the view takes. See applyCamera. */
+const VIEW_LEAN = 0.35;
+
 export function createPossession({ camera, player, friend, playerBody, onTaken }) {
   let unlocked = false;
   let possessing = false;
@@ -94,7 +97,18 @@ export function createPossession({ camera, player, friend, playerBody, onTaken }
         friend.position.y + friend.eyeHeight - friend.viewLag,
         friend.position.z
       );
-      camera.rotation.set(player.lookPitch, player.lookYaw, 0, 'YXZ');
+      // Whatever it is sitting on leans it, and the view goes with the body —
+      // ride a swing forward and you are lying back looking at the ceiling,
+      // which is where that swing's button is. `lean` is the body's own tilt
+      // and tips it head-backward as it goes negative, so the pitch it adds is
+      // the other way round. Only a share of it: taking the whole angle would
+      // wrench the view eighty degrees off where the mouse is pointing it.
+      camera.rotation.set(
+        player.lookPitch - friend.lean * VIEW_LEAN,
+        player.lookYaw,
+        0,
+        'YXZ'
+      );
     },
   };
 }

@@ -26,15 +26,30 @@ import { makeWornPaintSurface, cloneSurface } from './textures.js';
  */
 
 const STRIPES = [
-  { color: '#3c2260', height: 0.15 },   // purple
-  { color: '#22603a', height: 0.15 },   // green
-  { color: '#1e4a82', height: 0.15 },   // blue
+  { color: '#3c2260', height: 0.3 },   // purple
+  { color: '#22603a', height: 0.3 },   // green
+  { color: '#1e4a82', height: 0.3 },   // blue
 ];
 /** Hairline of wall left showing between them, so they read as three. */
-const SPLIT = 0.022;
-/** Height of the top of the band. Above the skirting, below the eye. */
-const TOP = 1.52;
-const BOTTOM = TOP - STRIPES.reduce((sum, s) => sum + s.height, 0) - SPLIT * (STRIPES.length - 1);
+const SPLIT = 0.04;
+/** Top to bottom of all three and the splits between them. */
+const BAND = STRIPES.reduce((sum, s) => sum + s.height, 0) + SPLIT * (STRIPES.length - 1);
+
+/**
+ * How high up the wall the middle of the band sits: half the room's height, so
+ * it is in the middle of the wall it is painted on.
+ *
+ * Except that one of these rooms is twenty-two metres tall. Taken literally the
+ * band in there would be eleven metres up, which is above the light fittings,
+ * past where the fog takes over, and out of shot unless you stand in the middle
+ * of the floor and look up — so the room the player sees most would be the one
+ * that appeared to lose its stripe. The cap is where a wall stops being a wall
+ * you are standing next to and starts being architecture. Every other room in
+ * the building is under it and gets its true middle.
+ */
+const HIGHEST = 4;
+const middleOf = (height) => Math.min(height / 2, HIGHEST);
+
 /** Off the wall face, far enough not to fight it for the same pixels. */
 const PROUD = 0.015;
 
@@ -46,6 +61,17 @@ const REACH = 0.35;
 const MARGIN = 0.12;
 /** Anything closer to the wall than this is the wall, not something on it. */
 const FLUSH = 0.03;
+/**
+ * And how far behind the plane a surface can be and still be *this* wall.
+ *
+ * Without this the test was only "does it stick out into the room", which every
+ * mesh in the next room along also passes, and a wall asked for where there is
+ * no wall got painted anyway — on the strength of a wall seven metres behind it.
+ * That put three stripes across the middle of the room with the television,
+ * hanging in the air in front of it. A wall is a surface at the plane, not
+ * everything standing behind the plane.
+ */
+const BEHIND = 0.45;
 
 /**
  * The wear, shared by every stripe in the building.
@@ -118,7 +144,7 @@ function subtract(keep, cut) {
  * lintel over a door is deliberately not a wall by this test: it is up above
  * the band, and paint does not float across an opening under it.
  */
-function readWall({ scene, along, at, face, ignore }) {
+function readWall({ scene, along, at, face, ignore, top, bottom }) {
   const axis = along === 'x' ? 'x' : 'z';
   const normal = along === 'x' ? 'z' : 'x';
   const skip = new Set();
@@ -144,11 +170,21 @@ function readWall({ scene, along, at, face, ignore }) {
     // The wall itself: sitting in the plane or behind it, and tall enough to
     // carry the band at the height the band runs.
     if (far <= FLUSH) {
-      if (box.min.y <= BOTTOM + 0.01 && box.max.y >= TOP - 0.01) walls.push(span);
+      // Masonry, not joinery. A wall is either a surface — every wall in this
+      // game is a plane — or something thick enough to be structure. A door
+      // leaf sitting in its frame is neither: it is a hundred millimetres of
+      // board that happens to be flush with the wall today, and painting the
+      // stripe across it leaves a band hanging in an open doorway the moment
+      // it swings. The red door in the dark room did exactly that.
+      const thickness = Math.abs(box.max[normal] - box.min[normal]);
+      const structural = thickness < 0.06 || thickness > 0.3;
+      if (structural && far >= -BEHIND && box.min.y <= bottom + 0.01 && box.max.y >= top - 0.01) {
+        walls.push(span);
+      }
       return;
     }
     // Something on the wall, standing in front of it across the band.
-    if (near < REACH && box.min.y < TOP && box.max.y > BOTTOM) {
+    if (near < REACH && box.min.y < top && box.max.y > bottom) {
       blocked.push([span[0] - MARGIN, span[1] + MARGIN]);
     }
   });
@@ -162,11 +198,13 @@ function readWall({ scene, along, at, face, ignore }) {
  * `along` is the axis the wall runs down and `at` is where it stands on the
  * other one; `face` is +1 or -1 for which way the paint looks.
  */
-export function paintWallStripes({ scene, along, at, face, from, to, ignore = [] }) {
+export function paintWallStripes({ scene, along, at, face, from, to, height = 3.4, ignore = [] }) {
   const group = new THREE.Group();
   scene.add(group);
 
-  const { walls, blocked } = readWall({ scene, along, at, face, ignore });
+  const top = middleOf(height) + BAND / 2;
+  const bottom = top - BAND;
+  const { walls, blocked } = readWall({ scene, along, at, face, ignore, top, bottom });
   const wanted = [[Math.min(from, to), Math.max(from, to)]];
   // Where the wall is, minus what is on it, minus anything outside the stretch
   // asked for.
@@ -180,11 +218,11 @@ export function paintWallStripes({ scene, along, at, face, from, to, ignore = []
     if (length < 0.25) continue;   // a scrap of paint between two fittings
     const middle = (runFrom + runTo) / 2;
 
-    let y = TOP;
-    for (const { color, height } of STRIPES) {
+    let y = top;
+    for (const { color, height: thickness } of STRIPES) {
       const stripe = new THREE.Mesh(
-        new THREE.PlaneGeometry(length, height),
-        wornPaint(color, length, height)
+        new THREE.PlaneGeometry(length, thickness),
+        wornPaint(color, length, thickness)
       );
       // Paint on a wall is lit by the room and takes its shadows, so it is a
       // standard material rather than an unlit one: in the corners these rooms
@@ -192,14 +230,14 @@ export function paintWallStripes({ scene, along, at, face, from, to, ignore = []
       stripe.receiveShadow = true;
       stripe.userData.wallStripe = true;
       if (along === 'x') {
-        stripe.position.set(middle, y - height / 2, at + face * PROUD);
+        stripe.position.set(middle, y - thickness / 2, at + face * PROUD);
         stripe.rotation.y = face > 0 ? 0 : Math.PI;
       } else {
-        stripe.position.set(at + face * PROUD, y - height / 2, middle);
+        stripe.position.set(at + face * PROUD, y - thickness / 2, middle);
         stripe.rotation.y = face > 0 ? Math.PI / 2 : -Math.PI / 2;
       }
       group.add(stripe);
-      y -= height + SPLIT;
+      y -= thickness + SPLIT;
     }
   }
 
@@ -214,7 +252,7 @@ export function paintWallStripes({ scene, along, at, face, from, to, ignore = []
  * there does not get painted. That is what makes this callable per room rather
  * than per stretch of masonry.
  */
-export function paintRoomStripes({ scene, minX, maxX, minZ, maxZ, ignore = [] }) {
+export function paintRoomStripes({ scene, minX, maxX, minZ, maxZ, height, ignore = [] }) {
   const group = new THREE.Group();
   scene.add(group);
   for (const wall of [
@@ -223,7 +261,7 @@ export function paintRoomStripes({ scene, minX, maxX, minZ, maxZ, ignore = [] })
     { along: 'x', at: minZ, face: 1, from: minX, to: maxX },
     { along: 'x', at: maxZ, face: -1, from: minX, to: maxX },
   ]) {
-    group.add(paintWallStripes({ scene, ignore, ...wall }).group);
+    group.add(paintWallStripes({ scene, ignore, height, ...wall }).group);
   }
   return { group };
 }

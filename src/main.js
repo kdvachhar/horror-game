@@ -11,7 +11,17 @@ import { createExitRoom } from './exitRoom.js';
 import { createOrangeRoom } from './orangeRoom.js';
 import { createEmployeeDoor } from './employeeDoor.js';
 import { paintRoomStripes } from './wallStripes.js';
-import { MACHINE, DOOR, BACK_DOOR, LAYER, SPAWN, MEDICAL, insideBackRoom } from './config.js';
+import {
+  MACHINE,
+  DOOR,
+  BACK_DOOR,
+  LAYER,
+  SPAWN,
+  MEDICAL,
+  ROOM,
+  BACK_ROOM,
+  insideBackRoom,
+} from './config.js';
 import { createPlayer } from './player.js';
 import { createWallText } from './wallText.js';
 import { createInteractions } from './interaction.js';
@@ -225,18 +235,25 @@ for (const { dark, ...where } of STAFF_DOORS) {
  */
 const NOT_FIXTURES = [friend.mesh, playerBody.group, bucket.group];
 for (const room of [
-  // The room you wake up in.
-  { minX: -22, maxX: 22, minZ: -21, maxZ: 21 },
+  // The room you wake up in. Its own height is 22m and the band is capped well
+  // under that — see HIGHEST in wallStripes.js.
+  { minX: -22, maxX: 22, minZ: -21, maxZ: 21, height: ROOM.height },
   // The dark room behind it. On the dark layer with everything else in there
   // until the power comes back; lightUpBackRoom finds it by layer.
-  { minX: -8, maxX: 8, minZ: -39, maxZ: -21, dark: true },
+  { minX: -8, maxX: 8, minZ: -39, maxZ: -21, height: BACK_ROOM.height, dark: true },
   // The ward you wake up in, the corridor behind its back wall, and the store
-  // room the corridor turns into.
-  { minX: -5, maxX: 8, minZ: -52.5, maxZ: -41.5 },
-  { minX: 2, maxX: 8, minZ: -41.5, maxZ: -39 },
-  { minX: 8, maxX: 13.9, minZ: -41.5, maxZ: -37.4 },
-  // And the room at the end with the television in it.
-  { minX: -55.2, maxX: -48, minZ: -39.4, maxZ: -31.4 },
+  // room the corridor turns into. The corridor and the store are one space and
+  // share a ceiling.
+  { minX: -5, maxX: 8, minZ: -52.5, maxZ: -41.5, height: MEDICAL.height },
+  { minX: 2, maxX: 8, minZ: -41.5, maxZ: -39, height: 3.4 },
+  { minX: 8, maxX: 13.9, minZ: -41.5, maxZ: -37.4, height: 3.4 },
+  // And the room at the end with the television in it. Measured off the room
+  // rather than worked out from the hall: the doorway the hall hands over is at
+  // the far side of a 2.6m passage, so the room starts at -50.6 and not at the
+  // hall's end wall, and its far wall — the one the television is on — is at
+  // -57.8. Guessing this put the paint 2.6m into the passage at one end and
+  // stopped it short of the television's wall at the other.
+  { minX: -57.8, maxX: -50.6, minZ: -39.4, maxZ: -31.4, height: 4.2 },
 ]) {
   const { dark, ...bounds } = room;
   const painted = paintRoomStripes({ scene, ignore: NOT_FIXTURES, ...bounds });

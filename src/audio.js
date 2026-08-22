@@ -481,6 +481,56 @@ export function playDoorClose() {
   }
 }
 
+/**
+ * A locked door being tried: the handle going down and coming back, the leaf
+ * moving the half centimetre its latch allows, and nothing else.
+ *
+ * Deliberately small. playDoorClose is a slab of concrete arriving; this is the
+ * sound of a door telling you no, and the whole point of the staff doors is
+ * that they never do anything. Three clicks and a dull knock, no low end.
+ */
+export function playLockedDoor(level = 1) {
+  if (!ready()) return;
+  playedCount++;
+
+  const t = context.currentTime + 0.01;
+
+  // Handle: two dry clicks, down and back up.
+  for (const [delay, pitch, gainLevel] of [[0, 1750, 0.12], [0.16, 1520, 0.085]]) {
+    const click = context.createBufferSource();
+    click.buffer = getNoise();
+    const band = context.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = pitch + Math.random() * 220;
+    band.Q.value = 5.5;
+    const gain = context.createGain();
+    const at = t + delay;
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.exponentialRampToValueAtTime(gainLevel * level, at + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.05);
+    click.connect(band).connect(gain);
+    send(gain, 0.8);
+    click.start(at, Math.random() * 1.5);
+    click.stop(at + 0.08);
+  }
+
+  // The leaf itself, hitting the frame and stopping dead against the latch.
+  const knock = context.createBufferSource();
+  knock.buffer = getNoise();
+  const body = context.createBiquadFilter();
+  body.type = 'lowpass';
+  body.frequency.setValueAtTime(900, t + 0.05);
+  body.frequency.exponentialRampToValueAtTime(240, t + 0.2);
+  const knockGain = context.createGain();
+  knockGain.gain.setValueAtTime(0.0001, t + 0.05);
+  knockGain.gain.exponentialRampToValueAtTime(0.16 * level, t + 0.06);
+  knockGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+  knock.connect(body).connect(knockGain);
+  send(knockGain, 0.7);
+  knock.start(t + 0.05, Math.random() * 1.5);
+  knock.stop(t + 0.3);
+}
+
 /** Heavier, lower version of a footstep, for coming down off a jump. */
 export function playLanding() {
   if (!ready()) return;

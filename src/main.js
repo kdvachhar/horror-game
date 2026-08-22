@@ -9,6 +9,7 @@ import { createMedicalRoom } from './medicalRoom.js';
 import { createGauntlet } from './gauntlet.js';
 import { createExitRoom } from './exitRoom.js';
 import { createOrangeRoom } from './orangeRoom.js';
+import { createEmployeeDoor, updateEmployeeDoors } from './employeeDoor.js';
 import { MACHINE, DOOR, BACK_DOOR, LAYER, SPAWN, MEDICAL, insideBackRoom } from './config.js';
 import { createPlayer } from './player.js';
 import { createWallText } from './wallText.js';
@@ -164,10 +165,51 @@ const orangeRoom = createOrangeRoom({
 });
 room.colliders.push(...orangeRoom.colliders);
 
+/**
+ * The staff doors, in five rooms, none of which own them.
+ *
+ * Placed from here rather than from inside each room because they belong to the
+ * building rather than to any one space in it — that is the whole idea of them,
+ * and a copy of the same prop built five times inside five files would be five
+ * chances for them to drift apart.
+ *
+ * Every one of these positions was probed against what is already standing
+ * there before it was written down. That is not caution for its own sake: these
+ * rooms are full, and a door hung by eye on the ward's far wall lands inside a
+ * wall fitting, one on the hall's long wall gets a skirting rail across the
+ * bottom of it, and neither is visible from where you write the number.
+ *
+ * The red hall is deliberately not on the list. It is the one room with
+ * something that sweeps its whole width, and a door fixed to the wall of it is
+ * a door the spike wall passes through.
+ */
+const STAFF_DOORS = [
+  // The room you wake up in, on both long walls — the biggest space in the
+  // game, and the one whose walls read as blank without something human on them.
+  // standoff: this room has the skirting rail. See createEmployeeDoor.
+  { x: -22, z: 6, facing: Math.PI / 2, standoff: 0.1 },
+  { x: 22, z: -7, facing: -Math.PI / 2, standoff: 0.1 },
+  // The dark room, on the wall opposite the red door. Built into the dark pass
+  // like everything else in there; lightUpBackRoom finds it by layer and brings
+  // it into the main one when the power comes back.
+  { x: 8, z: -26, facing: -Math.PI / 2, dark: true },
+  // The ward's far wall — the wall you wake up facing.
+  { x: -3.5, z: -52.5, facing: 0 },
+  // And the swing room, which is the furthest into the building you get.
+  { x: -60.2, z: -25, facing: Math.PI / 2 },
+];
+
+const staffDoors = STAFF_DOORS.map(({ dark, ...where }) => {
+  const door = createEmployeeDoor({ scene, ...where });
+  if (dark) door.group.traverse((object) => object.layers.set(LAYER.DARK));
+  return door;
+});
+
 const interactions = createInteractions(camera, showPrompt);
 for (const target of gauntlet.interactions) interactions.add(target);
 for (const target of exitRoom.interactions) interactions.add(target);
 for (const target of orangeRoom.interactions) interactions.add(target);
+for (const door of staffDoors) interactions.add(door.interaction);
 
 /**
  * What you think, turning round and finding the way you came in is shut.
@@ -781,6 +823,10 @@ renderer.setAnimationLoop((time) => {
   // them, so the charge in it is driven from here rather than from whichever
   // room happens to have switched it on. It costs nothing while it is off.
   updateWireCurrent(delta);
+  // Same arrangement as the wire, and for the same reason: the staff doors are
+  // scattered across five rooms and belong to none of them. Free while nobody
+  // is trying one, which is nearly always.
+  updateEmployeeDoors(delta);
   // Only the bucket can get up there, but the check is on position rather than
   // on identity — whatever ends up on the top board presses it. It latches, so
   // this is true on exactly one frame ever.

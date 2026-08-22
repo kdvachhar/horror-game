@@ -1264,6 +1264,76 @@ export function makeInstructionPosterTexture() {
   return posterTexture(canvas);
 }
 
+/**
+ * The plate screwed to every staff door in the building.
+ *
+ * Enamel rather than paper: the notices in the back room are things somebody
+ * put up, and this is part of the fabric of the place — the same sign on five
+ * doors in five rooms, which is what makes them read as one building rather
+ * than five sets. It is the only text in the game that repeats.
+ *
+ * Authored dark like everything else that gets lit. A sign with white enamel
+ * on it comes out of ACES as a lamp; this one is a bone-coloured letter on a
+ * near-black plate, and it is the letters that catch what light there is.
+ */
+export function makeEmployeeSignTexture() {
+  const W = 512;
+  const H = 168;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const c = canvas.getContext('2d');
+
+  c.fillStyle = '#191d1f';
+  c.fillRect(0, 0, W, H);
+
+  // Wear, heaviest at the edges where hands and trolleys catch it.
+  const worn = c.createLinearGradient(0, 0, 0, H);
+  worn.addColorStop(0, 'rgba(120,124,118,0.16)');
+  worn.addColorStop(0.5, 'rgba(0,0,0,0)');
+  worn.addColorStop(1, 'rgba(0,0,0,0.3)');
+  c.fillStyle = worn;
+  c.fillRect(0, 0, W, H);
+
+  c.strokeStyle = '#6f7a6d';
+  c.lineWidth = 4;
+  c.strokeRect(14, 14, W - 28, H - 28);
+
+  c.fillStyle = '#cdc9ba';
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.font = 'bold 62px "Courier New", Courier, monospace';
+  c.fillText('EMPLOYEES', W / 2, H * 0.36);
+  c.font = 'bold 44px "Courier New", Courier, monospace';
+  c.fillText('O N L Y', W / 2, H * 0.71);
+
+  // Screws in the corners, and scratches through the lot.
+  for (const [sx, sy] of [[30, 30], [W - 30, 30], [30, H - 30], [W - 30, H - 30]]) {
+    c.fillStyle = '#5b625c';
+    c.beginPath();
+    c.arc(sx, sy, 7, 0, Math.PI * 2);
+    c.fill();
+    c.strokeStyle = '#20241f';
+    c.lineWidth = 2.5;
+    c.beginPath();
+    c.moveTo(sx - 4, sy - 2);
+    c.lineTo(sx + 4, sy + 2);
+    c.stroke();
+  }
+  for (let i = 0; i < 26; i++) {
+    c.strokeStyle = `rgba(150,150,138,${0.03 + Math.random() * 0.09})`;
+    c.lineWidth = 1 + Math.random();
+    const x = Math.random() * W;
+    const y = Math.random() * H;
+    c.beginPath();
+    c.moveTo(x, y);
+    c.lineTo(x + (Math.random() - 0.5) * 60, y + (Math.random() - 0.5) * 12);
+    c.stroke();
+  }
+
+  return posterTexture(canvas);
+}
+
 export function makeSoftDotTexture() {
   const size = 64;
   const canvas = createCanvas(size);

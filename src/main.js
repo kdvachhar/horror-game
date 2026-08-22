@@ -10,6 +10,7 @@ import { createGauntlet } from './gauntlet.js';
 import { createExitRoom } from './exitRoom.js';
 import { createOrangeRoom } from './orangeRoom.js';
 import { createEmployeeDoor } from './employeeDoor.js';
+import { paintWallStripes } from './wallStripes.js';
 import { MACHINE, DOOR, BACK_DOOR, LAYER, SPAWN, MEDICAL, insideBackRoom } from './config.js';
 import { createPlayer } from './player.js';
 import { createWallText } from './wallText.js';
@@ -205,6 +206,30 @@ const STAFF_DOORS = [
 for (const { dark, ...where } of STAFF_DOORS) {
   const door = createEmployeeDoor({ scene, ...where });
   if (dark) door.group.traverse((object) => object.layers.set(LAYER.DARK));
+}
+
+/**
+ * And the stripe, round all four walls of the room you wake up in.
+ *
+ * The gaps are measured, not guessed: the two doorways and the two staff doors
+ * that now stand on the long walls, each with a hand's width of bare wall left
+ * either side so the paint stops short of a frame rather than dying against it.
+ * A stripe painted straight through a door frame is the one thing that would
+ * give away that it was put on afterwards.
+ */
+const ROOM_HALF_X = 22;
+const ROOM_HALF_Z = 21;
+for (const wall of [
+  // Long walls. Each carries a staff door; the reader beside it sticks out
+  // further along the wall than the frame does, hence the lopsided gaps.
+  { along: 'z', at: -ROOM_HALF_X, face: 1, from: -ROOM_HALF_Z, to: ROOM_HALF_Z, gaps: [[5.0, 6.8]] },
+  { along: 'z', at: ROOM_HALF_X, face: -1, from: -ROOM_HALF_Z, to: ROOM_HALF_Z, gaps: [[-7.8, -6.1]] },
+  // The far wall, under the writing, with the way on cut out of it.
+  { along: 'x', at: -ROOM_HALF_Z, face: 1, from: -ROOM_HALF_X, to: ROOM_HALF_X, gaps: [[-1.9, 1.9]] },
+  // And the wall behind you when you wake up.
+  { along: 'x', at: ROOM_HALF_Z, face: -1, from: -ROOM_HALF_X, to: ROOM_HALF_X, gaps: [[-1.7, 1.7]] },
+]) {
+  paintWallStripes({ scene, ...wall });
 }
 
 const interactions = createInteractions(camera, showPrompt);

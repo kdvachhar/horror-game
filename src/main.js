@@ -10,7 +10,7 @@ import { createGauntlet } from './gauntlet.js';
 import { createExitRoom } from './exitRoom.js';
 import { createOrangeRoom } from './orangeRoom.js';
 import { createEmployeeDoor } from './employeeDoor.js';
-import { paintWallStripes } from './wallStripes.js';
+import { paintRoomStripes } from './wallStripes.js';
 import { MACHINE, DOOR, BACK_DOOR, LAYER, SPAWN, MEDICAL, insideBackRoom } from './config.js';
 import { createPlayer } from './player.js';
 import { createWallText } from './wallText.js';
@@ -209,27 +209,38 @@ for (const { dark, ...where } of STAFF_DOORS) {
 }
 
 /**
- * And the stripe, round all four walls of the room you wake up in.
+ * And the stripe, round every room in the building that has no colour of its
+ * own. The red hall and the orange room are left alone — they already say what
+ * they are.
  *
- * The gaps are measured, not guessed: the two doorways and the two staff doors
- * that now stand on the long walls, each with a hand's width of bare wall left
- * either side so the paint stops short of a frame rather than dying against it.
- * A stripe painted straight through a door frame is the one thing that would
- * give away that it was put on afterwards.
+ * Bounds only. Where the wall is and what is already fixed to it are read off
+ * the scene when the paint goes on, which is why a corridor that turns a corner
+ * and a store room with half a near wall can both be given as plain rectangles.
+ * See wallStripes.js.
+ *
+ * Painted last, after every room and prop exists, because it paints round
+ * whatever it finds. The bodies are excluded by hand: they are the only things
+ * in the scene that will not still be there in a minute, and the bucket happens
+ * to start its life against a wall.
  */
-const ROOM_HALF_X = 22;
-const ROOM_HALF_Z = 21;
-for (const wall of [
-  // Long walls. Each carries a staff door; the reader beside it sticks out
-  // further along the wall than the frame does, hence the lopsided gaps.
-  { along: 'z', at: -ROOM_HALF_X, face: 1, from: -ROOM_HALF_Z, to: ROOM_HALF_Z, gaps: [[5.0, 6.8]] },
-  { along: 'z', at: ROOM_HALF_X, face: -1, from: -ROOM_HALF_Z, to: ROOM_HALF_Z, gaps: [[-7.8, -6.1]] },
-  // The far wall, under the writing, with the way on cut out of it.
-  { along: 'x', at: -ROOM_HALF_Z, face: 1, from: -ROOM_HALF_X, to: ROOM_HALF_X, gaps: [[-1.9, 1.9]] },
-  // And the wall behind you when you wake up.
-  { along: 'x', at: ROOM_HALF_Z, face: -1, from: -ROOM_HALF_X, to: ROOM_HALF_X, gaps: [[-1.7, 1.7]] },
+const NOT_FIXTURES = [friend.mesh, playerBody.group, bucket.group];
+for (const room of [
+  // The room you wake up in.
+  { minX: -22, maxX: 22, minZ: -21, maxZ: 21 },
+  // The dark room behind it. On the dark layer with everything else in there
+  // until the power comes back; lightUpBackRoom finds it by layer.
+  { minX: -8, maxX: 8, minZ: -39, maxZ: -21, dark: true },
+  // The ward you wake up in, the corridor behind its back wall, and the store
+  // room the corridor turns into.
+  { minX: -5, maxX: 8, minZ: -52.5, maxZ: -41.5 },
+  { minX: 2, maxX: 8, minZ: -41.5, maxZ: -39 },
+  { minX: 8, maxX: 13.9, minZ: -41.5, maxZ: -37.4 },
+  // And the room at the end with the television in it.
+  { minX: -55.2, maxX: -48, minZ: -39.4, maxZ: -31.4 },
 ]) {
-  paintWallStripes({ scene, ...wall });
+  const { dark, ...bounds } = room;
+  const painted = paintRoomStripes({ scene, ignore: NOT_FIXTURES, ...bounds });
+  if (dark) painted.group.traverse((object) => object.layers.set(LAYER.DARK));
 }
 
 const interactions = createInteractions(camera, showPrompt);

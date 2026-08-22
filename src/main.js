@@ -9,7 +9,7 @@ import { createMedicalRoom } from './medicalRoom.js';
 import { createGauntlet } from './gauntlet.js';
 import { createExitRoom } from './exitRoom.js';
 import { createOrangeRoom } from './orangeRoom.js';
-import { createEmployeeDoor, updateEmployeeDoors } from './employeeDoor.js';
+import { createEmployeeDoor } from './employeeDoor.js';
 import { MACHINE, DOOR, BACK_DOOR, LAYER, SPAWN, MEDICAL, insideBackRoom } from './config.js';
 import { createPlayer } from './player.js';
 import { createWallText } from './wallText.js';
@@ -199,17 +199,18 @@ const STAFF_DOORS = [
   { x: -60.2, z: -25, facing: Math.PI / 2 },
 ];
 
-const staffDoors = STAFF_DOORS.map(({ dark, ...where }) => {
+// Built and then left alone. They are not registered with the interaction
+// system and nothing in the loop touches them: a staff door is a thing on a
+// wall, the same as the poster and the paint tin's shelf.
+for (const { dark, ...where } of STAFF_DOORS) {
   const door = createEmployeeDoor({ scene, ...where });
   if (dark) door.group.traverse((object) => object.layers.set(LAYER.DARK));
-  return door;
-});
+}
 
 const interactions = createInteractions(camera, showPrompt);
 for (const target of gauntlet.interactions) interactions.add(target);
 for (const target of exitRoom.interactions) interactions.add(target);
 for (const target of orangeRoom.interactions) interactions.add(target);
-for (const door of staffDoors) interactions.add(door.interaction);
 
 /**
  * What you think, turning round and finding the way you came in is shut.
@@ -823,10 +824,6 @@ renderer.setAnimationLoop((time) => {
   // them, so the charge in it is driven from here rather than from whichever
   // room happens to have switched it on. It costs nothing while it is off.
   updateWireCurrent(delta);
-  // Same arrangement as the wire, and for the same reason: the staff doors are
-  // scattered across five rooms and belong to none of them. Free while nobody
-  // is trying one, which is nearly always.
-  updateEmployeeDoors(delta);
   // Only the bucket can get up there, but the check is on position rather than
   // on identity — whatever ends up on the top board presses it. It latches, so
   // this is true on exactly one frame ever.

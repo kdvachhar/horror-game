@@ -1,7 +1,5 @@
 import * as THREE from 'three';
 import { makeEmployeeSignTexture, makeMetalPanelSurface } from './textures.js';
-import { showNote } from './hud.js';
-import { playLockedDoor } from './audio.js';
 
 /**
  * The staff doors: the ones that are not for you.
@@ -23,10 +21,13 @@ import { playLockedDoor } from './audio.js';
  * dead reader — because that sameness is the only thing that makes five props
  * in five rooms read as one building.
  *
- * Locked, permanently, with no puzzle behind them and nothing on the other
- * side. Trying one rattles the handle, blinks the badge reader red, and says
- * so. A player who tries the second one already knows what will happen, and
- * that is the intended experience of them: they are scenery that answers.
+ * They are scenery, and scenery is all they are: no prompt, no key, no reply.
+ * They had a handle you could try at first, which rattled and told you it was
+ * locked — and that turns each one into a thing to walk up to and use, five
+ * times, for the same sentence. Everything this game asks you to press E on
+ * does something. Making the doors answer put them in that category and then
+ * had them refuse, which is worse than silence: a prompt is a promise. Read the
+ * plate and keep walking.
  */
 
 const WIDTH = 1.02;
@@ -38,16 +39,6 @@ const JAMB = 0.09;
 /** Where the sign sits on the leaf — just above eye height, as they are. */
 const SIGN_Y = 1.72;
 const SIGN_WIDTH = 0.62;
-
-/** How long the reader stays red after it turns you down. */
-const DENY_SECONDS = 1.1;
-
-/**
- * Every door built, so one call from the loop can pulse whichever one has just
- * been tried. The same arrangement the wire uses, and for the same reason:
- * these are scattered across five rooms and belong to none of them.
- */
-const doors = [];
 
 /**
  * One staff door, standing on a wall.
@@ -173,8 +164,12 @@ export function createEmployeeDoor({ scene, x, z, facing = 0, y = 0, standoff = 
   sign.position.set(0, SIGN_Y, face + 0.073);
   group.add(sign);
 
-  // The badge reader beside the handle: a dark slab with one light on it, which
-  // is the only part of any of this that is still powered.
+  // The badge reader beside the handle: a dark slab with one light on it.
+  //
+  // The light stays as it is, dull and red and doing nothing. It used to blink
+  // when you tried the door and it is better as a thing that never changes —
+  // something left on in a building where most things are not, which is a
+  // detail you notice rather than a response you triggered.
   const reader = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.17, 0.05), frameMat);
   reader.position.set(WIDTH / 2 + JAMB + 0.13, 1.18, face + 0.06);
   group.add(reader);
@@ -187,54 +182,8 @@ export function createEmployeeDoor({ scene, x, z, facing = 0, y = 0, standoff = 
   lamp.position.set(WIDTH / 2 + JAMB + 0.13, 1.23, face + 0.088);
   group.add(lamp);
 
-  const door = {
-    group,
-    lamp,
-    /** Counts down while the reader is showing red. */
-    denied: 0,
-  };
-  doors.push(door);
-
-  /**
-   * Where the prompt hangs, and where the player has to be to get it: out in
-   * front of the leaf at handle height, not at the door's origin, which is on
-   * the floor inside the wall.
-   */
-  const at = new THREE.Vector3(
-    x + Math.sin(facing) * (face + 0.3),
-    y + 1.15,
-    z + Math.cos(facing) * (face + 0.3)
-  );
-
-  return {
-    group,
-    interaction: {
-      position: at,
-      label: 'Try the door',
-      range: 2.2,
-      once: false,
-      onInteract() {
-        door.denied = DENY_SECONDS;
-        playLockedDoor(0.9);
-        showNote('Locked. Employees only.', 2.2);
-      },
-    },
-  };
-}
-
-/**
- * Pulse whichever readers have just turned somebody down.
- *
- * Costs nothing while nobody is trying a door, which is almost all of the time:
- * with none of them denied this returns on the first line.
- */
-export function updateEmployeeDoors(delta) {
-  for (const door of doors) {
-    if (door.denied <= 0) continue;
-    door.denied = Math.max(0, door.denied - delta);
-    // Two hard blinks rather than a fade — a reader saying no is a square wave,
-    // and a smooth decay would read as the door thinking about it.
-    const on = door.denied > 0 && Math.floor(door.denied * 6) % 2 === 1;
-    door.lamp.material.color.set(on ? '#ff2a1e' : '#5e0f0c');
-  }
+  // Only the group: there is nothing to drive and nothing to press. The caller
+  // wants it for the render layer, which is the one thing about a staff door
+  // that depends on which room it is standing in.
+  return { group };
 }

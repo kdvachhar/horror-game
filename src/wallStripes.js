@@ -26,12 +26,12 @@ import { makeWornPaintSurface, cloneSurface } from './textures.js';
  */
 
 const STRIPES = [
-  { color: '#3c2260', height: 0.3 },   // purple
-  { color: '#22603a', height: 0.3 },   // green
-  { color: '#1e4a82', height: 0.3 },   // blue
+  { color: '#3c2260', height: 0.5 },   // purple
+  { color: '#22603a', height: 0.5 },   // green
+  { color: '#1e4a82', height: 0.5 },   // blue
 ];
 /** Hairline of wall left showing between them, so they read as three. */
-const SPLIT = 0.04;
+const SPLIT = 0.05;
 /** Top to bottom of all three and the splits between them. */
 const BAND = STRIPES.reduce((sum, s) => sum + s.height, 0) + SPLIT * (STRIPES.length - 1);
 
@@ -59,6 +59,18 @@ const PROUD = 0.015;
  */
 const REACH = 0.35;
 const MARGIN = 0.12;
+/**
+ * How deep a thing can be and still count as fixed to the wall.
+ *
+ * Because this reads bounding boxes, and a bounding box is a poor description
+ * of anything long and bent. The black wire is one tube that leaves the ward,
+ * crosses the corridor and runs the length of the building: its box is thirteen
+ * metres deep, touches every wall it passes and reads as a fitting on all of
+ * them. It was blanking whole walls — the corridor lost its stripe entirely to
+ * a cable an inch thick lying on the floor. Nothing actually screwed to a wall
+ * is a metre deep.
+ */
+const DEEPEST = 1.2;
 /** Anything closer to the wall than this is the wall, not something on it. */
 const FLUSH = 0.03;
 /**
@@ -184,7 +196,7 @@ function readWall({ scene, along, at, face, ignore, top, bottom }) {
       return;
     }
     // Something on the wall, standing in front of it across the band.
-    if (near < REACH && box.min.y < top && box.max.y > bottom) {
+    if (near < REACH && far - near < DEEPEST && box.min.y < top && box.max.y > bottom) {
       blocked.push([span[0] - MARGIN, span[1] + MARGIN]);
     }
   });

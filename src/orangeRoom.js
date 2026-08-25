@@ -658,6 +658,55 @@ export function createOrangeRoom({
       return { x: axis, z: far + WAY.depth, width: WAY.width, height: WAY.height };
     },
 
+    /**
+     * Open the way on without playing the puzzle — for the debug menu, so the
+     * hall behind this room can be jumped to.
+     *
+     * The same shape as medical.openDoor and gauntlet.powerUp: the room does
+     * the thing it would have done, rather than the menu reaching in and
+     * sliding a door itself. It is deliberately one way, like solving it is,
+     * and the door still travels on its own over the next second.
+     */
+    solve() {
+      solved = true;
+    },
+
+    /**
+     * And wind it back, which the debug menu does before every jump.
+     *
+     * Needed because solve() is one way and so is the puzzle: without this,
+     * jumping to the hall behind this room and then back to this room would
+     * hand you a solved swing set with its door already open, and the one thing
+     * worth testing here would be unreachable for the rest of the session.
+     *
+     * Everything the room owns goes back, including whoever was sitting on a
+     * swing when you jumped — a body left carried is a body that never walks
+     * again.
+     */
+    reset() {
+      solved = false;
+      missedNote = false;
+      entered = false;
+      for (const swing of swings) {
+        if (swing.rider === 'you') {
+          player.setCarried(false);
+          playerBody.setSeated(null);
+        } else if (swing.rider === 'bucket') {
+          friend.stand();
+        }
+        swing.rider = null;
+        swing.angle = 0;
+        swing.rate = 0;
+        swing.armed = true;
+        swing.lastHit = -99;
+        swing.lamp = 0;
+        swing.padMat.color.set('#5e1410');
+        swing.padMat.emissive.set('#000000');
+      }
+      wayDoor.position.x = axis;
+      carryWayDoor();
+    },
+
     /** Dev handle: how far along each arc, and when each last hit. */
     get state() {
       return swings.map((s) => ({

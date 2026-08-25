@@ -557,6 +557,11 @@ function resetSequences() {
   // back with it, shutters down and the wall parked by the door.
   gauntlet.powerDown();
   exitRoom.powerDown();
+  // And the two rooms past it. The swing set in particular has to come back:
+  // the entry for the hall behind it opens its door for you, and without this
+  // the next jump to the swing room would find the puzzle already spent.
+  orangeRoom.reset();
+  corpseHall.reset();
   handoverSaid = false;
   // The loop fires the cutscene the moment a door that has been open closes.
   // Clearing this stops a jump from immediately retriggering it underneath you.
@@ -703,6 +708,57 @@ const SCENES = [
       friend.collect();
 
       setObjective('See what is in here');
+    },
+  },
+  {
+    label: '9 · The swing room',
+    hint: 'Through the orange door, both of you in it, puzzle unsolved',
+    go() {
+      resetSequences();
+      medical.openDoor();
+      medical.shutDown();
+      room.lightUpBackRoom();
+      gauntlet.powerUp();
+      exitRoom.powerUp();
+      possession.unlock();
+
+      // Unsolved on purpose, the same as the hall entry leaves the hall alone.
+      // This room is the only two-body puzzle in the game and the thing worth
+      // testing about it is playing it; a menu entry that also solved it would
+      // put the one interesting state out of reach.
+      const way = exitRoom.wayOn;
+      player.teleport({ position: [way.x, 0, way.z + 1.6], yaw: Math.PI, pitch: 0 });
+      friend.spawn(new THREE.Vector3(way.x + 1.1, 0, way.z + 1.9));
+      friend.collect();
+
+      setObjective('Get on a swing');
+    },
+  },
+  {
+    label: '10 · The hall of bodies',
+    hint: 'Behind the orange door, which this opens for you — the yellow door and the pile',
+    go() {
+      resetSequences();
+      medical.openDoor();
+      medical.shutDown();
+      room.lightUpBackRoom();
+      gauntlet.powerUp();
+      exitRoom.powerUp();
+      possession.unlock();
+
+      // This one does solve the swings, and has to: the way in behind you is
+      // the orange door, and dropped into the hall with it still shut you are
+      // in a corridor with a heap at one end and a wall at the other. Every
+      // other entry leaves the room before it as it was, because in every other
+      // case you can walk back out.
+      orangeRoom.solve();
+
+      const entry = corpseHall.entry;
+      player.teleport({ position: entry.position, yaw: entry.yaw, pitch: 0 });
+      friend.spawn(new THREE.Vector3(entry.position[0] + 0.9, 0, entry.position[2] - 0.8));
+      friend.collect();
+
+      setObjective('Get to the end of the hall');
     },
   },
 ];

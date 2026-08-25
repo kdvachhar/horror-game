@@ -398,6 +398,26 @@ export function createCorpseHall({ scene, passage, player }) {
     colliders,
     contains,
 
+    /**
+     * Just inside, facing down it — where the debug menu drops you.
+     *
+     * Given by the hall rather than worked out by the caller, the same as the
+     * red hall's entry and the ward's wake: two files agreeing about where a
+     * room's doorway is has gone wrong here before.
+     */
+    get entry() {
+      return { position: [axis, 0, near + 1.6], yaw: Math.PI };
+    },
+
+    /**
+     * Wind back what little this room remembers: which of its two lines it has
+     * said. Nothing here moves or opens, so that is the whole of its state.
+     */
+    reset() {
+      entered = false;
+      seenTheHeap = false;
+    },
+
     update(delta) {
       // The failing tube. A slow sag with an occasional stutter in it rather
       // than a strobe: a fluorescent going out flickers in bursts and is steady

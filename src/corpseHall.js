@@ -3,10 +3,12 @@ import {
   makeWallSurface,
   makeFloorSurface,
   makeCeilingSurface,
+  cloneSurface,
   worldRepeat,
 } from './textures.js';
 import { setObjective, showNote } from './hud.js';
 import { DOOR_YELLOW } from './config.js';
+import { createFallenEmployeeDoor, EMPLOYEE_OPENING } from './employeeDoor.js';
 
 /**
  * The hall behind the orange door, and what is in it.
@@ -41,6 +43,24 @@ const TRIM = '#33372f';
 
 /** The door at the end. Shut, and staying shut. */
 const DOOR = { width: 1.8, height: 2.5 };
+
+/**
+ * And the staff door in the side wall, which is not shut, because it is not
+ * there any more.
+ *
+ * `side` is the wall it is in: -1 is the one on your right walking down.
+ *
+ * A quarter of the way along, which is not where it started. It was three
+ * quarters down, a couple of strides short of the heap, on the reasoning that
+ * the last thing you pass before the reveal should be the worst one — and there
+ * is no room down there to lay a door. A leaf is 2.1m long and there are 2m of
+ * floor between that doorway and the pile; the only way it fits is flung across
+ * the corridor, which points the plate at the wall it came out of and hands the
+ * player the one sentence in this room upside down. Up here it has four clear
+ * metres of wall to lie along, and lands early enough to be the thing that
+ * starts the hall rather than the thing that competes with the end of it.
+ */
+const STAFF = { side: -1, along: 0.28 };
 
 /**
  * The bodies. Grey, dressed in what the ward puts people in, and deliberately
@@ -228,15 +248,44 @@ export function createCorpseHall({ scene, passage, player }) {
   ceiling.position.set(axis, HEIGHT, midZ);
   group.add(ceiling);
 
+  const staffZ = near + LENGTH * STAFF.along;
+  const staffLow = staffZ - EMPLOYEE_OPENING.width / 2;
+  const staffHigh = staffZ + EMPLOYEE_OPENING.width / 2;
+
   for (const side of [-1, 1]) {
-    const wall = new THREE.Mesh(
-      new THREE.PlaneGeometry(LENGTH, HEIGHT),
-      new THREE.MeshStandardMaterial({ ...wallSurface, color: WALL_TINT })
-    );
-    wall.position.set(axis + side * HALF, HEIGHT / 2, midZ);
-    wall.rotation.y = side === 1 ? -Math.PI / 2 : Math.PI / 2;
-    wall.receiveShadow = true;
-    group.add(wall);
+    // The side with the staff door in it is built in three pieces round the
+    // hole, the same as every wall in this game with a way through it. The
+    // other is one plane.
+    const pieces = side !== STAFF.side
+      ? [[LENGTH, HEIGHT, midZ, HEIGHT / 2]]
+      : [
+          [staffLow - near, HEIGHT, (near + staffLow) / 2, HEIGHT / 2],
+          [far - staffHigh, HEIGHT, (staffHigh + far) / 2, HEIGHT / 2],
+          [
+            EMPLOYEE_OPENING.width,
+            HEIGHT - EMPLOYEE_OPENING.height,
+            staffZ,
+            (HEIGHT + EMPLOYEE_OPENING.height) / 2,
+          ],
+        ];
+    for (const [pw, ph, pz, py] of pieces) {
+      if (pw <= 0 || ph <= 0) continue;
+      const wall = new THREE.Mesh(
+        new THREE.PlaneGeometry(pw, ph),
+        // Cloned per piece rather than shared, so the boards on the three
+        // pieces either side of the opening stay the size they are on the wall
+        // opposite. A surface built for a 17m wall put on a 5m one is a wall
+        // whose formwork is a third the size of the formwork facing it.
+        new THREE.MeshStandardMaterial({
+          ...cloneSurface(wallSurface, ...worldRepeat(pw, ph)),
+          color: WALL_TINT,
+        })
+      );
+      wall.position.set(axis + side * HALF, py, pz);
+      wall.rotation.y = side === 1 ? -Math.PI / 2 : Math.PI / 2;
+      wall.receiveShadow = true;
+      group.add(wall);
+    }
     solid(
       Math.min(axis + side * HALF, axis + side * (HALF + 1)),
       Math.max(axis + side * HALF, axis + side * (HALF + 1)),
@@ -303,6 +352,28 @@ export function createCorpseHall({ scene, passage, player }) {
     skin: new THREE.MeshStandardMaterial({ color: SKIN, roughness: 0.86, metalness: 0 }),
     hair: new THREE.MeshStandardMaterial({ color: HAIR, roughness: 0.95, metalness: 0 }),
   };
+
+  // The staff door, off its hinges and on the floor.
+  //
+  // Facing is the yaw that turns it out of the wall it is in: the wall at -x
+  // looks along +x, which is a quarter turn the other way from its side.
+  //
+  // The leaf is laid down the hall and a fifth of a turn out from the wall, its
+  // top end reaching into the middle of the floor. Down the hall so the plate
+  // faces whoever is walking toward it, out from the wall so it is a thing that
+  // came off a wall rather than a thing stacked against one. It is turned so
+  // far that the hinge end has to stand more than half a metre clear of the
+  // frame or the near corner of it swings back inside the wall.
+  createFallenEmployeeDoor({
+    scene: group,
+    x: axis + STAFF.side * HALF,
+    z: staffZ,
+    facing: -STAFF.side * Math.PI / 2,
+    slew: -1.222,
+    out: 0.55,
+    // Away from the handle side, which on this wall is down the hall.
+    aside: -0.62,
+  });
 
   for (const { along, across, yaw, sprawl } of FALLEN) {
     const body = buildBody(materials, sprawl, sprawl > 0.55);

@@ -167,7 +167,10 @@ function readWall({ scene, along, at, face, ignore, top, bottom }) {
 
   scene.traverse((object) => {
     if (!object.isMesh || !object.geometry || skip.has(object)) return;
-    if (object.userData.wallStripe) return;
+    // Its own paint, and anything that has said it is a hole rather than a
+    // surface — the inside of a recess is neither a wall nor a thing fixed to
+    // one, and read as a wall it gets the band painted across an opening.
+    if (object.userData.wallStripe || object.userData.notWall) return;
     object.updateWorldMatrix(true, false);
     if (!object.geometry.boundingBox) object.geometry.computeBoundingBox();
     const box = object.geometry.boundingBox.clone().applyMatrix4(object.matrixWorld);

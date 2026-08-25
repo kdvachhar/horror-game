@@ -55,17 +55,7 @@ const SIGN_WIDTH = 0.62;
  */
 export const EMPLOYEE_OPENING = { width: WIDTH + JAMB * 2, height: HEIGHT + JAMB };
 
-/**
- * How far back the dark goes behind that one.
- *
- * Longer than it needs to be to hide its own end, and that is the whole reason
- * for the number. At two metres the nearest ceiling lamp reached the back of it
- * and lit three walls and a floor: a cupboard, with a door lying in front of it.
- * Past three the light has fallen off before it gets there and what is through
- * the frame is a passage going somewhere the game does not.
- */
-const RECESS = 3.2;
-/** And how far off the floor the leaf that came out of it lies. */
+/** How far off the floor the leaf that came out of one of these lies. */
 const LYING = 0.012;
 
 /** The kit every one of these is made of. */
@@ -315,40 +305,11 @@ export function createFallenEmployeeDoor({
     group.add(hinge);
   }
 
-  // What is behind it: a stub of somewhere else, unlit.
-  //
-  // The player never gets in here — the wall this is cut into still stops them
-  // a stride short of the opening — so the whole job of it is to give the light
-  // in the room a floor and two sides to die on. Five planes rather than a box,
-  // because a box has a front face and the front face is the doorway.
-  const recess = new THREE.Group();
-  group.add(recess);
-  const { width: OPEN_W, height: OPEN_H } = EMPLOYEE_OPENING;
-  const inside = new THREE.MeshStandardMaterial({
-    color: '#0f120f',
-    roughness: 0.98,
-    metalness: 0,
-  });
-  const back = new THREE.MeshStandardMaterial({ color: '#040504', roughness: 1, metalness: 0 });
-  for (const [w, h, px, py, pz, rx, ry] of [
-    [OPEN_W, OPEN_H, 0, OPEN_H / 2, -RECESS, 0, 0],                                  // the end of it
-    [RECESS, OPEN_H, -OPEN_W / 2, OPEN_H / 2, -RECESS / 2, 0, Math.PI / 2],          // sides
-    [RECESS, OPEN_H, OPEN_W / 2, OPEN_H / 2, -RECESS / 2, 0, -Math.PI / 2],
-    [OPEN_W, RECESS, 0, 0.004, -RECESS / 2, -Math.PI / 2, 0],                        // floor
-    [OPEN_W, RECESS, 0, OPEN_H, -RECESS / 2, Math.PI / 2, 0],                        // and lid
-  ]) {
-    const panel = new THREE.Mesh(
-      new THREE.PlaneGeometry(w, h),
-      pz === -RECESS ? back : inside
-    );
-    panel.position.set(px, py, pz);
-    panel.rotation.set(rx, ry, 0);
-    // Not the wall, and not a fitting on it: a hole. Without this the stripe
-    // reads the far side of the recess as a surface at the wall plane and
-    // paints its three colours straight across the opening.
-    panel.userData.notWall = true;
-    recess.add(panel);
-  }
+  // Nothing is built behind it here. There was, for one commit — a dark stub
+  // deep enough that the light died before it reached the end, so the frame
+  // read as a passage going somewhere the game does not. It goes somewhere now.
+  // The caller owns what is on the other side, and the caller is the hall,
+  // which hands its doorway to the room behind it. See controlRoom.js.
 
   // And the leaf, face-up on the floor where it landed.
   //

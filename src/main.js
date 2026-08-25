@@ -10,6 +10,7 @@ import { createGauntlet } from './gauntlet.js';
 import { createExitRoom } from './exitRoom.js';
 import { createOrangeRoom } from './orangeRoom.js';
 import { createCorpseHall } from './corpseHall.js';
+import { createControlRoom } from './controlRoom.js';
 import { createEmployeeDoor } from './employeeDoor.js';
 import { paintRoomStripes } from './wallStripes.js';
 import {
@@ -186,6 +187,17 @@ const corpseHall = createCorpseHall({ scene, passage: orangeRoom.wayOn, player }
 room.colliders.push(...corpseHall.colliders);
 
 /**
+ * And the room behind the staff door lying on the floor of it: a console, a
+ * chair on its side and a wall of machinery still running.
+ *
+ * Hung off the hall's own doorway rather than placed, for the reason every room
+ * in here is hung off the one before it — the two files cannot then disagree
+ * about where the hole in the wall is.
+ */
+const controlRoom = createControlRoom({ scene, doorway: corpseHall.staffDoor, player });
+room.colliders.push(...controlRoom.colliders);
+
+/**
  * The staff doors, in five rooms, none of which own them.
  *
  * Placed from here rather than from inside each room because they belong to the
@@ -260,6 +272,16 @@ for (const room of [
   // uncoloured room, and here it does something the others do not: it leads all
   // the way down the wall to a door nobody got through.
   { minX: -55.65, maxX: -52.75, minZ: -15.2, maxZ: 1.8, height: 2.9 },
+  // The control room behind the staff door in that hall is deliberately not on
+  // this list, and it is the first room to be left off for a reason other than
+  // having a colour of its own.
+  //
+  // The band is wayfinding. It is painted for people being moved through a
+  // building, and the whole point of the door it is behind is that they are not
+  // meant to go through it — so the paint stopping at that doorway is the line
+  // doing its job. It was painted in there first and it also simply looked
+  // wrong: a machine room lit by one screen, with the brightest thing in it a
+  // decorative purple-green-blue band across the plant.
   // And the room at the end with the television in it. Measured off the room
   // rather than worked out from the hall: the doorway the hall hands over is at
   // the far side of a 2.6m passage, so the room starts at -50.6 and not at the
@@ -562,6 +584,7 @@ function resetSequences() {
   // the next jump to the swing room would find the puzzle already spent.
   orangeRoom.reset();
   corpseHall.reset();
+  controlRoom.reset();
   handoverSaid = false;
   // The loop fires the cutscene the moment a door that has been open closes.
   // Clearing this stops a jump from immediately retriggering it underneath you.
@@ -759,6 +782,33 @@ const SCENES = [
       friend.collect();
 
       setObjective('Get to the end of the hall');
+    },
+  },
+  {
+    label: '11 · The control room',
+    hint: 'Through the staff door in the hall — the console and the machinery',
+    go() {
+      resetSequences();
+      medical.openDoor();
+      medical.shutDown();
+      room.lightUpBackRoom();
+      gauntlet.powerUp();
+      exitRoom.powerUp();
+      possession.unlock();
+      // Same reason as the hall: the only way out of this room is back through
+      // the hall and out of the orange door, so that door has to be open.
+      orangeRoom.solve();
+
+      const entry = controlRoom.entry;
+      player.teleport({ position: entry.position, yaw: entry.yaw, pitch: 0 });
+      // The bucket stays out in the hall. It can follow you in — the doorway is
+      // wide enough — but dropped into a room this full it starts its life
+      // inside the console.
+      const hall = corpseHall.entry;
+      friend.spawn(new THREE.Vector3(hall.position[0], 0, hall.position[2]));
+      friend.collect();
+
+      setObjective('See what is in here');
     },
   },
 ];
@@ -975,6 +1025,7 @@ renderer.setAnimationLoop((time) => {
   // bucket then the view below has to be taken from where it has just been put.
   orangeRoom.update(delta);
   corpseHall.update(delta);
+  controlRoom.update(delta);
   // After that, not before it, and for the same reason the view is: the shadow
   // body is drawn where the player is, and on a swing the player is wherever
   // the room has just put them. Updated ahead of the rooms it lagged a frame
@@ -1021,7 +1072,7 @@ renderer.setAnimationLoop((time) => {
 
 // Dev-only handle for poking at the scene from the console.
 if (import.meta.env.DEV) {
-  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, corpseHall, wakeUp, possession, painter, monologue };
+  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, corpseHall, controlRoom, wakeUp, possession, painter, monologue };
   window.game.__tvLines = TV_LINES;
   // Console handles for diagnosing silence: game.audio.state() / .test()
   window.game.perf = () => ({

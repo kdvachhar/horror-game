@@ -49,6 +49,11 @@ const DOOR = { width: 1.8, height: 2.5 };
  * there any more.
  *
  * `side` is the wall it is in: -1 is the one on your right walking down.
+ * `thickness` is that wall, and it is load bearing in two senses now: there is
+ * a room on the other side of it, so it is what you walk through rather than
+ * a plane with a slab of collision behind it. Deep enough that nobody crosses
+ * it in one frame at a run, shallow enough to read as a doorway and not a
+ * tunnel.
  *
  * A quarter of the way along, which is not where it started. It was three
  * quarters down, a couple of strides short of the heap, on the reasoning that
@@ -60,7 +65,7 @@ const DOOR = { width: 1.8, height: 2.5 };
  * metres of wall to lie along, and lands early enough to be the thing that
  * starts the hall rather than the thing that competes with the end of it.
  */
-const STAFF = { side: -1, along: 0.28 };
+const STAFF = { side: -1, along: 0.28, thickness: 0.45 };
 
 /**
  * The bodies. Grey, dressed in what the ward puts people in, and deliberately
@@ -286,13 +291,22 @@ export function createCorpseHall({ scene, passage, player }) {
       wall.receiveShadow = true;
       group.add(wall);
     }
-    solid(
-      Math.min(axis + side * HALF, axis + side * (HALF + 1)),
-      Math.max(axis + side * HALF, axis + side * (HALF + 1)),
-      near - 1,
-      far + 1,
-      {}
-    );
+    // And the collider for it. The staff side is the wall between here and the
+    // room behind it, so it is that wall's thickness and no more — a metre of
+    // slab the way the other side is built would stand three quarters of a
+    // metre inside that room and you could not walk along its wall. It comes in
+    // two pieces with the doorway between them, because the door is off and the
+    // way through is open.
+    const thick = side === STAFF.side ? STAFF.thickness : 1;
+    const inner = axis + side * HALF;
+    const outer = axis + side * (HALF + thick);
+    const spans =
+      side === STAFF.side
+        ? [[near - 1, staffLow], [staffHigh, far + 1]]
+        : [[near - 1, far + 1]];
+    for (const [fromZ, toZ] of spans) {
+      solid(Math.min(inner, outer), Math.max(inner, outer), fromZ, toZ, {});
+    }
   }
 
   // The near wall, round the way in. Three pieces, like every wall in this game
@@ -478,6 +492,22 @@ export function createCorpseHall({ scene, passage, player }) {
      */
     get entry() {
       return { position: [axis, 0, near + 1.6], yaw: Math.PI };
+    },
+
+    /**
+     * The hole the staff door came out of, for whoever builds what is behind
+     * it. Handed over the same way the orange room hands over `wayOn`: two
+     * files agreeing about where an opening is by both writing the number down
+     * is how a doorway ends up in a different place from its room.
+     */
+    get staffDoor() {
+      return {
+        x: axis + STAFF.side * HALF,
+        z: staffZ,
+        width: EMPLOYEE_OPENING.width,
+        height: EMPLOYEE_OPENING.height,
+        thickness: STAFF.thickness,
+      };
     },
 
     /**

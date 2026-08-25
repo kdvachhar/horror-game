@@ -1334,6 +1334,71 @@ export function makeEmployeeSignTexture() {
   return posterTexture(canvas);
 }
 
+/**
+ * What is on the one monitor still lit in the room behind the staff door.
+ *
+ * Deliberately not readable. There was a version of this with words on it —
+ * subject numbers, a column of outcomes — and it explained in six lines of text
+ * what the hall outside says by having a heap of people against a door. The
+ * room is stronger when the screen is only evidence that somebody was sitting
+ * here watching something: rows of a readout, a column of figures, one line
+ * highlighted. You can see it is a list. You cannot see what of.
+ *
+ * Drawn at the tube's own aspect and scanned across with dark lines, because
+ * the thing that makes a screen read as a CRT rather than as a green rectangle
+ * is the raster.
+ */
+export function makeConsoleScreenTexture() {
+  const W = 512;
+  const H = 384;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const c = canvas.getContext('2d');
+
+  c.fillStyle = '#04120a';
+  c.fillRect(0, 0, W, H);
+
+  // Phosphor is brightest in the middle of the tube and falls off into the
+  // corners, which is most of why an old monitor looks like an old monitor.
+  const glow = c.createRadialGradient(W / 2, H / 2, 20, W / 2, H / 2, W * 0.62);
+  glow.addColorStop(0, 'rgba(58,120,66,0.5)');
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = glow;
+  c.fillRect(0, 0, W, H);
+
+  // The readout: a left-hand column of figures and a row of blocks beside it,
+  // in rows down the tube. The blocks are drawn rather than typed so there is
+  // nothing to read at any distance.
+  const rows = 16;
+  const top = 26;
+  const step = (H - 48) / rows;
+  for (let i = 0; i < rows; i++) {
+    const y = top + i * step;
+    const hot = i === 9;
+    c.fillStyle = hot ? 'rgba(150,230,150,0.92)' : `rgba(96,178,104,${0.34 + (i % 3) * 0.12})`;
+    // The figure column.
+    for (let d = 0; d < 4; d++) c.fillRect(24 + d * 13, y, 9, 11);
+    // And the line of it, broken into words of different lengths.
+    let x = 96;
+    while (x < W - 40) {
+      const word = 18 + Math.floor(Math.random() * 5) * 13;
+      c.fillRect(x, y, word, 11);
+      x += word + 13;
+    }
+    if (hot) {
+      c.fillStyle = 'rgba(150,230,150,0.16)';
+      c.fillRect(14, y - 5, W - 28, 21);
+    }
+  }
+
+  // The raster, over everything.
+  c.fillStyle = 'rgba(0,0,0,0.34)';
+  for (let y = 0; y < H; y += 3) c.fillRect(0, y, W, 1.4);
+
+  return posterTexture(canvas);
+}
+
 export function makeSoftDotTexture() {
   const size = 64;
   const canvas = createCanvas(size);

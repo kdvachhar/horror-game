@@ -9,6 +9,7 @@ import { createMedicalRoom } from './medicalRoom.js';
 import { createGauntlet } from './gauntlet.js';
 import { createExitRoom } from './exitRoom.js';
 import { createOrangeRoom } from './orangeRoom.js';
+import { createCorpseHall } from './corpseHall.js';
 import { createEmployeeDoor } from './employeeDoor.js';
 import { paintRoomStripes } from './wallStripes.js';
 import {
@@ -177,6 +178,14 @@ const orangeRoom = createOrangeRoom({
 room.colliders.push(...orangeRoom.colliders);
 
 /**
+ * And the hall behind the orange door, which is the first place in here that is
+ * not an experiment — just a corridor, the people who tried it before you, and
+ * a door at the end that does not open.
+ */
+const corpseHall = createCorpseHall({ scene, passage: orangeRoom.wayOn, player });
+room.colliders.push(...corpseHall.colliders);
+
+/**
  * The staff doors, in five rooms, none of which own them.
  *
  * Placed from here rather than from inside each room because they belong to the
@@ -247,6 +256,10 @@ for (const room of [
   { minX: -5, maxX: 8, minZ: -52.5, maxZ: -41.5, height: MEDICAL.height },
   { minX: 2, maxX: 8, minZ: -41.5, maxZ: -39, height: 3.4 },
   { minX: 8, maxX: 13.9, minZ: -41.5, maxZ: -37.4, height: 3.4 },
+  // The hall behind the orange door. It gets the line like every other
+  // uncoloured room, and here it does something the others do not: it leads all
+  // the way down the wall to a door nobody got through.
+  { minX: -55.65, maxX: -52.75, minZ: -15.2, maxZ: 1.8, height: 2.9 },
   // And the room at the end with the television in it. Measured off the room
   // rather than worked out from the hall: the doorway the hall hands over is at
   // the far side of a 2.6m passage, so the room starts at -50.6 and not at the
@@ -905,6 +918,7 @@ renderer.setAnimationLoop((time) => {
   // update: a rider on a swing is put where the seat is, and if that is the
   // bucket then the view below has to be taken from where it has just been put.
   orangeRoom.update(delta);
+  corpseHall.update(delta);
   // After that, not before it, and for the same reason the view is: the shadow
   // body is drawn where the player is, and on a swing the player is wherever
   // the room has just put them. Updated ahead of the rooms it lagged a frame
@@ -951,7 +965,7 @@ renderer.setAnimationLoop((time) => {
 
 // Dev-only handle for poking at the scene from the console.
 if (import.meta.env.DEV) {
-  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, wakeUp, possession, painter, monologue };
+  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, corpseHall, wakeUp, possession, painter, monologue };
   window.game.__tvLines = TV_LINES;
   // Console handles for diagnosing silence: game.audio.state() / .test()
   window.game.perf = () => ({

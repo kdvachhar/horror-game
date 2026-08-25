@@ -455,14 +455,9 @@ export function createOrangeRoom({
     deck.rotation.x = -Math.PI / 2;
     deck.position.set(axis, 0.003, far + WAY.depth / 2);
     group.add(deck);
-    const cap = new THREE.Mesh(
-      new THREE.PlaneGeometry(WAY.width, WAY.height),
-      new THREE.MeshBasicMaterial({ color: '#000000', toneMapped: false, fog: false })
-    );
-    cap.position.set(axis, WAY.height / 2, zEnd);
-    cap.rotation.y = Math.PI;
-    group.add(cap);
-    solid(wayLow, wayHigh, zEnd, zEnd + 1, {});
+    // No cap on the end of it any more: there is a hall through there now, and
+    // the passage opens into it. The same thing happened to the exit room's
+    // passage when this room was built behind it — see wayOn below.
     solid(axis - HALF_WIDTH - 1, wayLow, far, zEnd + 1, {});
     solid(wayHigh, axis + HALF_WIDTH + 1, far, zEnd + 1, {});
   }
@@ -651,6 +646,16 @@ export function createOrangeRoom({
 
     get isSolved() {
       return solved;
+    },
+
+    /**
+     * The far end of the passage past the orange door, for whatever is built
+     * behind it. Handed over rather than worked out from the outside, because
+     * the last room that guessed at a neighbour's wall put its paint two and a
+     * half metres into a passage.
+     */
+    get wayOn() {
+      return { x: axis, z: far + WAY.depth, width: WAY.width, height: WAY.height };
     },
 
     /** Dev handle: how far along each arc, and when each last hit. */

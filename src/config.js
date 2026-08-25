@@ -168,6 +168,27 @@ export const DOOR_ORANGE = {
 };
 
 /**
+ * And the yellow one at the end of the hall behind that, which is the first
+ * door in this building you are not going to get through.
+ *
+ * The colours have been a sequence so far and each one has opened: red the way
+ * you came, orange the way on. This one is the same kit again in the next
+ * colour, so it reads as another way on — and then there is a heap of people
+ * against it who evidently thought the same thing.
+ *
+ * Authored darker than it looks like it should be. Yellow is the brightest
+ * thing a screen can do and ACES lifts hard through the mids; mixed at the
+ * value you want to read, this comes out as a lamp rather than as paint.
+ */
+export const DOOR_YELLOW = {
+  leaf: '#6d5c11',
+  trim: '#3b4240',
+  hazard: '#8d7a2e',
+  roughness: 0.66,
+  metalness: 0.08,
+};
+
+/**
  * Whether a world position is standing in the back room.
  *
  * The test used to be `z < DOOR.z` — everything past the hall's far wall was

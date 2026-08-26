@@ -299,6 +299,8 @@ const interactions = createInteractions(camera, showPrompt);
 for (const target of gauntlet.interactions) interactions.add(target);
 for (const target of exitRoom.interactions) interactions.add(target);
 for (const target of orangeRoom.interactions) interactions.add(target);
+// One target: the switch that brings the set in the control room up.
+for (const target of controlRoom.interactions) interactions.add(target);
 
 /**
  * What you think, turning round and finding the way you came in is shut.

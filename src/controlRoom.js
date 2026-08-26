@@ -10,6 +10,7 @@ import {
   metalRepeat,
 } from './textures.js';
 import { buildTelevision, createScreenLife } from './screenFace.js';
+import { playButtonPress } from './audio.js';
 import { showNote } from './hud.js';
 
 /**
@@ -28,11 +29,11 @@ import { showNote } from './hud.js';
  * and every room you get into that you were not meant to be in turns out to
  * have it in there already. It is what he was looking at.
  *
- * Nothing in here is interactive, like the hall. There is no terminal to use,
- * no log to read, no button that opens the yellow door — a room with an answer
- * in it would turn the hall outside into a puzzle, and the hall is not a
- * puzzle. What this room is for is the sentence you say to yourself walking
- * back out of it.
+ * There is one thing in here to press and it is the switch that brings the set
+ * up. Nothing else: no terminal to use, no log to read, nothing that opens the
+ * yellow door — a room with an answer in it would turn the hall outside into a
+ * puzzle, and the hall is not a puzzle. The button is not an answer. It gets
+ * you the one thing this room has to say and it says it without words.
  *
  * Which is also why the screen says nothing readable. See
  * makeConsoleScreenTexture: it had words on it once and they explained, in six
@@ -465,9 +466,12 @@ export function createControlRoom({ scene, doorway, player }) {
    *
    * It does not talk in here, and that is a decision rather than an omission.
    * Both places it has spoken it wanted something from you — a door to go
-   * through, a button to press. This is a room you were not invited into, with
-   * the man who watched the hall dead at the desk under it, and the thing on
-   * the wall is on, and blinking, and looking at you. It has nothing to ask.
+   * through, a button to press. This is a room you were not invited into, and
+   * once it is on it just blinks and looks at you. It has nothing to ask.
+   *
+   * And it starts dark. There is a button on the wall past the end of the desk
+   * and you have to be the one who presses it, which is the difference between
+   * finding a thing that is watching you and switching it on yourself.
    */
   const television = buildTelevision();
   // Against the back wall, turned to face the door, hung so its bottom edge
@@ -483,6 +487,100 @@ export function createControlRoom({ scene, doorway, player }) {
     faceParts: television.faceParts,
     glow: television.glow,
   });
+
+  /**
+   * The button that turns him on, on the wall past the end of the desk.
+   *
+   * Past the end of it because that is the only piece of this wall a person can
+   * reach. The console is a metre deep and stands against the same wall the set
+   * hangs on, so everywhere along the middle of it you are stopped half a metre
+   * short with a desk between you and the switch. Two strides round the end and
+   * the wall is bare to the floor.
+   *
+   * Which lands it a hand's width from the casing, and that is the placement
+   * the red hall's button argued its way to as well: you turn to press it and
+   * the face comes up beside you rather than behind you.
+   */
+  const BUTTON = { z: deskZ + DESK.long / 2 + 0.25, y: 1.3, out: 0.11 };
+
+  const backplate = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.4, 0.4), caseMat);
+  backplate.position.set(back + 0.035, BUTTON.y, BUTTON.z);
+  backplate.castShadow = true;
+  backplate.receiveShadow = true;
+  group.add(backplate);
+
+  // A quarter turn on the two cylinders: one is born standing up, and a button
+  // on this wall lies on its side pointing into the room. Negative, so the
+  // narrow end of the collar is the end you can see.
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 0.06, 16), trimMat);
+  collar.rotation.z = -Math.PI / 2;
+  collar.position.set(back + BUTTON.out - 0.06, BUTTON.y, BUTTON.z);
+  group.add(collar);
+
+  const cap = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.13, 0.13, 0.09, 16),
+    new THREE.MeshStandardMaterial({ color: '#5e1410', roughness: 0.45 })
+  );
+  cap.rotation.z = Math.PI / 2;
+  cap.position.set(back + BUTTON.out, BUTTON.y, BUTTON.z);
+  group.add(cap);
+
+  // The state light is a ring round the cap and not the cap itself — the same
+  // button as the red hall's, down to why. A torus is born in the xy plane and
+  // this wall is the yz one, so it is the only piece here that turns about y.
+  // Lit red before it is pressed, not dark like the red hall's.
+  //
+  // That one sits in a room with the lights on. This corner has one lamp four
+  // metres away and everything in it is authored dark, so an unlit ring on a
+  // dark cap on a dark backplate is a button you find by walking into the wall.
+  // A standby lamp is also what a set that is off but plugged in actually does.
+  const ringMat = new THREE.MeshStandardMaterial({
+    color: '#8e1a12',
+    roughness: 0.4,
+    emissive: '#450a06',
+  });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.155, 0.022, 8, 20), ringMat);
+  ring.rotation.y = Math.PI / 2;
+  ring.position.set(back + BUTTON.out - 0.045, BUTTON.y, BUTTON.z);
+  group.add(ring);
+
+  /**
+   * Pressed, and how far the picture has come up since.
+   *
+   * `picture` and not `lit`: there is already a `lit` in this file and it is a
+   * function that makes unlit materials, which is a good name for both things
+   * and cannot be the name of either of them twice.
+   */
+  let awake = false;
+  let wakeIn = 0;
+  let picture = 0;
+
+  const interactions = [
+    {
+      position: new THREE.Vector3(back + BUTTON.out, BUTTON.y, BUTTON.z),
+      label: 'Press the button',
+      // A little further than the red hall's 1.5. That one stands on an open
+      // wall you can square up to; this one is in a corner with the end of a
+      // console beside it, and at 1.5 you have to be against the wall before
+      // the prompt comes up — which is a metre and a half of hunting for it.
+      range: 1.8,
+      once: false,
+      enabled: () => !awake,
+      onInteract() {
+        if (awake) return;
+        awake = true;
+        playButtonPress();
+        ringMat.color.set('#2fd46a');
+        ringMat.emissive.set('#1d7a2c');
+        // It goes in, rather than down.
+        cap.position.x = back + BUTTON.out - 0.025;
+        // A beat before there is anything on the glass. A set that comes up the
+        // instant the switch goes in is a light being turned on; one that waits
+        // is a thing warming up, and this one has a face in it.
+        wakeIn = 0.9;
+      },
+    },
+  ];
 
   // Keyboard, pushed back the way you push one back when you stand up.
   const keyboard = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.03, 0.44), caseMat);
@@ -747,6 +845,7 @@ export function createControlRoom({ scene, doorway, player }) {
   return {
     group,
     colliders,
+    interactions,
     contains,
 
     /**
@@ -760,6 +859,14 @@ export function createControlRoom({ scene, doorway, player }) {
 
     reset() {
       entered = false;
+      // And the set goes back off, so a jump back in here finds the room the
+      // way it is meant to be found: a dead screen over a dead man.
+      awake = false;
+      wakeIn = 0;
+      picture = 0;
+      ringMat.color.set('#8e1a12');
+      ringMat.emissive.set('#450a06');
+      cap.position.x = back + BUTTON.out;
     },
 
     update(delta) {
@@ -782,10 +889,18 @@ export function createControlRoom({ scene, doorway, player }) {
         const flicker = 0.86 + 0.14 * Math.sin(t * 7.7) + 0.04 * Math.sin(t * 23.1);
         monitor.glass.material.color.setScalar(flicker);
       }
-      // The face: breathing, blinking, watching. Always fully lit — the fade
-      // the other two screens have is for a thing being switched on or going
-      // out, and this one has been on the whole time.
-      life.update(delta, 1);
+      // The tube coming up, and then the face on it.
+      //
+      // Not a fade. A lamp fades; a tube of this age takes a moment to decide,
+      // arrives most of the way at once and then hunts for a second before it
+      // settles, and the hunt is the whole difference between a screen turning
+      // on and a brightness value being animated.
+      if (awake) {
+        if (wakeIn > 0) wakeIn = Math.max(0, wakeIn - delta);
+        else picture += (1 - picture) * (1 - Math.exp(-3.6 * delta));
+      }
+      const hunting = picture > 0.02 && picture < 0.97 && Math.sin(t * 47) > 0.35 ? 0.45 : 1;
+      life.update(delta, picture * hunting);
       for (const rack of racks) {
         for (const [i, bulb] of rack.lamps.entries()) {
           const on = Math.sin(t * (1.3 + i * 0.37) + rack.phase) > (i % 2 ? 0.2 : 0.6);

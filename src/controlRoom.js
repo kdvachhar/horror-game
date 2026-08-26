@@ -12,14 +12,20 @@ import {
 import { buildTelevision, createScreenLife } from './screenFace.js';
 import { createWallArms } from './wallArms.js';
 import {
+  createEmployeeDoor,
+  EMPLOYEE_OPENING,
+  READER_LOCKED,
+  READER_OPEN,
+} from './employeeDoor.js';
+import {
   blackWireMaterial,
   buildWirePort,
   chargeWire,
   setWireCurrent,
   WIRE_RADIUS,
 } from './wire.js';
-import { playButtonPress } from './audio.js';
-import { showNote } from './hud.js';
+import { playButtonPress, playWardDoor } from './audio.js';
+import { showNote, setObjective } from './hud.js';
 
 /**
  * The room behind the staff door, and the man in it.
@@ -38,14 +44,18 @@ import { showNote } from './hud.js';
  * have it in there already. It is what he was looking at.
  *
  * There is one thing in here to press and it is the switch that brings the set
- * up. Nothing else: no terminal to use, no log to read, nothing that opens the
- * yellow door — a room with an answer in it would turn the hall outside into a
- * puzzle, and the hall is not a puzzle. The button is not an answer. It gets
- * you the one thing this room has to say and it says it without words.
+ * up. Nothing else: no terminal to use, no log to read, and above all nothing
+ * that opens the yellow door — a room that unblocked the hall would turn a heap
+ * of people who died against a door into a puzzle you had solved, and it is not
+ * one. The button does not answer the hall. It wakes the thing that has been
+ * hanging over the dead man the whole time, and the thing tells you to go a
+ * different way.
  *
- * Which is also why the screen says nothing readable. See
+ * Which is why the *screen* on the desk still says nothing readable. See
  * makeConsoleScreenTexture: it had words on it once and they explained, in six
- * lines, what a heap of bodies against a door already says.
+ * lines, what a heap of bodies against a door already says. The room does not
+ * explain itself and it never will. He does — and what he says is four
+ * sentences, three of which are directions and one of which is not.
  */
 
 /**
@@ -64,6 +74,38 @@ import { showNote } from './hud.js';
  * solid nothing standing in the corner of it. Measured, not guessed. So the
  * room grew away from it, and the machinery went with it.
  */
+/**
+ * What he says when you switch him on.
+ *
+ * Four sentences, split at the full stops like every other speech in this game
+ * — a line is both a subtitle and a mouth schedule, and one long one sits on
+ * screen for ten seconds with a face chewing under it.
+ *
+ * The shape of it is the point. He has watched you walk the length of a
+ * corridor full of people who died against a door, and his first word about it
+ * is "hmm" — the noise you make at a stuck drawer. Then two lines of helpful
+ * directions. Then he stops being helpful, and the last sentence is not about
+ * the door at all.
+ *
+ * `opens` is on the line that names the door, so the leaf answers while he is
+ * still talking rather than after he has finished. The exit room's orange door
+ * waits for the end because there the door *is* the ending; here the door is the
+ * middle, and the warning has to land on somebody who is already looking at an
+ * open doorway.
+ *
+ * `eyes: 'closed'` on the last one. It is the delivery this face keeps for
+ * lines it is pleased with — see createScreenLife — and a thing that shuts its
+ * eyes to tell you about someone who does not like guests is worse than one
+ * that scowls. Nothing here gets the brows: the frown is for what it thinks of
+ * this building, and it does not think anything bad about him.
+ */
+const WAKE_LINES = [
+  { text: 'Hmm. The door is blocked.', hold: 2.0 },
+  { text: 'Well. Go through this door next to me.', hold: 2.6, opens: true },
+  { text: 'But I should warn you.', hold: 1.8, arms: 'crossed' },
+  { text: 'He doesn’t like guests.', hold: 2.6, arms: 'crossed', eyes: 'closed' },
+];
+
 const DEPTH = 7.2;
 const RUN = { racks: 3.5, plant: 6.1 };
 /**
@@ -234,6 +276,33 @@ export function createControlRoom({ scene, doorway, player }) {
   const midZ = (minZ + maxZ) / 2;
   const midX = (front + back) / 2;
 
+  /**
+   * The way on: a staff door in the same wall the set hangs on, and the passage
+   * behind it.
+   *
+   * "This door next to me" is a thing he says out loud, so it has to be a door
+   * he could point at without turning round — the same wall, a few strides
+   * along, and in view of the button you wake him with. That leaves exactly one
+   * stretch of this room. The back wall is 9.6m long and almost all of it is
+   * spoken for: the television is 3.8 of it, the switch panel is at -2.7, and
+   * the two arm ports sit at ±2.9 with a 0.43 ring around each. From +3.33 to
+   * the far corner there are 2.77m of bare wall, which is the only piece of this
+   * room a door fits on.
+   *
+   * A staff door and not the sliding kit from the sequence — red, orange, yellow
+   * — and that is the whole idea rather than a size problem. Those are the
+   * building's doors, hung in public corridors, and the last one in the sequence
+   * is the one with the heap of people against it. This is a plain grey leaf
+   * that says EMPLOYEES ONLY, in a room you were not meant to be in, and you
+   * have walked past five of them all game watching them not open. The sliding
+   * kit is also 1.8 wide and needs its own width again to park in, which those
+   * 2.77m do not have; but it would be wrong here even if it fitted.
+   */
+  const WAY = { z: doorway.z + 4.6, depth: 2.6, open: -1.62 };
+  const wayLow = WAY.z - EMPLOYEE_OPENING.width / 2;
+  const wayHigh = WAY.z + EMPLOYEE_OPENING.width / 2;
+  const wayEnd = back - WAY.depth;
+
   let entered = false;
 
   const wallSurface = makeWallSurface(...worldRepeat(maxZ - minZ, HEIGHT), WALL_TINT);
@@ -268,14 +337,25 @@ export function createControlRoom({ scene, doorway, player }) {
   ceiling.position.set(midX, HEIGHT, midZ);
   group.add(ceiling);
 
-  // Back wall and the two ends.
-  for (const [w, h, px, pz, ry] of [
-    [maxZ - minZ, HEIGHT, back, midZ, Math.PI / 2],
-    [DEPTH, HEIGHT, midX, minZ, 0],
-    [DEPTH, HEIGHT, midX, maxZ, Math.PI],
+  // Back wall and the two ends. The back one is in three pieces round the way
+  // on, the same way the front one is round the door you came in by.
+  for (const [w, h, px, py, pz, ry] of [
+    [wayLow - minZ, HEIGHT, back, HEIGHT / 2, (minZ + wayLow) / 2, Math.PI / 2],
+    [maxZ - wayHigh, HEIGHT, back, HEIGHT / 2, (wayHigh + maxZ) / 2, Math.PI / 2],
+    [
+      EMPLOYEE_OPENING.width,
+      HEIGHT - EMPLOYEE_OPENING.height,
+      back,
+      (HEIGHT + EMPLOYEE_OPENING.height) / 2,
+      WAY.z,
+      Math.PI / 2,
+    ],
+    [DEPTH, HEIGHT, midX, HEIGHT / 2, minZ, 0],
+    [DEPTH, HEIGHT, midX, HEIGHT / 2, maxZ, Math.PI],
   ]) {
+    if (w <= 0 || h <= 0) continue;
     const wall = new THREE.Mesh(new THREE.PlaneGeometry(w, h), wallOf(w, h));
-    wall.position.set(px, HEIGHT / 2, pz);
+    wall.position.set(px, py, pz);
     wall.rotation.y = ry;
     wall.receiveShadow = true;
     group.add(wall);
@@ -284,7 +364,12 @@ export function createControlRoom({ scene, doorway, player }) {
   // past it. A metre past it is inside the hall: they put a pair of invisible
   // blocks in the corners out there, one of them across the end you come in by.
   // The wall's own collider covers the gap between `front` and the hall.
-  solid(back - 1, back, minZ - 1, maxZ + 1, {});
+  //
+  // And the back one is split round the opening for the same reason the hall
+  // splits its side wall round the staff door: a solid run here is a doorway you
+  // can see through and cannot walk into.
+  solid(back - 1, back, minZ - 1, wayLow, {});
+  solid(back - 1, back, wayHigh, maxZ + 1, {});
   solid(back - 1, front, minZ - 1, minZ, {});
   solid(back - 1, front, maxZ, maxZ + 1, {});
 
@@ -337,6 +422,117 @@ export function createControlRoom({ scene, doorway, player }) {
     group.add(panel);
   }
 
+  // ----------------------------------------------------------- the way on ---
+
+  /**
+   * The passage behind the staff door: lined, unlit, and stopping in the dark.
+   *
+   * Not a wall you can see. A door that opens onto a flat plane at arm's length
+   * says there is nothing built past this, which is true and is the last thing
+   * the room should be saying out loud — he has just told you where to go. Two
+   * and a half metres of concrete going out of the light says what the corridor
+   * past the ward said: it carries on, and you cannot see how far.
+   *
+   * Nothing lights it. The nearest fitting is over the floor four metres back,
+   * and what reaches in through a 1.2m opening dies about a metre down — which
+   * is the whole of the difference between a doorway and a doorway you can see
+   * the end of.
+   *
+   * Capped, for now, exactly the way the exit room's orange door was capped
+   * before there was an orange room to put behind it: a dark plane across the
+   * end and a collider behind that. `wayOn` hands the far end out for whatever
+   * gets built on it, and when something is, the cap comes off.
+   */
+  {
+    const liner = new THREE.MeshStandardMaterial({ color: '#33372f', roughness: 0.94 });
+    const throat = (front + wayEnd) / 2;
+    for (const [w, h, px, py, pz, rx, ry] of [
+      [WAY.depth, EMPLOYEE_OPENING.height, throat, EMPLOYEE_OPENING.height / 2, wayLow, 0, 0],
+      [WAY.depth, EMPLOYEE_OPENING.height, throat, EMPLOYEE_OPENING.height / 2, wayHigh, 0, Math.PI],
+      // Lid and deck. Rotated about x, so a plane's own y runs along world z and
+      // its width is the depth of the passage — the same way round as the reveal
+      // panels above.
+      [WAY.depth, EMPLOYEE_OPENING.width, throat, EMPLOYEE_OPENING.height, WAY.z, Math.PI / 2, 0],
+      [WAY.depth, EMPLOYEE_OPENING.width, throat, 0.004, WAY.z, -Math.PI / 2, 0],
+    ]) {
+      const panel = new THREE.Mesh(new THREE.PlaneGeometry(w, h), liner);
+      panel.position.set(px, py, pz);
+      panel.rotation.set(rx, ry, 0);
+      // The cheeks stand in the back wall's plane and are as deep as a wall is,
+      // which is what the stripe painter looks for in a wall. There is no band
+      // in this room today, but the reveal on the other side of it learned this
+      // the hard way — see above.
+      panel.userData.notWall = true;
+      panel.receiveShadow = true;
+      group.add(panel);
+    }
+
+    const cap = new THREE.Mesh(
+      new THREE.PlaneGeometry(EMPLOYEE_OPENING.width, EMPLOYEE_OPENING.height),
+      new THREE.MeshStandardMaterial({ color: '#0a0b09', roughness: 1 })
+    );
+    cap.position.set(wayEnd, EMPLOYEE_OPENING.height / 2, WAY.z);
+    cap.rotation.y = Math.PI / 2;
+    group.add(cap);
+
+    // The sides and the end. Not the top or the bottom: a collider has no
+    // underside and a box over the passage would be a ceiling you could not
+    // walk under.
+    solid(wayEnd, back, wayLow - 0.6, wayLow, {});
+    solid(wayEnd, back, wayHigh, wayHigh + 0.6, {});
+    solid(wayEnd - 0.6, wayEnd, wayLow - 0.6, wayHigh + 0.6, {});
+  }
+
+  /**
+   * And the door itself: the sixth staff door, and the first one that opens.
+   *
+   * Built by the same lines as the five that do not — that is the entire point
+   * of it, and why employeeDoor.js grew a pivot rather than this room growing
+   * its own grey leaf. You have read that plate from a metre away in four rooms
+   * and once off the floor of a corridor full of bodies. This is the same plate,
+   * and it swings.
+   *
+   * It is not opened by the badge on the dead man's chest, which is hanging four
+   * metres away and would open anything in this building. It is opened by the
+   * thing on the wall, mid-sentence, without anybody touching it.
+   */
+  const wayDoor = createEmployeeDoor({
+    scene,
+    parent: group,
+    x: back,
+    z: WAY.z,
+    facing: Math.PI / 2,
+  });
+
+  /**
+   * The leaf's collider, walked onto wherever it has swung to.
+   *
+   * An axis-aligned box round a leaf that is turning is a poor fit halfway
+   * through the turn and a good one at either end, which is the right trade
+   * here: it is square to the wall for the whole game except the second and a
+   * half it takes to open. Worked out from the swing angle rather than read off
+   * the mesh, so it costs two trig calls rather than a matrix update through the
+   * whole room.
+   *
+   * The hinge is the +z jamb — the far one from the television — so the leaf
+   * opens away from you as you walk down the wall towards it, rather than
+   * closing the gap you are walking into.
+   */
+  const LEAF = { width: 1.02, half: 0.09 };
+  const leafBox = { minX: back, maxX: back, minZ: WAY.z, maxZ: WAY.z };
+  colliders.push(leafBox);
+  const carryLeaf = () => {
+    const turn = wayDoor.swing.rotation.y;
+    const hingeZ = WAY.z + LEAF.width / 2;
+    const tipX = back - LEAF.width * Math.sin(turn);
+    const tipZ = hingeZ - LEAF.width * Math.cos(turn);
+    leafBox.minX = Math.min(back, tipX) - LEAF.half;
+    leafBox.maxX = Math.max(back, tipX) + LEAF.half;
+    leafBox.minZ = Math.min(hingeZ, tipZ) - LEAF.half;
+    leafBox.maxZ = Math.max(hingeZ, tipZ) + LEAF.half;
+  };
+  carryLeaf();
+
   // ------------------------------------------------------------------ light ---
 
   const trimMat = new THREE.MeshStandardMaterial({ color: TRIM, roughness: 0.6, metalness: 0.3 });
@@ -350,13 +546,30 @@ export function createControlRoom({ scene, doorway, player }) {
   // than one to two. It took two lamps at two and a half times the hall's to
   // make the machinery visible at all. The dead one is over the desk on
   // purpose — the console is lit by its own screen, which is the picture.
-  for (const [fx, fz, alive] of [
+  //
+  // `full` is per fitting, and it is per fitting because of the third one. The
+  // other two hang in open floor with four metres of room under them and 38 is
+  // what it takes to reach any of it; that one hangs two metres off a wall it is
+  // pointed at, and at the same number it burned a patch of plaster brighter
+  // than the television — in a room whose whole palette is authored two stops
+  // down to survive ACES. Distance to the nearest surface is the number that
+  // matters here, not the size of the room.
+  for (const [fx, fz, alive, full = 38] of [
     [midX + 0.9, doorway.z - 2.2, true],
     [midX + 0.9, doorway.z + 2.4, true],
     // A third, for the two metres of room that arrived with the arms. The far
     // end was black without it, which in a room this size reads as the room
     // ending there.
-    [midX + 0.9, doorway.z + 5.1, true],
+    //
+    // Over the way on rather than out in the middle of the floor with the other
+    // two, which is where it was until there was a door under it. Every fitting
+    // in here hangs at midX + 0.9 — four and a half metres off the back wall —
+    // and that lights floor. It left the far corner of the wall as murk with a
+    // green pinhead in it, and the line he says about that door is "this door
+    // next to me": a door you cannot see is not a door he can point at. Pulled
+    // in to two metres out, it washes the wall it is in, the leaf when that
+    // swings, and the plate on it.
+    [back + 2.2, doorway.z + 4.6, true, 22],
     [back + 0.9, doorway.z - 0.4, false],
   ]) {
     const housing = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 0.16), trimMat);
@@ -369,10 +582,10 @@ export function createControlRoom({ scene, doorway, player }) {
     tube.position.set(fx, HEIGHT - 0.08, fz);
     group.add(tube);
     if (!alive) continue;
-    const lamp = new THREE.PointLight(0xd2dbca, 38, 17, 2);
+    const lamp = new THREE.PointLight(0xd2dbca, full, 17, 2);
     lamp.position.set(fx, HEIGHT - 0.2, fz);
     group.add(lamp);
-    fittings.push({ lamp, tube, level: 1 });
+    fittings.push({ lamp, tube, level: 1, full });
   }
 
   // ---------------------------------------------------------------- console ---
@@ -482,14 +695,18 @@ export function createControlRoom({ scene, doorway, player }) {
    * and it read as a computer with a face on it rather than as the thing from
    * the ward. The three tubes on the desk are somebody's computers; this is not.
    *
-   * It does not talk in here, and that is a decision rather than an omission.
-   * Both places it has spoken it wanted something from you — a door to go
-   * through, a button to press. This is a room you were not invited into, and
-   * once it is on it just blinks and looks at you. It has nothing to ask.
-   *
-   * And it starts dark. There is a button on the wall past the end of the desk
-   * and you have to be the one who presses it, which is the difference between
+   * It starts dark. There is a button on the wall past the end of the desk and
+   * you have to be the one who presses it, which is the difference between
    * finding a thing that is watching you and switching it on yourself.
+   *
+   * And then it talks. It did not, for two commits, and the argument for
+   * silence was that both other times it has spoken it wanted something from
+   * you — a door to go through, a button to press — whereas this is a room you
+   * were not invited into and it has nothing to ask. What is better is that it
+   * has nothing to ask and speaks anyway. You are standing in a plant room with
+   * a dead man in it because the way on is heaped with people who died against
+   * it, and the thing on the wall says hmm, and offers you a different door.
+   * See WAKE_LINES.
    */
   const television = buildTelevision();
   // Against the back wall, turned to face the door, hung so its bottom edge
@@ -663,6 +880,8 @@ export function createControlRoom({ scene, doorway, player }) {
   let picture = 0;
   /** The last charge to land off the cable, decaying. */
   let surge = 0;
+  /** Whether the line that opens the staff door has been reached. */
+  let opening = false;
 
   const interactions = [
     {
@@ -698,6 +917,7 @@ export function createControlRoom({ scene, doorway, player }) {
         // instant the switch goes in is a light being turned on; one that waits
         // is a thing warming up, and this one has a face in it.
         wakeIn = 0.9;
+        setObjective('Listen');
       },
     },
   ];
@@ -980,6 +1200,23 @@ export function createControlRoom({ scene, doorway, player }) {
       return { position: [front - 1.1, 0, doorway.z], yaw: Math.PI / 2 };
     },
 
+    /**
+     * The far end of the passage behind the staff door, for whatever gets built
+     * on the other side of it — handed over the same way the exit room hands out
+     * its orange door and the hall hands this room its doorway. One opening, one
+     * set of numbers, and nobody measuring off somebody else's file.
+     *
+     * Whatever takes this is what he is warning you about.
+     */
+    get wayOn() {
+      return {
+        x: wayEnd,
+        z: WAY.z,
+        width: EMPLOYEE_OPENING.width,
+        height: EMPLOYEE_OPENING.height,
+      };
+    },
+
     /** Dev handle: what the pair on the wall are doing right now. */
     get gesture() {
       return arms.gesture;
@@ -993,6 +1230,16 @@ export function createControlRoom({ scene, doorway, player }) {
       wakeIn = 0;
       picture = 0;
       surge = 0;
+      // Mid-sentence when a scene jump lands is a voice carrying on over the
+      // next room, so the speech is cut rather than left to finish.
+      life.stop();
+      // And the way on shuts again, with the reader back on red. A jump into
+      // this room that found the staff door standing open would give away the
+      // one thing he is here to tell you.
+      opening = false;
+      wayDoor.swing.rotation.y = 0;
+      wayDoor.lamp.material.color.set(READER_LOCKED);
+      carryLeaf();
       // The run goes quiet with it, for the reason the red hall's does: a reset
       // that left a charge travelling would light three rooms off a button that
       // is out.
@@ -1011,7 +1258,7 @@ export function createControlRoom({ scene, doorway, player }) {
       for (const fitting of fittings) {
         const want = 0.72 + 0.28 * Math.sin(t * 0.9) * Math.sin(t * 0.31);
         fitting.level += (want - fitting.level) * Math.min(1, delta * 3);
-        fitting.lamp.intensity = 38 * fitting.level;
+        fitting.lamp.intensity = fitting.full * fitting.level;
         fitting.tube.material.color.setScalar(0.3 + 0.5 * fitting.level);
       }
 
@@ -1029,8 +1276,46 @@ export function createControlRoom({ scene, doorway, player }) {
       // settles, and the hunt is the whole difference between a screen turning
       // on and a brightness value being animated.
       if (awake) {
-        if (wakeIn > 0) wakeIn = Math.max(0, wakeIn - delta);
-        else picture += (1 - picture) * (1 - Math.exp(-3.6 * delta));
+        if (wakeIn > 0) {
+          wakeIn = Math.max(0, wakeIn - delta);
+          // And it starts talking on the same beat the picture starts arriving.
+          // Waiting for the tube to settle first was the other option and it is
+          // the wrong one: a face that appears, looks at you, and *then* begins
+          // is a thing that decided to speak. This one is already halfway
+          // through drawing itself when the first word lands, which is a thing
+          // that was going to say this whether you were here or not.
+          if (wakeIn <= 0) {
+            life.speak(WAKE_LINES, () => {
+              // He stays on. Both other times this thing has spoken it has gone
+              // dark afterwards, because both times it had asked you for
+              // something and got it. It has not asked you for anything in
+              // here — you switched it on — so there is nothing for it to be
+              // finished with, and it is still lit, still blinking, and still
+              // has its arms out of the wall while you walk past it and through
+              // the door it opened.
+              setObjective('Go through the door beside him');
+            });
+          }
+        } else picture += (1 - picture) * (1 - Math.exp(-3.6 * delta));
+      }
+
+      /**
+       * The staff door, on the line that names it.
+       *
+       * Latch first and then a metre of leaf, over about a second and a half —
+       * slow, and slowing as it goes, because nothing is pushing it. There is no
+       * mechanism in a staff door: it has a lever handle and two hinges, and it
+       * is standing open by the end of the sentence with nobody near it.
+       */
+      if (!opening && life.line?.opens) {
+        opening = true;
+        playWardDoor(0.45);
+        wayDoor.lamp.material.color.set(READER_OPEN);
+      }
+      if (opening && wayDoor.swing.rotation.y > WAY.open + 0.004) {
+        wayDoor.swing.rotation.y +=
+          (WAY.open - wayDoor.swing.rotation.y) * Math.min(1, delta * 1.6);
+        carryLeaf();
       }
       const hunting = picture > 0.02 && picture < 0.97 && Math.sin(t * 47) > 0.35 ? 0.45 : 1;
       // What is arriving down the cable, taken at its peak and let go of
@@ -1039,8 +1324,14 @@ export function createControlRoom({ scene, doorway, player }) {
       surge = Math.max(arrival(), surge - delta * 2.2);
       life.update(delta, picture * hunting * (1 + surge * 0.9));
 
-      // The arms come out with him and go back in with him.
-      arms.update(delta, { retract: !awake });
+      // The arms come out with him and go back in with him — and now that he
+      // talks in here, they move while he does, and fold on the two lines that
+      // ask for it. Same handles the ward and the red hall drive them with.
+      arms.update(delta, {
+        speaking: life.isSpeaking,
+        cross: life.line?.arms === 'crossed',
+        retract: !awake,
+      });
       for (const rack of racks) {
         for (const [i, bulb] of rack.lamps.entries()) {
           const on = Math.sin(t * (1.3 + i * 0.37) + rack.phase) > (i % 2 ? 0.2 : 0.6);

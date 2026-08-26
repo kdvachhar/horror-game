@@ -21,17 +21,22 @@ import { makeEmployeeSignTexture, makeMetalPanelSurface } from './textures.js';
  * dead reader — because that sameness is the only thing that makes five props
  * in five rooms read as one building.
  *
- * And it is what the sixth one trades on. There is one in the hall behind the
+ * And it is what the other two trade on. There is one in the hall behind the
  * orange door that is lying on the floor with a hole in the wall where it used
- * to be, and it is only worth anything because the other five held.
+ * to be, and one in the room behind that hole that opens — and neither is worth
+ * anything except that the other five held. The torn one was something coming
+ * out. The one that opens is worse: nothing touches it, nobody puts a badge to
+ * the reader, and the light on it goes green because the thing on the screen
+ * would like you to go through. A door that has refused you all game and then
+ * agrees is not a door being unlocked, it is a door being held for you.
  *
- * They are scenery, and scenery is all they are: no prompt, no key, no reply.
- * They had a handle you could try at first, which rattled and told you it was
- * locked — and that turns each one into a thing to walk up to and use, five
- * times, for the same sentence. Everything this game asks you to press E on
- * does something. Making the doors answer put them in that category and then
- * had them refuse, which is worse than silence: a prompt is a promise. Read the
- * plate and keep walking.
+ * The five are scenery, and scenery is all they are: no prompt, no key, no
+ * reply. They had a handle you could try at first, which rattled and told you it
+ * was locked — and that turns each one into a thing to walk up to and use, five
+ * times, for the same sentence. Everything this game asks you to press E on does
+ * something. Making the doors answer put them in that category and then had them
+ * refuse, which is worse than silence: a prompt is a promise. Read the plate and
+ * keep walking. The one that opens is not asked either: it is opened *at* you.
  */
 
 const WIDTH = 1.02;
@@ -182,7 +187,14 @@ function buildFrame({ frameMat }, frameDeep) {
  * blink when you tried a door and it is better as a thing that never changes —
  * something left on in a building where most things are not, which is a detail
  * you notice rather than a response you triggered.
+ *
+ * The lamp comes back out because there is now one of these that opens, and the
+ * whole of that moment is this light changing colour. See READER_LOCKED and
+ * READER_OPEN: the caller sets it, and on five of the six nobody ever does.
  */
+export const READER_LOCKED = '#5e0f0c';
+export const READER_OPEN = '#1f7a2a';
+
 function buildReader({ frameMat }, face) {
   const group = new THREE.Group();
   const reader = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.17, 0.05), frameMat);
@@ -192,11 +204,11 @@ function buildReader({ frameMat }, face) {
     new THREE.SphereGeometry(0.017, 8, 6),
     // toneMapped off: at this size it has to be a light rather than a red dot,
     // and ACES turns an authored red into a pink smudge.
-    new THREE.MeshBasicMaterial({ color: '#5e0f0c', toneMapped: false })
+    new THREE.MeshBasicMaterial({ color: READER_LOCKED, toneMapped: false })
   );
   lamp.position.set(WIDTH / 2 + JAMB + 0.13, 1.23, face + 0.088);
   group.add(lamp);
-  return group;
+  return { group, lamp };
 }
 
 /**
@@ -209,13 +221,27 @@ function buildReader({ frameMat }, face) {
  * Nothing here is a collider. The door stands a tenth of a metre off a wall
  * that already stops you, and the player's own radius is four times that, so
  * there is nothing to walk into: adding boxes for these would be five more
- * chances to wedge the bucket for no gain.
+ * chances to wedge the bucket for no gain. The one that opens swings a metre of
+ * leaf into a room and needs one — the room it is in owns that, because it is
+ * the only place the leaf is ever anywhere but flat on a wall.
+ *
+ * `parent` is the scene by default, so the five that stand on their own can go
+ * on being built with one call. The one in the control room hangs off that
+ * room's group instead, so it is hidden, shown, moved and reset with it.
  */
-export function createEmployeeDoor({ scene, x, z, facing = 0, y = 0, standoff = 0 }) {
+export function createEmployeeDoor({
+  scene,
+  parent = scene,
+  x,
+  z,
+  facing = 0,
+  y = 0,
+  standoff = 0,
+}) {
   const group = new THREE.Group();
   group.position.set(x, y, z);
   group.rotation.y = facing;
-  scene.add(group);
+  parent.add(group);
 
   // How far the leaf sits in front of the wall plane, and how deep the frame
   // has to be to reach back to it.
@@ -231,10 +257,31 @@ export function createEmployeeDoor({ scene, x, z, facing = 0, y = 0, standoff = 
 
   const materials = doorMaterials();
   group.add(buildFrame(materials, frameDeep));
-  group.add(buildLeaf(materials, face));
-  group.add(buildReader(materials, face));
 
-  // Hinges, on the side the handle is not.
+  /**
+   * The leaf, on a pivot at the hinge edge.
+   *
+   * A group whose origin is the hinge line, with the leaf hung half a width off
+   * it, so `swing.rotation.y` is the door opening and nothing else has to move.
+   * At zero it is exactly where it always was — the five that never open are
+   * untouched by this, which is the only way to add a moving part to a prop that
+   * five rooms depend on looking identical.
+   *
+   * Negative opens it, into the room the leaf faces: turning the leaf's own +z
+   * toward +x swings the free edge out of the wall rather than back into it.
+   */
+  const swing = new THREE.Group();
+  swing.position.x = -WIDTH / 2;
+  const leaf = buildLeaf(materials, face);
+  leaf.position.x = WIDTH / 2;
+  swing.add(leaf);
+  group.add(swing);
+
+  const reader = buildReader(materials, face);
+  group.add(reader.group);
+
+  // Hinges, on the side the handle is not — and on the wall, not on the leaf.
+  // They are the one part of a hinge that does not move.
   for (const hy of [0.36, HEIGHT - 0.36]) {
     const hinge = new THREE.Mesh(
       new THREE.CylinderGeometry(0.035, 0.035, 0.16, 8),
@@ -244,10 +291,10 @@ export function createEmployeeDoor({ scene, x, z, facing = 0, y = 0, standoff = 
     group.add(hinge);
   }
 
-  // Only the group: there is nothing to drive and nothing to press. The caller
-  // wants it for the render layer, which is the one thing about a staff door
-  // that depends on which room it is standing in.
-  return { group };
+  // The group for the render layer, and — for the one of these that is not
+  // scenery — the pivot to turn and the light to change. Five callers use
+  // neither and should not have to know they are there.
+  return { group, swing, lamp: reader.lamp };
 }
 
 /**
@@ -291,7 +338,7 @@ export function createFallenEmployeeDoor({
   const materials = doorMaterials();
   group.add(buildFrame(materials, FRAME_DEPTH));
   // Still armed, on a door that no longer exists. Nobody came to turn it off.
-  group.add(buildReader(materials, 0));
+  group.add(buildReader(materials, 0).group);
 
   // The hinges it tore off, still on the jamb and bent out of line. The top one
   // further than the bottom, because that is the one that goes last.

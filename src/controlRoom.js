@@ -9,6 +9,7 @@ import {
   worldRepeat,
   metalRepeat,
 } from './textures.js';
+import { buildTelevision, createScreenLife } from './screenFace.js';
 import { showNote } from './hud.js';
 
 /**
@@ -21,6 +22,11 @@ import { showNote } from './hud.js';
  * of him, a badge round his neck that opens every door in the building, and a
  * wall of machinery running because nobody switched it off. Four metres that
  * way there is a heap of people who died against a door he could have opened.
+ *
+ * And on the wall above him, the television from the ward. The same one, not a
+ * third copy of it — there is one character in this game, it lives on glass,
+ * and every room you get into that you were not meant to be in turns out to
+ * have it in there already. It is what he was looking at.
  *
  * Nothing in here is interactive, like the hall. There is no terminal to use,
  * no log to read, no button that opens the yellow door — a room with an answer
@@ -45,7 +51,15 @@ import { showNote } from './hud.js';
  */
 const DEPTH = 5.9;
 const RUN = { racks: 3.5, plant: 4.1 };
-const HEIGHT = 3.2;
+/**
+ * Taller than the hall outside, and taller than it was.
+ *
+ * It went from 3.2 to 3.6 when the television arrived. That thing is 1.9 high
+ * and it hangs on a wall over a desk with monitors standing on it, and under a
+ * 3.2 ceiling there is no height at which it clears the tubes below it and the
+ * slab above. A plant room being taller than a corridor is also just true.
+ */
+const HEIGHT = 3.6;
 
 // Back of house. Dirtier and greener than the hall outside, which is a public
 // corridor and gets painted; nobody has decorated in here.
@@ -336,7 +350,7 @@ export function createControlRoom({ scene, doorway, player }) {
     tube.position.set(fx, HEIGHT - 0.08, fz);
     group.add(tube);
     if (!alive) continue;
-    const lamp = new THREE.PointLight(0xd2dbca, 32, 16, 2);
+    const lamp = new THREE.PointLight(0xd2dbca, 38, 17, 2);
     lamp.position.set(fx, HEIGHT - 0.2, fz);
     group.add(lamp);
     fittings.push({ lamp, tube, level: 1 });
@@ -400,9 +414,8 @@ export function createControlRoom({ scene, doorway, player }) {
   /**
    * Three tubes on the desk, one of them still on.
    *
-   * Not the face from the ward — that thing has two screens of its own and this
-   * is not a third. See screenFace.js: two copies of a character are two
-   * characters. These are somebody's monitors.
+   * These are somebody's monitors and they are not the face — the face is on
+   * the wall above them, on its own set. See below.
    */
   const screenTexture = makeConsoleScreenTexture();
   const monitors = [];
@@ -428,19 +441,48 @@ export function createControlRoom({ scene, doorway, player }) {
     group.add(glass);
     if (!alive) continue;
     monitors.push({ glass });
-    // The glow it throws. Small and short-ranged: it should reach the desk, the
-    // wall behind it and the back of the chair, and nothing else.
-    //
-    // Up above the tube rather than out in front of it, because what is out in
-    // front of it is a man's head at a quarter of a metre. Inverse square does
-    // the rest: down there this lamp put forty lux on the back of his skull and
-    // he came out as a light bulb. From up here he is lit by his own screen,
-    // which is what was wanted, at about half again the ceiling's.
-    const glow = new THREE.PointLight(0x53a05c, 2.2, 3.2, 2);
-    glow.position.set(back + 0.95, DESK.top + 0.62, deskZ + offset);
-    group.add(glow);
-    monitors[monitors.length - 1].glow = glow;
+    // No lamp on this one. It had a small green one, back when this readout was
+    // the only lit thing in the room; the television above it throws green over
+    // the whole desk now and a second source of the same colour a foot below
+    // the first is a light you can only see by looking for it.
   }
+
+  /**
+   * And the thing on the wall above them.
+   *
+   * The same television as the ward's and the same one as the console at the end
+   * of the red hall — the object, not a copy of it, which is the entire point of
+   * it being here. There is one character in this game and it lives on glass,
+   * and every time you find a room you were not meant to be in, it is already in
+   * that room, further along than you are. See screenFace.js.
+   *
+   * It is the set and not the face on a desk terminal, and that is a rule this
+   * project has already learned once: the wide grey box, the wires out of the
+   * top and bottom, the face floating in the middle of far too much screen. The
+   * first attempt at the red hall's console shrank the face into a small monitor
+   * and it read as a computer with a face on it rather than as the thing from
+   * the ward. The three tubes on the desk are somebody's computers; this is not.
+   *
+   * It does not talk in here, and that is a decision rather than an omission.
+   * Both places it has spoken it wanted something from you — a door to go
+   * through, a button to press. This is a room you were not invited into, with
+   * the man who watched the hall dead at the desk under it, and the thing on
+   * the wall is on, and blinking, and looking at you. It has nothing to ask.
+   */
+  const television = buildTelevision();
+  // Against the back wall, turned to face the door, hung so its bottom edge
+  // clears the tubes on the desk under it by a hand's width.
+  television.group.position.set(back + television.depth / 2 + 0.02, 2.35, deskZ);
+  television.group.rotation.y = Math.PI / 2;
+  group.add(television.group);
+  // Its glow is part of the set and it is the room's green now — see the
+  // monitors above, which gave theirs up for it.
+  const life = createScreenLife({
+    eyes: television.eyes,
+    mouth: television.mouth,
+    faceParts: television.faceParts,
+    glow: television.glow,
+  });
 
   // Keyboard, pushed back the way you push one back when you stand up.
   const keyboard = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.03, 0.44), caseMat);
@@ -463,15 +505,20 @@ export function createControlRoom({ scene, doorway, player }) {
   mug.position.set(back + 0.72, DESK.top + 0.08, deskZ + 0.55);
   group.add(mug);
 
-  // The panel above the desk: switches, and a row of lamps that are still on
-  // because whatever they watch is still doing it.
-  const panel = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.62, 2.3), caseMat);
-  panel.position.set(back + 0.045, 1.86, deskZ);
+  // The panel of switches, and a row of lamps that are still on because
+  // whatever they watch is still doing it.
+  //
+  // Along the wall past the end of the desk rather than above it, where it was.
+  // The wall above the desk is the television's now, and 3.8m of television on a
+  // 7.6m wall leaves exactly one stretch of it long enough for this.
+  const panelZ = deskZ - 2.7;
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.62, 1.3), caseMat);
+  panel.position.set(back + 0.045, 1.5, panelZ);
   group.add(panel);
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < 8; i++) {
     const sw = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.05, 6), trimMat);
     sw.rotation.z = Math.PI / 2;
-    sw.position.set(back + 0.11, 1.66, deskZ - 1.0 + i * 0.155);
+    sw.position.set(back + 0.11, 1.32, panelZ - 0.42 + i * 0.12);
     group.add(sw);
   }
   for (let i = 0; i < 9; i++) {
@@ -482,7 +529,7 @@ export function createControlRoom({ scene, doorway, player }) {
       new THREE.SphereGeometry(0.016, 8, 6),
       on ? lit(i === 2 ? '#7d1a12' : '#2f6a2c') : new THREE.MeshStandardMaterial({ color: '#24281f', roughness: 0.7 })
     );
-    bulb.position.set(back + 0.1, 2.02, deskZ - 0.86 + i * 0.215);
+    bulb.position.set(back + 0.1, 1.66, panelZ - 0.48 + i * 0.12);
     group.add(bulb);
   }
 
@@ -676,12 +723,15 @@ export function createControlRoom({ scene, doorway, player }) {
     const tray = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.06, trayLength), trimMat);
     tray.position.set(back + 1.5, HEIGHT - 0.24, midZ);
     group.add(tray);
+    // Landing wide of the middle, past the end of the television, because the
+    // wall they used to run down is 3.8m of it now and a cable hanging across
+    // that face is a cable across the one thing in the room you are looking at.
     for (const [side, drop] of [[-0.1, 0.5], [0.06, 0.62]]) {
       const curve = new THREE.CatmullRomCurve3([
         new THREE.Vector3(back + 1.5 + side, HEIGHT - 0.28, trayZ),
-        new THREE.Vector3(back + 1.1 + side, HEIGHT - 0.28 - drop, deskZ + 0.4),
-        new THREE.Vector3(back + 0.55 + side, 2.2, deskZ + 0.1),
-        new THREE.Vector3(back + 0.3 + side, 1.2, deskZ + 0.05),
+        new THREE.Vector3(back + 1.3 + side, HEIGHT - 0.28 - drop, deskZ + 1.4),
+        new THREE.Vector3(back + 1.05 + side, 2.0, deskZ + 2.0),
+        new THREE.Vector3(back + 0.95 + side, 1.0, deskZ + 2.1),
       ]);
       const cable = new THREE.Mesh(
         new THREE.TubeGeometry(curve, 24, 0.022, 6, false),
@@ -721,7 +771,7 @@ export function createControlRoom({ scene, doorway, player }) {
       for (const fitting of fittings) {
         const want = 0.72 + 0.28 * Math.sin(t * 0.9) * Math.sin(t * 0.31);
         fitting.level += (want - fitting.level) * Math.min(1, delta * 3);
-        fitting.lamp.intensity = 32 * fitting.level;
+        fitting.lamp.intensity = 38 * fitting.level;
         fitting.tube.material.color.setScalar(0.3 + 0.5 * fitting.level);
       }
 
@@ -731,8 +781,11 @@ export function createControlRoom({ scene, doorway, player }) {
       for (const monitor of monitors) {
         const flicker = 0.86 + 0.14 * Math.sin(t * 7.7) + 0.04 * Math.sin(t * 23.1);
         monitor.glass.material.color.setScalar(flicker);
-        if (monitor.glow) monitor.glow.intensity = 2.2 * flicker;
       }
+      // The face: breathing, blinking, watching. Always fully lit — the fade
+      // the other two screens have is for a thing being switched on or going
+      // out, and this one has been on the whole time.
+      life.update(delta, 1);
       for (const rack of racks) {
         for (const [i, bulb] of rack.lamps.entries()) {
           const on = Math.sin(t * (1.3 + i * 0.37) + rack.phase) > (i % 2 ? 0.2 : 0.6);

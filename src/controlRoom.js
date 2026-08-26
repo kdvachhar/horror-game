@@ -12,14 +12,15 @@ import {
 import { showNote } from './hud.js';
 
 /**
- * The room behind the staff door, and the man who was not in it.
+ * The room behind the staff door, and the man in it.
  *
  * The hall outside is the first place in the building that is not an
  * experiment — a corridor, the people who tried it, and a door that does not
- * open. This is the other half of that sentence. Somebody watched. There is a
- * console in here with a screen still lit on it and a chair on its side behind
- * it, and a wall of machinery that is still running because nobody switched it
- * off, and it is all four metres from a heap of people who died against a door.
+ * open. This is the other half of that sentence. Somebody watched, and he is
+ * still here: face down on his own console with the screen still going in front
+ * of him, a badge round his neck that opens every door in the building, and a
+ * wall of machinery running because nobody switched it off. Four metres that
+ * way there is a heap of people who died against a door he could have opened.
  *
  * Nothing in here is interactive, like the hall. There is no terminal to use,
  * no log to read, no button that opens the yellow door — a room with an answer
@@ -52,6 +53,129 @@ const WALL_TINT = '#4a4f47';
 const FLOOR_TINT = '#3e403a';
 const TRIM = '#2d312b';
 const CASE = '#3a403b';
+
+/** What he is wearing, and what is left of him. Authored dark, like the hall. */
+const SHIRT = '#333940';
+const TROUSER = '#252925';
+const SKIN = '#4a4338';
+const HAIR = '#1e1c19';
+
+/**
+ * A limb, as two points and a thickness.
+ *
+ * The bodies in the hall are posed in angles — a rotation per joint, worked out
+ * on paper — because they are all the same body lying down thirteen times and
+ * the pose is a parameter. There is one of this one and he is folded over a
+ * desk, so he is written as where his hands are and where his head is, and the
+ * angles fall out of the arithmetic. Two points is also the only description
+ * that cannot come apart: a shoulder and an elbow given as angles drift into
+ * each other the moment either changes.
+ */
+const UP = new THREE.Vector3(0, 1, 0);
+function bone(from, to, radius, material) {
+  const a = new THREE.Vector3(...from);
+  const b = new THREE.Vector3(...to);
+  const along = new THREE.Vector3().subVectors(b, a);
+  const mesh = new THREE.Mesh(
+    new THREE.CapsuleGeometry(radius, Math.max(along.length() - radius * 2, 0.01), 3, 7),
+    material
+  );
+  mesh.position.copy(a).add(b).multiplyScalar(0.5);
+  mesh.quaternion.setFromUnitVectors(UP, along.normalize());
+  mesh.castShadow = true;
+  return mesh;
+}
+
+/**
+ * The man at the console, face down on his own desk.
+ *
+ * Built sitting: origin on the floor under the seat, +z the way he is facing,
+ * which is at the desk. Every number below is measured off two things that are
+ * real — the seat at 0.46 and the worktop at 0.815 — so his hands and his cheek
+ * are on the desk rather than near it. That is the entire difficulty of posing
+ * something that is touching furniture.
+ */
+function buildOperator() {
+  const group = new THREE.Group();
+  const shirt = new THREE.MeshStandardMaterial({ color: SHIRT, roughness: 0.9, metalness: 0 });
+  const trouser = new THREE.MeshStandardMaterial({ color: TROUSER, roughness: 0.94, metalness: 0 });
+  const skin = new THREE.MeshStandardMaterial({ color: SKIN, roughness: 0.86, metalness: 0 });
+  const hair = new THREE.MeshStandardMaterial({ color: HAIR, roughness: 0.95, metalness: 0 });
+
+  // Hips on the seat, and the spine folded forward until the shoulders are over
+  // the front edge of the worktop.
+  group.add(bone([0, 0.44, -0.04], [0, 0.5, 0.1], 0.15, trouser));
+  // Flattened across, because a capsule at the width a back needs is a sausage
+  // at the depth a back does not: a person seen from behind is wider than they
+  // are thick and everything about reading him as a person is that shape.
+  const spine = bone([0, 0.5, 0.08], [0, 0.7, 0.3], 0.16, shirt);
+  spine.scale.set(1.3, 1, 0.85);
+  group.add(spine);
+  // Shoulders across the top of it, so the arms come off something.
+  group.add(bone([-0.18, 0.7, 0.27], [0.18, 0.7, 0.27], 0.075, shirt));
+
+  // The head, on its side on the desk with the neck at the angle that puts it
+  // there — and haired over almost completely, which is not a detail.
+  //
+  // The face is into the desk, so from every angle a player can stand at, what
+  // they are looking at is the back of a skull. Built the obvious way — a skin
+  // sphere with a smaller cap of hair on top of it — he read from behind as a
+  // bald white ball with the screen lighting it, which is the one thing in this
+  // room that has to not look like a prop. So the hair is the larger sphere and
+  // the skin shows through at the front, where it is face down on the worktop.
+  group.add(bone([0, 0.71, 0.32], [0.02, 0.84, 0.42], 0.055, skin));
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.115, 12, 10), skin);
+  // 0.50 and not 0.53: the front of the middle tube's casing is 0.115 further
+  // on, and at 0.53 his skull and it share the same four millimetres.
+  head.position.set(0.05, 0.925, 0.5);
+  head.castShadow = true;
+  group.add(head);
+  const crown = new THREE.Mesh(new THREE.SphereGeometry(0.119, 12, 10), hair);
+  crown.position.set(0.05, 0.941, 0.478);
+  crown.scale.set(0.98, 0.93, 1);
+  crown.castShadow = true;
+  group.add(crown);
+
+  // Arms out along the desk either side of the keyboard, which is why the hands
+  // are 0.34 off the middle: straight ahead they are inside the monitor.
+  for (const side of [-1, 1]) {
+    group.add(bone([side * 0.17, 0.7, 0.26], [side * 0.32, 0.8, 0.44], 0.055, shirt));
+    group.add(bone([side * 0.32, 0.8, 0.44], [side * 0.34, 0.845, 0.62], 0.048, side > 0 ? skin : shirt));
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.052, 8, 6), skin);
+    hand.position.set(side * 0.34, 0.845, 0.66);
+    hand.scale.set(0.8, 0.6, 1.2);
+    hand.castShadow = true;
+    group.add(hand);
+  }
+
+  // Legs under the desk, in the gap the modesty panel leaves for them.
+  for (const side of [-1, 1]) {
+    group.add(bone([side * 0.11, 0.45, 0.02], [side * 0.13, 0.46, 0.4], 0.075, trouser));
+    group.add(bone([side * 0.13, 0.44, 0.4], [side * 0.13, 0.1, 0.48], 0.06, trouser));
+    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.07, 0.24), hair);
+    shoe.position.set(side * 0.13, 0.04, 0.53);
+    group.add(shoe);
+  }
+
+  // And the badge on its lanyard, hanging off the front of the desk.
+  //
+  // The one thing in this room that would open every door in the building, on a
+  // strap round the neck of the man who is not going to use it. It is not a
+  // pickup and there is no prompt on it — see the top of this file.
+  const strap = new THREE.MeshStandardMaterial({ color: '#20242a', roughness: 0.95 });
+  for (const side of [-1, 1]) {
+    group.add(bone([side * 0.07, 0.75, 0.3], [side * 0.03, 0.86, 0.46], 0.008, strap));
+  }
+  const badge = new THREE.Mesh(
+    new THREE.BoxGeometry(0.055, 0.08, 0.006),
+    new THREE.MeshStandardMaterial({ color: '#8d8878', roughness: 0.6, metalness: 0.1 })
+  );
+  badge.position.set(0.02, 0.845, 0.5);
+  badge.rotation.set(Math.PI / 2, 0.3, 0);
+  group.add(badge);
+
+  return group;
+}
 
 /**
  * The room, hung off the doorway the hall hands over.
@@ -234,7 +358,11 @@ export function createControlRoom({ scene, doorway, player }) {
   });
   const lit = (color) => new THREE.MeshBasicMaterial({ color, toneMapped: false });
 
-  const DESK = { deep: 0.9, long: 3.8, top: 0.78 };
+  // Deeper than a desk needs to be, and the reason is the man at it. The tubes
+  // are 0.46 front to back and stand at the wall; at 0.9 that left a 0.33 strip
+  // of clear worktop in front of them, and a pair of hands reaching out along it
+  // came down inside the middle one. A console desk is that deep anyway.
+  const DESK = { deep: 1.05, long: 3.8, top: 0.78 };
   const deskFront = back + DESK.deep;
 
   const worktop = new THREE.Mesh(
@@ -259,9 +387,14 @@ export function createControlRoom({ scene, doorway, player }) {
       group.add(drawer);
     }
   }
-  const modesty = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.44, DESK.long - 1.4), caseMat);
-  modesty.position.set(deskFront - 0.06, 0.5, deskZ);
-  group.add(modesty);
+  // Modesty panel in two pieces with a knee space between them, which is how a
+  // desk somebody sits at is built — and here it has to be, because somebody is
+  // sitting at it and a single panel runs straight through his shins.
+  for (const end of [-1, 1]) {
+    const modesty = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.44, 0.7), caseMat);
+    modesty.position.set(deskFront - 0.06, 0.5, deskZ + end * 0.85);
+    group.add(modesty);
+  }
   solid(back, deskFront, deskZ - DESK.long / 2, deskZ + DESK.long / 2, { top: DESK.top + 0.04 });
 
   /**
@@ -297,8 +430,14 @@ export function createControlRoom({ scene, doorway, player }) {
     monitors.push({ glass });
     // The glow it throws. Small and short-ranged: it should reach the desk, the
     // wall behind it and the back of the chair, and nothing else.
-    const glow = new THREE.PointLight(0x53a05c, 2.6, 3.4, 2);
-    glow.position.set(back + 0.9, DESK.top + 0.3, deskZ + offset);
+    //
+    // Up above the tube rather than out in front of it, because what is out in
+    // front of it is a man's head at a quarter of a metre. Inverse square does
+    // the rest: down there this lamp put forty lux on the back of his skull and
+    // he came out as a light bulb. From up here he is lit by his own screen,
+    // which is what was wanted, at about half again the ceiling's.
+    const glow = new THREE.PointLight(0x53a05c, 2.2, 3.2, 2);
+    glow.position.set(back + 0.95, DESK.top + 0.62, deskZ + offset);
     group.add(glow);
     monitors[monitors.length - 1].glow = glow;
   }
@@ -347,17 +486,32 @@ export function createControlRoom({ scene, doorway, player }) {
     group.add(bulb);
   }
 
-  // The chair, on its side where it went over.
-  //
-  // Not pushed back and not tucked in. A chair tucked under a desk is a room
-  // somebody left at the end of a shift, and that is not what happened here.
+  /**
+   * The chair, pulled up to the desk, and the man in it.
+   *
+   * He was an empty chair on its side for one commit and that was a worse room.
+   * An overturned chair is somebody having got up, which puts the interesting
+   * event somewhere the player cannot see and leaves the room a set. He is the
+   * whole point of it: everyone in the hall outside died four metres that way,
+   * against a door, trying to get out — and the one man who could have opened
+   * anything in this building never stood up.
+   *
+   * Slumped forward onto the desk in front of the tube that is still lit, which
+   * is the only arrangement of him that works. Face down on the floor and he is
+   * another body, and there are thirteen of those through the wall.
+   */
   {
+    const seatAt = deskFront + 0.32;
+
     const chair = new THREE.Group();
-    // Off the line between the door and the desk. It reads the same from
-    // anywhere in the room and it is not something to walk into on the way in.
-    chair.position.set(deskFront + 0.5, 0, deskZ + 1.15);
-    // Over onto its side, and turned so the seat faces the door you came in by.
-    chair.rotation.set(0, -0.6, Math.PI / 2);
+    chair.position.set(seatAt, 0, deskZ);
+    // Swivelled, so the backrest is at his shoulder instead of across his back.
+    //
+    // Square behind him it hid him: from the doorway, two metres back and dead
+    // on, the whole of the man was a chair with the top of a head over it. An
+    // office chair turns, everyone knows it turns, and turned it puts his back
+    // and both arms in view from the one place every player enters from.
+    chair.rotation.y = Math.PI - 0.85;
     group.add(chair);
     const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.08, 14), caseMat);
     seat.position.y = 0.46;
@@ -365,6 +519,7 @@ export function createControlRoom({ scene, doorway, player }) {
     chair.add(seat);
     const backRest = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.42), caseMat);
     backRest.position.set(-0.2, 0.72, 0);
+    backRest.castShadow = true;
     chair.add(backRest);
     const column = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.045, 0.36, 8), trimMat);
     column.position.y = 0.24;
@@ -378,9 +533,18 @@ export function createControlRoom({ scene, doorway, player }) {
       castor.position.set(Math.cos((i / 5) * Math.PI * 2) * 0.27, 0.04, Math.sin((i / 5) * Math.PI * 2) * 0.27);
       chair.add(castor);
     }
-    // Low enough to step over rather than walk through: the one thing in here
-    // lying in the open where a player will meet it at knee height.
-    solid(deskFront + 0.14, deskFront + 0.86, deskZ + 0.78, deskZ + 1.52, { top: 0.5 });
+
+    const operator = buildOperator();
+    operator.position.set(seatAt, 0, deskZ);
+    // Built facing +z like every other prop in this project, and turned to face
+    // the desk, which is at -x.
+    operator.rotation.y = -Math.PI / 2;
+    group.add(operator);
+
+    // One box for the pair of them, and no top: he is not something to stand
+    // on. It butts up against the desk's, so between them the middle of the
+    // console is closed off and you look at him from the side.
+    solid(deskFront, seatAt + 0.4, deskZ - 0.46, deskZ + 0.46, {});
   }
 
   // ------------------------------------------------------------- machinery ---
@@ -567,7 +731,7 @@ export function createControlRoom({ scene, doorway, player }) {
       for (const monitor of monitors) {
         const flicker = 0.86 + 0.14 * Math.sin(t * 7.7) + 0.04 * Math.sin(t * 23.1);
         monitor.glass.material.color.setScalar(flicker);
-        if (monitor.glow) monitor.glow.intensity = 2.6 * flicker;
+        if (monitor.glow) monitor.glow.intensity = 2.2 * flicker;
       }
       for (const rack of racks) {
         for (const [i, bulb] of rack.lamps.entries()) {
@@ -578,7 +742,9 @@ export function createControlRoom({ scene, doorway, player }) {
 
       if (!entered && contains(player.position.x, player.position.z)) {
         entered = true;
-        showNote('Somebody sat in here while it happened.', 3.4);
+        // Said on the way in, before you are close enough to see what is at the
+        // desk. The line is the suspicion; he is the answer to it.
+        showNote('Somebody was in here the whole time.', 3.4);
       }
     },
   };

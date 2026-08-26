@@ -10,6 +10,14 @@ import {
   metalRepeat,
 } from './textures.js';
 import { buildTelevision, createScreenLife } from './screenFace.js';
+import { createWallArms } from './wallArms.js';
+import {
+  blackWireMaterial,
+  buildWirePort,
+  chargeWire,
+  setWireCurrent,
+  WIRE_RADIUS,
+} from './wire.js';
 import { playButtonPress } from './audio.js';
 import { showNote } from './hud.js';
 
@@ -42,16 +50,22 @@ import { showNote } from './hud.js';
 
 /**
  * How far the room runs back from the wall the door is in, and how far along
- * that wall each way from the doorway.
+ * that wall each way from the doorway. Sized by the arms, in the end.
  *
- * `racks` is capped by something real rather than chosen: the passage from the
- * orange room into the hall has a wall on this side of it whose collider runs
- * back to z -14.2, and a room built past that has a slab of solid nothing
- * standing in the corner of it. Measured, not guessed — that collider is 3.6m
- * deep and there is no mesh anywhere near it to see.
+ * It was 5.9 by 7.6 and that was a room built around a desk. The pair that come
+ * out of the wall either side of the set put their ports 2.9m off its middle
+ * and reach 2.7m into the room, which needs eight metres of wall and most of
+ * seven metres of floor — the room at the end of the red hall, which is where
+ * they were fitted to, is 8 by 7.2. So this is now too.
+ *
+ * All of the extra width had to go one way. `racks` is up against something
+ * real: the passage from the orange room into the hall has a wall on this side
+ * whose collider runs to z -14.2, and a room built past that has a slab of
+ * solid nothing standing in the corner of it. Measured, not guessed. So the
+ * room grew away from it, and the machinery went with it.
  */
-const DEPTH = 5.9;
-const RUN = { racks: 3.5, plant: 4.1 };
+const DEPTH = 7.2;
+const RUN = { racks: 3.5, plant: 6.1 };
 /**
  * Taller than the hall outside, and taller than it was.
  *
@@ -339,6 +353,10 @@ export function createControlRoom({ scene, doorway, player }) {
   for (const [fx, fz, alive] of [
     [midX + 0.9, doorway.z - 2.2, true],
     [midX + 0.9, doorway.z + 2.4, true],
+    // A third, for the two metres of room that arrived with the arms. The far
+    // end was black without it, which in a room this size reads as the room
+    // ending there.
+    [midX + 0.9, doorway.z + 5.1, true],
     [back + 0.9, doorway.z - 0.4, false],
   ]) {
     const housing = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 0.16), trimMat);
@@ -489,6 +507,95 @@ export function createControlRoom({ scene, doorway, player }) {
   });
 
   /**
+   * And its arms, out of the wall either side of it.
+   *
+   * They are not attached to the set in the ward and they are not attached to
+   * it here either, which is the whole of the effect — they belong to the thing
+   * on the screen rather than to the television, and they come out of whatever
+   * wall it is hanging on. wallArms.js builds them for exactly that reason.
+   *
+   * The anchor is what tells them where the wall is and which way it faces.
+   * Everything in the arms is written in the wall's own frame — +z out of it,
+   * +x along it — and a quarter turn is what makes that frame this wall, which
+   * looks back down the room in +x the same way the red hall's room does.
+   *
+   * They start inside the wall and come out when the button wakes him. There is
+   * a port ring in the plaster either side of the set the whole time, which is
+   * the only warning you get.
+   */
+  const armAnchor = new THREE.Group();
+  armAnchor.position.set(back, 0, deskZ);
+  armAnchor.rotation.y = Math.PI / 2;
+  group.add(armAnchor);
+  const arms = createWallArms({
+    parent: armAnchor,
+    colliders,
+    origin: new THREE.Vector3(back, 0, deskZ),
+    yaw: Math.PI / 2,
+    startRetracted: true,
+  });
+
+  /**
+   * The cable, out of the rack with its panel off and into the underside of the
+   * set.
+   *
+   * The one that runs from the ward is a different question and it has its own
+   * answer at the end of the red hall — you followed it there. This one asks
+   * the other half: not where he goes, but what he is plugged into. It comes
+   * out of an open cabinet in a room nobody was meant to get into, crosses the
+   * floor, climbs the wall past the end of the desk and goes in among the loose
+   * wires under the casing. Six centimetres past the bottom edge, so it ends
+   * inside the set rather than against it.
+   *
+   * Same material, same thickness and the same charge as every other stretch in
+   * the building, because it is the same kind of thing: chargeWire hands back
+   * what is landing at the far end each frame, and what is at the far end is
+   * his face.
+   */
+  let arrival = () => 0;
+  {
+    const openRack = back + 3.9 + 2 * 0.78;
+    const rackFace = minZ + 0.66;
+    const r = WIRE_RADIUS;
+
+    const port = buildWirePort();
+    // Built facing +x; this one comes out of a cabinet facing down the room.
+    port.position.set(openRack, 1.02, rackFace + 0.02);
+    port.rotation.y = Math.PI / 2;
+    group.add(port);
+
+    const curve = new THREE.CatmullRomCurve3(
+      [
+        [openRack, 1.02, rackFace + 0.06],
+        [openRack - 0.06, 0.62, rackFace + 0.34],
+        // Two points to land on rather than one, and the floor run carried a
+        // little proud of the floor. A Catmull-Rom curve overshoots through a
+        // corner, and coming out of a drop into a flat run it put a third of a
+        // metre of cable under the slab — visible as a gap, from the one angle
+        // where you are looking along it.
+        [openRack - 0.34, 0.16, rackFace + 0.66],
+        [openRack - 0.66, 0.075, rackFace + 0.8],
+        // Along the floor, wide of the desk's end, to the wall the set is on.
+        [openRack - 2.2, 0.075, deskZ - 2.3],
+        [back + 1.5, 0.075, deskZ - 2.26],
+        [back + 0.5, 0.075, deskZ - 2.2],
+        [back + 0.2, 0.16, deskZ - 2.18],
+        // Up the wall past the end of the desk, then in under the casing.
+        [back + 0.16, 0.5, deskZ - 2.16],
+        [back + 0.12, 1.12, deskZ - 1.9],
+        [back + 0.13, 1.46, deskZ - 1.14],
+      ].map((p) => new THREE.Vector3(...p))
+    );
+    const cable = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, 90, r, 8, false),
+      blackWireMaterial()
+    );
+    cable.castShadow = true;
+    group.add(cable);
+    ({ arrival } = chargeWire(cable, curve.getLength()));
+  }
+
+  /**
    * The button that turns him on, on the wall past the end of the desk.
    *
    * Past the end of it because that is the only piece of this wall a person can
@@ -554,6 +661,8 @@ export function createControlRoom({ scene, doorway, player }) {
   let awake = false;
   let wakeIn = 0;
   let picture = 0;
+  /** The last charge to land off the cable, decaying. */
+  let surge = 0;
 
   const interactions = [
     {
@@ -574,6 +683,17 @@ export function createControlRoom({ scene, doorway, player }) {
         ringMat.emissive.set('#1d7a2c');
         // It goes in, rather than down.
         cap.position.x = back + BUTTON.out - 0.025;
+        // And the cable comes alive again.
+        //
+        // It is dead when you get here, and deliberately: the set at the end of
+        // the red hall kills the current when it goes out, because a screen
+        // that has gone dark with a charge still arriving in it has not gone
+        // anywhere. So the run has been quiet the whole way through the swing
+        // room and the hall of bodies — and it starts again in here, arriving
+        // in the one thing at the end of it. It is the same building's cable
+        // and the same switch it always was; the only new part is where it
+        // stops.
+        setWireCurrent(true);
         // A beat before there is anything on the glass. A set that comes up the
         // instant the switch goes in is a light being turned on; one that waits
         // is a thing warming up, and this one has a face in it.
@@ -698,8 +818,11 @@ export function createControlRoom({ scene, doorway, player }) {
   // that is what a rack room looks like, and one of them with its front off.
   const rackDepth = 0.66;
   const racks = [];
+  // Started at back + 1.15, which is inside the reach of the arm that comes out
+  // of the wall at this end: it left a conduit passing through four cabinets.
+  // They are down at the door end of the wall now, past where the arm stops.
   for (let i = 0; i < 4; i++) {
-    const rx = back + 1.15 + i * 0.78;
+    const rx = back + 3.9 + i * 0.78;
     const cabinet = new THREE.Mesh(new THREE.BoxGeometry(0.74, 2.05, rackDepth), caseMat);
     cabinet.position.set(rx, 1.025, minZ + rackDepth / 2);
     cabinet.castShadow = true;
@@ -753,7 +876,7 @@ export function createControlRoom({ scene, doorway, player }) {
   // Out as far as the panel leaning off the open one, not just as far as the
   // cabinet fronts — otherwise the one loose thing in the room is the one thing
   // you can walk through.
-  solid(back + 0.75, back + 1.15 + 3 * 0.78 + 0.4, minZ, minZ + 1.15, {});
+  solid(back + 3.5, back + 3.9 + 3 * 0.78 + 0.4, minZ, minZ + 1.15, {});
 
   // The plant on the other side: a compressor with a tank on top of it and its
   // pipework going up through the ceiling. This is the thing you can hear if
@@ -857,6 +980,11 @@ export function createControlRoom({ scene, doorway, player }) {
       return { position: [front - 1.1, 0, doorway.z], yaw: Math.PI / 2 };
     },
 
+    /** Dev handle: what the pair on the wall are doing right now. */
+    get gesture() {
+      return arms.gesture;
+    },
+
     reset() {
       entered = false;
       // And the set goes back off, so a jump back in here finds the room the
@@ -864,6 +992,11 @@ export function createControlRoom({ scene, doorway, player }) {
       awake = false;
       wakeIn = 0;
       picture = 0;
+      surge = 0;
+      // The run goes quiet with it, for the reason the red hall's does: a reset
+      // that left a charge travelling would light three rooms off a button that
+      // is out.
+      setWireCurrent(false);
       ringMat.color.set('#8e1a12');
       ringMat.emissive.set('#450a06');
       cap.position.x = back + BUTTON.out;
@@ -900,7 +1033,14 @@ export function createControlRoom({ scene, doorway, player }) {
         else picture += (1 - picture) * (1 - Math.exp(-3.6 * delta));
       }
       const hunting = picture > 0.02 && picture < 0.97 && Math.sin(t * 47) > 0.35 ? 0.45 : 1;
-      life.update(delta, picture * hunting);
+      // What is arriving down the cable, taken at its peak and let go of
+      // slowly. The pulse has a hard front, so a raw read is one frame bright
+      // and gone — which at speed is a dropped frame rather than a flash.
+      surge = Math.max(arrival(), surge - delta * 2.2);
+      life.update(delta, picture * hunting * (1 + surge * 0.9));
+
+      // The arms come out with him and go back in with him.
+      arms.update(delta, { retract: !awake });
       for (const rack of racks) {
         for (const [i, bulb] of rack.lamps.entries()) {
           const on = Math.sin(t * (1.3 + i * 0.37) + rack.phase) > (i % 2 ? 0.2 : 0.6);

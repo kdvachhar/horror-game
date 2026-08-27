@@ -4,16 +4,14 @@ import {
   makeFloorSurface,
   makeCeilingSurface,
   makeMetalPanelSurface,
-  makeHazardSurface,
   cloneSurface,
   worldRepeat,
   metalRepeat,
 } from './textures.js';
-import { createClimbTower, SUMMIT } from './climbTower.js';
 import { showNote, setObjective } from './hud.js';
 
 /**
- * The hall behind the staff door, and the tower in it.
+ * The hall behind the staff door.
  *
  * Everything in this game up to now has been a room somebody could stand up in
  * and touch the ceiling of. A ward with beds in it. A corridor three metres
@@ -22,16 +20,20 @@ import { showNote, setObjective } from './hud.js';
  * that happened was a thing on a television telling you to go through a door it
  * opened for you, and warning you about who is on the other side.
  *
- * This is on the other side. It is seventeen metres across, thirty-eight long
- * and twenty high, and you come into it through a doorway one metre wide.
+ * This is on the other side. It is seventeen metres across, sixty-two long and
+ * twenty high, and you come into it through a doorway one metre wide.
  *
- * The scale IS the content. There is nothing in here that explains itself and
- * nothing to press: the hall is the sentence, and it says that the part of this
- * building you have been in was the small part. That is why the door you arrive
- * by is left plainly visible in the wall behind you and why the wall is
- * otherwise bare for twenty metres above it — the one readable object in a
- * flat expanse is what gives the expanse its size, and a person's door in a
- * wall this tall is the only ruler the player has.
+ * The scale IS the content, and it is now the only content: there was a tower
+ * standing in here for one commit and it has been taken out again, so what the
+ * hall has is its size and the walk. Nothing in it explains itself and there is
+ * nothing to press. It says that the part of this building you have been in was
+ * the small part, and it says it by being sixty-two metres of somewhere you have
+ * to cross on foot.
+ *
+ * Which is why the door you arrive by is left plainly visible in the wall behind
+ * you and why that wall is otherwise bare for twenty metres above it — the one
+ * readable object in a flat expanse is what gives the expanse its size, and a
+ * person's door in a wall this tall is the only ruler the player has.
  *
  * And why the stripe does not come in here, for the second time in two rooms.
  * The band is wayfinding painted for people being walked through a building. It
@@ -47,18 +49,33 @@ import { showNote, setObjective } from './hud.js';
  * room's passage stops, handed over rather than written down twice. Everything
  * else runs off it.
  *
- * Thirty-eight metres long against seventeen wide, so it is a hallway and not a
- * hangar — it has a direction, and the direction is away from the door you came
- * in by. Twenty high against seventeen wide, so it is taller than it is broad,
- * which is the proportion that reads as a shaft rather than as a warehouse and
- * is the only one that makes the ceiling worth not being able to see.
+ * Sixty-two metres long against seventeen wide, so it is emphatically a hallway
+ * and not a hangar — it has a direction, and the direction is away from the door
+ * you came in by. Twenty high against seventeen wide, so it is taller than it is
+ * broad, which is the proportion that reads as a shaft rather than as a
+ * warehouse and is the only one that makes the ceiling worth not being able to
+ * see.
+ *
+ * It was thirty-eight, back when there was a tower standing in it and the length
+ * was mostly the approach to that. With the tower gone, length is the only thing
+ * the hall has, so it has a great deal more of it: sixty-two metres of the same
+ * six-metre bay, which is ten of them receding instead of six, and a lit doorway
+ * at the end that you can see from the moment you come in and walk towards for
+ * the better part of a minute.
  */
 const WIDTH = 17;
-const LENGTH = 38;
+const LENGTH = 62;
 const HEIGHT = 20;
 
-/** How the long walls are divided up, and how far the ribs stand proud. */
-const BAYS = 6;
+/**
+ * How the long walls are divided up, and how far the ribs stand proud.
+ *
+ * Ten bays over sixty-two metres, which is 6.2 apiece — near enough the 6.33 the
+ * shorter hall had that the rhythm is the same one, just more of it. The bay is
+ * the unit the eye measures the place in, so it is the one number that had to
+ * survive the room getting longer.
+ */
+const BAYS = 10;
 const RIB = { wide: 1.3, deep: 0.55 };
 /** The two string courses, which are the only horizontal lines in here. */
 const COURSES = [4.2, 9.6];
@@ -135,19 +152,20 @@ export function createGiantHall({ scene, doorway, player }) {
   /**
    * The way in, and the way on.
    *
-   * The first is the doorway the control room hands over, down at floor level in
-   * the near wall. The second is at the top of the stair — call it fourteen
-   * metres — and it is the entire reason there is a tower: the hall has one way
-   * out and it is not on the floor.
+   * The first is the doorway the control room hands over, in the near wall. The
+   * second is at the far end, square on to the length of the hall, and both are
+   * on the floor.
    *
-   * It is in the end wall, square on to the length of the hall, and that was
-   * worth moving it for. It began in the long wall beside the tower, where the
-   * geometry was tidier and where, from anywhere you actually stand, you see it
-   * nearly edge-on: a dark slot in a wall running away from you, invisible from
-   * the door and barely legible from the foot of the stair. In the end wall it
-   * is a lit rectangle at the end of thirty-eight metres, fourteen up, and the
-   * first thing you see when you come out of the staff door is the whole of what
-   * you are about to do.
+   * The second one used to be fourteen metres up, because there was a tower to
+   * climb to it and the whole point of the tower was that the way out was not on
+   * the floor. The tower is gone, so it came down with it — a door at head
+   * height on a wall with nothing to climb is a door you look at, and the hall
+   * would have no exit at all.
+   *
+   * It stays in the end wall rather than going back into a long one. Square on
+   * is what makes it work: a lit rectangle at the end of sixty-two metres, dead
+   * ahead from the moment you come out of the staff door. In a long wall it is
+   * edge-on from everywhere you ever stand.
    */
   const IN = {
     z: doorway.z,
@@ -155,11 +173,7 @@ export function createGiantHall({ scene, doorway, player }) {
     high: doorway.z + doorway.width / 2,
     height: doorway.height,
   };
-  // The sill is the top of the stair, taken from the tower rather than written
-  // down here. The opening is cut and the gantry hung before the tower is built,
-  // so the two would otherwise be two numbers that have to be kept equal by
-  // hand — and the first time a tread is added or taken away, they would not be.
-  const OUT = { x: midX, width: 2.4, height: 2.8, sill: SUMMIT.top };
+  const OUT = { x: midX, width: 2.4, height: 2.8 };
   const outLow = OUT.x - OUT.width / 2;
   const outHigh = OUT.x + OUT.width / 2;
 
@@ -195,12 +209,11 @@ export function createGiantHall({ scene, doorway, player }) {
   solid(far - 1, far, foot - 1, head + 1, {});
 
   // The end wall you are walking towards, in four pieces round the opening at
-  // the top of the tower.
+  // the far end.
   for (const [w, h, px, py] of [
     [outLow - far, HEIGHT, (far + outLow) / 2, HEIGHT / 2],
     [near - outHigh, HEIGHT, (outHigh + near) / 2, HEIGHT / 2],
-    [OUT.width, OUT.sill, OUT.x, OUT.sill / 2],
-    [OUT.width, HEIGHT - OUT.sill - OUT.height, OUT.x, (HEIGHT + OUT.sill + OUT.height) / 2],
+    [OUT.width, HEIGHT - OUT.height, OUT.x, (HEIGHT + OUT.height) / 2],
   ]) {
     if (w <= 0 || h <= 0) continue;
     const wall = new THREE.Mesh(new THREE.PlaneGeometry(w, h), wallOf(w, h));
@@ -210,12 +223,9 @@ export function createGiantHall({ scene, doorway, player }) {
   }
   solid(far - 1, outLow, foot - 1, foot, {});
   solid(outHigh, near + 1, foot - 1, foot, {});
-  // Under the high opening, and over it. The one under is given a `top` at the
-  // sill rather than being solid all the way up, which is the same box doing two
-  // jobs: it is fourteen metres of wall you cannot walk through, and it is the
-  // threshold you step onto when you finally get up there.
-  solid(outLow, outHigh, foot - 1, foot, { top: OUT.sill });
-  solid(outLow, outHigh, foot - 1, foot, { bottom: OUT.sill + OUT.height });
+  // And the lintel over it, the same arrangement as the door you came in by:
+  // solid only to somebody whose head is above the opening.
+  solid(outLow, outHigh, foot - 1, foot, { bottom: OUT.height });
 
   // And the end wall behind you, whole.
   {
@@ -293,14 +303,11 @@ export function createGiantHall({ scene, doorway, player }) {
    * above ten metres, is what makes you aware there is a ceiling up there you
    * cannot see.
    *
-   * Two of the six are on the tower, and they are not atmosphere: a jump you
-   * cannot see the far side of is not a jump, it is a coin toss, and every other
-   * decision in here can be dark as long as that one is not. Two and not one
-   * because of which way light falls. A lamp lights the TOP of everything below
-   * it and the underside of everything above it, and the thing you need to see
-   * before every hop is the top of the next tread — so one lamp halfway up a
-   * fourteen-metre stair leaves the whole upper half of the climb as silhouettes
-   * with lit undersides. One low and one high covers both.
+   * The sixth is inside the way out. Two of these used to be on the tower doing
+   * legibility rather than atmosphere — you cannot jump at something you cannot
+   * see — and with nothing left to jump at, that pair went back into the run
+   * down the hall, which needed them: the room is twenty-four metres longer than
+   * it was and it is lit by the same six lamps.
    */
   const fittings = [];
   // `under` is the slab each one hangs from, which is the hall's ceiling for all
@@ -308,28 +315,27 @@ export function createGiantHall({ scene, doorway, player }) {
   // the sill, and hung on the hall's number its rods were four metres long and
   // went up through the lintel into nothing — visible from the gantry, which is
   // the one place in the hall you are guaranteed to stand and look at it.
+  //
+  // They alternate sides down the length. A single line of lamps up the middle
+  // of a hallway lights a strip of floor and leaves both walls to fall away into
+  // nothing, which is a corridor; staggered, each one washes the wall it is
+  // nearest, and the bays come out of the dark one at a time as you walk.
   for (const [fx, fy, fz, watt, range, under = HEIGHT] of [
     [midX + 3.4, 10.5, doorway.z - 1.5, 140, 44],
     [midX - 3.4, 10.5, doorway.z - 12, 140, 44],
-    [midX + 3.4, 10.5, doorway.z - 22, 120, 42],
-    // The tower, low and high. Out at three and a half metres from the core
-    // rather than tucked against it: at a metre the concrete burned out into a
-    // white column brighter than anything else in the hall, which in a room
-    // this dark is a lamp with a wall in front of it rather than a lit wall.
-    [midX + 3.6, 6.0, -27.6, 95, 28],
-    [midX - 3.6, 15.2, -31.4, 100, 30],
+    [midX + 3.4, 10.5, doorway.z - 23, 130, 44],
+    [midX - 3.4, 10.5, doorway.z - 34, 130, 44],
+    [midX + 3.4, 10.5, doorway.z - 45, 120, 42],
     // And one just inside the way out. It is doing a third job again — it is
     // the only thing in the hall that says where you are going before you start
     // climbing.
     //
-    // Inside the throat rather than on the wall beside the opening, and that is
-    // the whole trick. The stair stands directly in front of the door, because
-    // the stair is what the door is for, so from the floor of the hall the wall
-    // around it is behind fourteen metres of tread and gantry. A lit passage
-    // mouth is not: it is a rectangle that glows past the thing in front of it,
-    // and the two and a half metres of it that clear the top tread are what you
-    // see from the doorway you come in by, thirty-eight metres away.
-    [OUT.x, OUT.sill + 1.5, foot - 1.1, 55, 26, OUT.sill + OUT.height],
+    // Inside the throat rather than on the wall beside the opening. A lit
+    // passage mouth is a rectangle; a lamp washing the wall around a dark hole
+    // is a bright patch of wall with nothing readable in the middle of it, and
+    // at sixty-two metres that is the difference between somewhere to walk to
+    // and no reason to set off.
+    [OUT.x, 2.0, foot - 1.1, 45, 24, OUT.height],
   ]) {
     const housing = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.34, 0.5), trimMat);
     housing.position.set(fx, fy + 0.22, fz);
@@ -361,8 +367,10 @@ export function createGiantHall({ scene, doorway, player }) {
   for (const [fx, fz] of [
     [midX - 3.4, doorway.z - 6],
     [midX + 3.4, doorway.z - 17],
-    [midX - 3.4, doorway.z - 27],
-    [midX + 3.4, -35],
+    [midX - 3.4, doorway.z - 28],
+    [midX + 3.4, doorway.z - 39],
+    [midX - 3.4, doorway.z - 50],
+    [midX + 3.4, doorway.z - 56],
   ]) {
     const housing = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.34, 0.5), trimMat);
     housing.position.set(fx, 10.72, fz);
@@ -380,121 +388,17 @@ export function createGiantHall({ scene, doorway, player }) {
     }
   }
 
-  // ----------------------------------------------------------------- tower ---
-
   /**
-   * And the tower, which is the only way out of here.
-   *
-   * Placed rather than fitted: it is a thing that stands somewhere, and the hall
-   * is sized so that it stands clear of both long walls with room to fall past
-   * it on either side. See climbTower.js — it is a spiral stair with a metre
-   * between the treads.
-   *
-   * Down at the far end, so the hall is walked before it is climbed. Coming in
-   * at the near end you see the whole length of the place with one lit thing at
-   * the bottom of it, and the way out is a lit rectangle thirteen metres up the
-   * wall behind that, which is the shape of the next ten minutes stated in one
-   * look.
-   */
-  const TOWER = new THREE.Vector3(midX, 0, -30);
-  const tower = createClimbTower({ parent: group, colliders, origin: TOWER });
-
-  /**
-   * The gantry from the top tread to the way out.
-   *
-   * The stair does not arrive at the door — it arrives beside it, and a plate
-   * bridges the gap. That is worth the extra piece: a spiral stair that happens
-   * to land exactly at a doorway is a stair drawn to fit a door, and this one
-   * was here first. It is also the one flat run on the whole climb, which is
-   * where you stand and look back down at what you came up.
-   */
-  const summit = tower.summit;
-  /**
-   * As wide as the tread it meets, and not as wide as the door it leads to.
-   *
-   * It was the door's width to begin with — 2.4 against the top tread's 3.6 —
-   * and that put six tenths of a metre of nothing down each side of the join.
-   * Walking off the tread in a straight line, anywhere but dead centre, you
-   * stepped onto air at fourteen metres and fell the whole way. Matching the
-   * tread means the step from stair to deck is a step and not an aim.
-   */
-  const GANTRY = { width: 3.6, top: OUT.sill, thick: 0.22 };
-  {
-    const fromZ = summit.box.minZ;
-    const run = fromZ - foot;
-    const deckMat = new THREE.MeshStandardMaterial({
-      ...makeMetalPanelSurface(...metalRepeat(run, GANTRY.width), '#4b4f4a'),
-      color: '#4b4f4a',
-      roughness: 0.7,
-      metalness: 0.3,
-    });
-    const deck = new THREE.Mesh(
-      new THREE.BoxGeometry(GANTRY.width, GANTRY.thick, run),
-      deckMat
-    );
-    deck.position.set(OUT.x, GANTRY.top - GANTRY.thick / 2, (foot + fromZ) / 2);
-    deck.castShadow = true;
-    deck.receiveShadow = true;
-    group.add(deck);
-    solid(OUT.x - GANTRY.width / 2, OUT.x + GANTRY.width / 2, foot, fromZ, {
-      top: GANTRY.top,
-      bottom: GANTRY.top - GANTRY.thick,
-    });
-
-    /**
-     * A handrail down each side, and it is a real one.
-     *
-     * The first draft hung them as meshes and gave them nothing to collide
-     * with, on the usual reasoning that a rail is scenery. It is not scenery
-     * here: it is the only thing between a walk and a fourteen-metre drop, and
-     * a rail you can see and walk through is worse than no rail at all — it
-     * tells the player they are safe and then is not there.
-     *
-     * `bottom` at deck level is what makes one collider do that without also
-     * being an invisible fence in the middle of the hall fourteen metres below.
-     * A box you are entirely under does not stop you, so down on the floor it
-     * is not there; up here your head is above it and it is.
-     *
-     * They stop at the tread rather than running on over it. Carried the extra
-     * few centimetres, the post at that end lands on the corner you arrive at
-     * and shoves you back off the stair you have just climbed.
-     */
-    for (const side of [-1, 1]) {
-      const railX = OUT.x + side * GANTRY.width / 2;
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, run), trimMat);
-      rail.position.set(railX, GANTRY.top + 1.0, (foot + fromZ) / 2);
-      group.add(rail);
-      for (let i = 0; i <= 4; i++) {
-        const post = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.0, 0.07), trimMat);
-        post.position.set(railX, GANTRY.top + 0.5, foot + (run / 4) * i);
-        group.add(post);
-      }
-      solid(railX - 0.07, railX + 0.07, foot, fromZ, { bottom: GANTRY.top });
-    }
-
-    // Hazard paint on the lip, the same language the treads speak.
-    const lip = new THREE.Mesh(
-      new THREE.BoxGeometry(0.16, GANTRY.thick + 0.03, run),
-      new THREE.MeshStandardMaterial({ ...makeHazardSurface(4, 1), roughness: 0.72 })
-    );
-    lip.position.set(
-      OUT.x - GANTRY.width / 2 + 0.08,
-      GANTRY.top - GANTRY.thick / 2,
-      (foot + fromZ) / 2
-    );
-    group.add(lip);
-  }
-
-  /**
-   * What is through the opening at the top: a lined passage, capped, exactly
+   * What is through the opening at the end: a lined passage, capped, exactly
    * the way the staff door's was before this hall was built on the end of it.
    * `wayOn` hands the far end over for whatever comes next.
    *
    * Lit, unlike that one, and for a reason rather than by accident — see the
    * lamp inside it above. The staff door's passage had to be a dark throat
    * because the whole of its job was to hide what was on the other side until
-   * you were standing in it. This one is the opposite: it is the thing you are
-   * meant to be able to see from the far end of a very long room.
+   * you were standing in it. This one is the opposite: it is the only thing in
+   * sixty-two metres of hall you can aim at, and you can see it from the door
+   * you come in by.
    */
   const OUT_DEPTH = 3.2;
   const outEnd = foot - OUT_DEPTH;
@@ -502,10 +406,10 @@ export function createGiantHall({ scene, doorway, player }) {
     const liner = new THREE.MeshStandardMaterial({ color: '#33352f', roughness: 0.94 });
     const throat = foot - OUT_DEPTH / 2;
     for (const [w, h, px, py, rx, ry] of [
-      [OUT_DEPTH, OUT.height, outLow, OUT.sill + OUT.height / 2, 0, Math.PI / 2],
-      [OUT_DEPTH, OUT.height, outHigh, OUT.sill + OUT.height / 2, 0, -Math.PI / 2],
-      [OUT.width, OUT_DEPTH, OUT.x, OUT.sill + OUT.height, Math.PI / 2, 0],
-      [OUT.width, OUT_DEPTH, OUT.x, OUT.sill + 0.004, -Math.PI / 2, 0],
+      [OUT_DEPTH, OUT.height, outLow, OUT.height / 2, 0, Math.PI / 2],
+      [OUT_DEPTH, OUT.height, outHigh, OUT.height / 2, 0, -Math.PI / 2],
+      [OUT.width, OUT_DEPTH, OUT.x, OUT.height, Math.PI / 2, 0],
+      [OUT.width, OUT_DEPTH, OUT.x, 0.004, -Math.PI / 2, 0],
     ]) {
       const panel = new THREE.Mesh(new THREE.PlaneGeometry(w, h), liner);
       panel.position.set(px, py, throat);
@@ -517,12 +421,13 @@ export function createGiantHall({ scene, doorway, player }) {
       new THREE.PlaneGeometry(OUT.width, OUT.height),
       new THREE.MeshStandardMaterial({ color: '#0a0b09', roughness: 1 })
     );
-    cap.position.set(OUT.x, OUT.sill + OUT.height / 2, outEnd);
+    cap.position.set(OUT.x, OUT.height / 2, outEnd);
     group.add(cap);
 
-    // The deck through the opening, and the sides and end of it. The floor of
-    // the passage is the same kind of box as the threshold, carried on through.
-    solid(outLow, outHigh, outEnd, foot, { top: OUT.sill, bottom: OUT.sill - 0.5 });
+    // The sides and the end. Not the floor — the passage is at the hall's own
+    // level now, and the hall's floor is the world's, so there is nothing to
+    // carry through. Not the top either: a collider has no underside, and a box
+    // over the passage would be a ceiling you could not walk under.
     solid(outLow - 0.6, outLow, outEnd, foot, {});
     solid(outHigh, outHigh + 0.6, outEnd, foot, {});
     solid(outLow - 0.6, outHigh + 0.6, outEnd - 0.6, outEnd, {});
@@ -535,17 +440,17 @@ export function createGiantHall({ scene, doorway, player }) {
     group,
     colliders,
     contains,
-    /** What the tower is made of, for the harness and the debug panel. */
-    steps: tower.steps,
-
-    /** Just inside the door, looking down the length of it. */
+    /**
+     * Just inside the door, looking down the length of it.
+     *
+     * Yaw 0 and not PI. Yaw 0 faces -z in this game — see the player — and -z
+     * is the way the hall runs; PI put the debug jump four metres from the end
+     * wall behind you, staring at it, with sixty-two metres of hall out of shot.
+     * It was wrong while there was a tower in here too and nobody noticed,
+     * because the tower was the thing you turned round and saw.
+     */
     get entry() {
-      return { position: [near - 1.4, 0, doorway.z], yaw: Math.PI };
-    },
-
-    /** On the gantry at the top, for jumping straight to the way out. */
-    get summitEntry() {
-      return { position: [OUT.x, OUT.sill, foot + 2.0], yaw: 0 };
+      return { position: [near - 1.4, 0, doorway.z], yaw: 0 };
     },
 
     /**
@@ -553,7 +458,7 @@ export function createGiantHall({ scene, doorway, player }) {
      * Handed over in the same terms as every other opening in this game.
      */
     get wayOn() {
-      return { x: OUT.x, y: OUT.sill, z: outEnd, width: OUT.width, height: OUT.height };
+      return { x: OUT.x, y: 0, z: outEnd, width: OUT.width, height: OUT.height };
     },
 
     reset() {
@@ -576,7 +481,7 @@ export function createGiantHall({ scene, doorway, player }) {
 
       if (!entered && contains(player.position.x, player.position.z)) {
         entered = true;
-        setObjective('Get up to the door');
+        setObjective('Get to the far end');
         showNote('This part was not built for people.', 3.8);
       }
     },

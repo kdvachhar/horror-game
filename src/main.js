@@ -827,7 +827,7 @@ const SCENES = [
   },
   {
     label: '12 · The giant hall',
-    hint: 'Through the door he opens — the hall and the tower',
+    hint: 'Through the door he opens — the long hall behind it',
     go() {
       resetSequences();
       medical.openDoor();
@@ -840,15 +840,14 @@ const SCENES = [
 
       const entry = giantHall.entry;
       player.teleport({ position: entry.position, yaw: entry.yaw, pitch: 0 });
-      // The bucket is left back in the hall of bodies. It cannot climb the
-      // tower — it jumps lower than you do — so bringing it in here would be
-      // handing the player a companion and then a staircase it cannot follow
-      // them up, which is a worse thing to do than leaving it behind.
-      const hall = corpseHall.entry;
-      friend.spawn(new THREE.Vector3(hall.position[0], 0, hall.position[2]));
+      // And the bucket comes in with you. It was left back in the hall of
+      // bodies while there was a tower in here, because it jumps lower than you
+      // do and could not have followed you up it. There is nothing to climb any
+      // more and nothing on the floor to wedge it on, so it comes along.
+      friend.spawn(new THREE.Vector3(entry.position[0] - 1.4, 0, entry.position[2] + 0.8));
       friend.collect();
 
-      setObjective('Get up to the door');
+      setObjective('Get to the far end');
     },
   },
 ];

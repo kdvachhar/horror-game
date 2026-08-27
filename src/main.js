@@ -11,6 +11,7 @@ import { createExitRoom } from './exitRoom.js';
 import { createOrangeRoom } from './orangeRoom.js';
 import { createCorpseHall } from './corpseHall.js';
 import { createControlRoom } from './controlRoom.js';
+import { createGiantHall } from './giantHall.js';
 import { createEmployeeDoor } from './employeeDoor.js';
 import { paintRoomStripes } from './wallStripes.js';
 import {
@@ -196,6 +197,16 @@ room.colliders.push(...corpseHall.colliders);
  */
 const controlRoom = createControlRoom({ scene, doorway: corpseHall.staffDoor, player });
 room.colliders.push(...controlRoom.colliders);
+
+/**
+ * And what is through the door he opens for you: the hall, and the tower.
+ *
+ * The first space in this game that is not built at a person's size. Hung off
+ * the control room's own passage, like everything else here is hung off the
+ * opening before it.
+ */
+const giantHall = createGiantHall({ scene, doorway: controlRoom.wayOn, player });
+room.colliders.push(...giantHall.colliders);
 
 /**
  * The staff doors, in five rooms, none of which own them.
@@ -587,6 +598,7 @@ function resetSequences() {
   orangeRoom.reset();
   corpseHall.reset();
   controlRoom.reset();
+  giantHall.reset();
   handoverSaid = false;
   // The loop fires the cutscene the moment a door that has been open closes.
   // Clearing this stops a jump from immediately retriggering it underneath you.
@@ -813,6 +825,32 @@ const SCENES = [
       setObjective('See what is in here');
     },
   },
+  {
+    label: '12 · The giant hall',
+    hint: 'Through the door he opens — the hall and the tower',
+    go() {
+      resetSequences();
+      medical.openDoor();
+      medical.shutDown();
+      room.lightUpBackRoom();
+      gauntlet.powerUp();
+      exitRoom.powerUp();
+      possession.unlock();
+      orangeRoom.solve();
+
+      const entry = giantHall.entry;
+      player.teleport({ position: entry.position, yaw: entry.yaw, pitch: 0 });
+      // The bucket is left back in the hall of bodies. It cannot climb the
+      // tower — it jumps lower than you do — so bringing it in here would be
+      // handing the player a companion and then a staircase it cannot follow
+      // them up, which is a worse thing to do than leaving it behind.
+      const hall = corpseHall.entry;
+      friend.spawn(new THREE.Vector3(hall.position[0], 0, hall.position[2]));
+      friend.collect();
+
+      setObjective('Get up to the door');
+    },
+  },
 ];
 
 const debugMenu = createDebugMenu({
@@ -1028,6 +1066,7 @@ renderer.setAnimationLoop((time) => {
   orangeRoom.update(delta);
   corpseHall.update(delta);
   controlRoom.update(delta);
+  giantHall.update(delta);
   // After that, not before it, and for the same reason the view is: the shadow
   // body is drawn where the player is, and on a swing the player is wherever
   // the room has just put them. Updated ahead of the rooms it lagged a frame
@@ -1074,7 +1113,7 @@ renderer.setAnimationLoop((time) => {
 
 // Dev-only handle for poking at the scene from the console.
 if (import.meta.env.DEV) {
-  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, corpseHall, controlRoom, wakeUp, possession, painter, monologue };
+  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, corpseHall, controlRoom, giantHall, wakeUp, possession, painter, monologue };
   window.game.__tvLines = TV_LINES;
   // Console handles for diagnosing silence: game.audio.state() / .test()
   window.game.perf = () => ({

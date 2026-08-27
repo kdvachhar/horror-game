@@ -425,23 +425,22 @@ export function createControlRoom({ scene, doorway, player }) {
   // ----------------------------------------------------------- the way on ---
 
   /**
-   * The passage behind the staff door: lined, unlit, and stopping in the dark.
+   * The passage behind the staff door: two and a half metres of lined concrete,
+   * with the giant hall on the far end of it.
    *
-   * Not a wall you can see. A door that opens onto a flat plane at arm's length
-   * says there is nothing built past this, which is true and is the last thing
-   * the room should be saying out loud — he has just told you where to go. Two
-   * and a half metres of concrete going out of the light says what the corridor
-   * past the ward said: it carries on, and you cannot see how far.
+   * Nothing lights it, and that is worth keeping now that it goes somewhere.
+   * The nearest fitting is over the floor four metres back and what reaches in
+   * through a 1.2m opening dies about a metre down, so the hall arrives as a
+   * grey rectangle at the end of a dark throat and then all at once — which is
+   * the only way a room twenty metres high can be got into from a room three and
+   * a half metres high without giving itself away from the doorway.
    *
-   * Nothing lights it. The nearest fitting is over the floor four metres back,
-   * and what reaches in through a 1.2m opening dies about a metre down — which
-   * is the whole of the difference between a doorway and a doorway you can see
-   * the end of.
-   *
-   * Capped, for now, exactly the way the exit room's orange door was capped
-   * before there was an orange room to put behind it: a dark plane across the
-   * end and a collider behind that. `wayOn` hands the far end out for whatever
-   * gets built on it, and when something is, the cap comes off.
+   * It was capped for one commit — a dark plane across the end and a collider
+   * behind it, the way the exit room's orange door was capped before there was
+   * an orange room to put behind it. giantHall.js is built on the far end of it
+   * now, off `wayOn`, so the cap is gone and the near wall of that hall is what
+   * you come out into. Only the sides are still solid, so you cannot walk out
+   * through the length of the passage.
    */
   {
     const liner = new THREE.MeshStandardMaterial({ color: '#33372f', roughness: 0.94 });
@@ -467,20 +466,11 @@ export function createControlRoom({ scene, doorway, player }) {
       group.add(panel);
     }
 
-    const cap = new THREE.Mesh(
-      new THREE.PlaneGeometry(EMPLOYEE_OPENING.width, EMPLOYEE_OPENING.height),
-      new THREE.MeshStandardMaterial({ color: '#0a0b09', roughness: 1 })
-    );
-    cap.position.set(wayEnd, EMPLOYEE_OPENING.height / 2, WAY.z);
-    cap.rotation.y = Math.PI / 2;
-    group.add(cap);
-
-    // The sides and the end. Not the top or the bottom: a collider has no
-    // underside and a box over the passage would be a ceiling you could not
-    // walk under.
+    // The sides only. Not the top or the bottom — a collider has no underside
+    // and a box over the passage would be a ceiling you could not walk under —
+    // and not the end either, which is a doorway into the hall now.
     solid(wayEnd, back, wayLow - 0.6, wayLow, {});
     solid(wayEnd, back, wayHigh, wayHigh + 0.6, {});
-    solid(wayEnd - 0.6, wayEnd, wayLow - 0.6, wayHigh + 0.6, {});
   }
 
   /**

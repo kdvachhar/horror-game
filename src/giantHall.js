@@ -20,15 +20,15 @@ import { showNote, setObjective } from './hud.js';
  * that happened was a thing on a television telling you to go through a door it
  * opened for you, and warning you about who is on the other side.
  *
- * This is on the other side. It is seventeen metres across, sixty-two long and
- * twenty high, and you come into it through a doorway one metre wide.
+ * This is on the other side. It is fifteen metres across, forty-eight long and
+ * eighteen high, and you come into it through a doorway one metre wide.
  *
  * The scale IS the content, and it is now the only content: there was a tower
  * standing in here for one commit and it has been taken out again, so what the
  * hall has is its size and the walk. Nothing in it explains itself and there is
  * nothing to press. It says that the part of this building you have been in was
- * the small part, and it says it by being sixty-two metres of somewhere you have
- * to cross on foot.
+ * the small part, and it says it by being forty-eight metres of somewhere you
+ * have to cross on foot.
  *
  * Which is why the door you arrive by is left plainly visible in the wall behind
  * you and why that wall is otherwise bare for twenty metres above it — the one
@@ -49,36 +49,38 @@ import { showNote, setObjective } from './hud.js';
  * room's passage stops, handed over rather than written down twice. Everything
  * else runs off it.
  *
- * Sixty-two metres long against seventeen wide, so it is emphatically a hallway
- * and not a hangar — it has a direction, and the direction is away from the door
- * you came in by. Twenty high against seventeen wide, so it is taller than it is
+ * Forty-eight metres long against fifteen wide, so it is a hallway and not a
+ * hangar — it has a direction, and the direction is away from the door you came
+ * in by. Eighteen high against fifteen wide, so it is still taller than it is
  * broad, which is the proportion that reads as a shaft rather than as a
  * warehouse and is the only one that makes the ceiling worth not being able to
  * see.
  *
- * It was thirty-eight, back when there was a tower standing in it and the length
- * was mostly the approach to that. With the tower gone, length is the only thing
- * the hall has, so it has a great deal more of it: sixty-two metres of the same
- * six-metre bay, which is ten of them receding instead of six, and a lit doorway
- * at the end that you can see from the moment you come in and walk towards for
- * the better part of a minute.
+ * It has been three sizes now, and the middle one was wrong. Thirty-eight while
+ * there was a tower in it, when the length was mostly the approach to the tower;
+ * sixty-two when the tower came out and length was all the hall had left; and
+ * forty-eight, which is where it stops. Sixty-two was a walk that had made its
+ * point by about the third bay and then went on for another seven, and a room
+ * whose only idea is its size can outstay that idea. Eight bays of six metres
+ * is still long enough that you set off towards a door you cannot yet make out
+ * — and short enough that you get there while it is still worth arriving.
  */
-const WIDTH = 17;
-const LENGTH = 62;
-const HEIGHT = 20;
+const WIDTH = 15;
+const LENGTH = 48;
+const HEIGHT = 18;
 
 /**
  * How the long walls are divided up, and how far the ribs stand proud.
  *
- * Ten bays over sixty-two metres, which is 6.2 apiece — near enough the 6.33 the
- * shorter hall had that the rhythm is the same one, just more of it. The bay is
- * the unit the eye measures the place in, so it is the one number that had to
- * survive the room getting longer.
+ * Eight bays over forty-eight metres, which is exactly six apiece — the same
+ * rhythm the hall has had at every length it has been (6.33, then 6.2, now 6.0).
+ * The bay is the unit the eye measures the place in, so it is the one number
+ * that has to survive the room being resized.
  */
-const BAYS = 10;
+const BAYS = 8;
 const RIB = { wide: 1.3, deep: 0.55 };
 /** The two string courses, which are the only horizontal lines in here. */
-const COURSES = [4.2, 9.6];
+const COURSES = [4.0, 9.0];
 
 // Colder and greyer than anything behind you. The plant room was a green-grey
 // because nobody decorated it; this was never decorated at all — it is the
@@ -163,8 +165,8 @@ export function createGiantHall({ scene, doorway, player }) {
    * would have no exit at all.
    *
    * It stays in the end wall rather than going back into a long one. Square on
-   * is what makes it work: a lit rectangle at the end of sixty-two metres, dead
-   * ahead from the moment you come out of the staff door. In a long wall it is
+   * is what makes it work: a lit rectangle at the end of the hall, dead ahead
+   * from the moment you come out of the staff door. In a long wall it is
    * edge-on from everywhere you ever stand.
    */
   const IN = {
@@ -303,11 +305,11 @@ export function createGiantHall({ scene, doorway, player }) {
    * above ten metres, is what makes you aware there is a ceiling up there you
    * cannot see.
    *
-   * The sixth is inside the way out. Two of these used to be on the tower doing
-   * legibility rather than atmosphere — you cannot jump at something you cannot
-   * see — and with nothing left to jump at, that pair went back into the run
-   * down the hall, which needed them: the room is twenty-four metres longer than
-   * it was and it is lit by the same six lamps.
+   * The fifth is inside the way out. There were six while the hall was sixty-two
+   * long; at forty-eight, four down the run is the same twelve-metre spacing,
+   * and the spare one is a light this renderer does not have to shade every
+   * fragment against — see the count in the scene, which is what a forward
+   * renderer actually charges you for.
    */
   const fittings = [];
   // `under` is the slab each one hangs from, which is the hall's ceiling for all
@@ -321,11 +323,10 @@ export function createGiantHall({ scene, doorway, player }) {
   // nothing, which is a corridor; staggered, each one washes the wall it is
   // nearest, and the bays come out of the dark one at a time as you walk.
   for (const [fx, fy, fz, watt, range, under = HEIGHT] of [
-    [midX + 3.4, 10.5, doorway.z - 1.5, 140, 44],
-    [midX - 3.4, 10.5, doorway.z - 12, 140, 44],
-    [midX + 3.4, 10.5, doorway.z - 23, 130, 44],
-    [midX - 3.4, 10.5, doorway.z - 34, 130, 44],
-    [midX + 3.4, 10.5, doorway.z - 45, 120, 42],
+    [midX + 3.0, 9.4, doorway.z - 1.5, 130, 40],
+    [midX - 3.0, 9.4, doorway.z - 13, 130, 40],
+    [midX + 3.0, 9.4, doorway.z - 24, 125, 40],
+    [midX - 3.0, 9.4, doorway.z - 35, 120, 40],
     // And one just inside the way out. It is doing a third job again — it is
     // the only thing in the hall that says where you are going before you start
     // climbing.
@@ -333,8 +334,8 @@ export function createGiantHall({ scene, doorway, player }) {
     // Inside the throat rather than on the wall beside the opening. A lit
     // passage mouth is a rectangle; a lamp washing the wall around a dark hole
     // is a bright patch of wall with nothing readable in the middle of it, and
-    // at sixty-two metres that is the difference between somewhere to walk to
-    // and no reason to set off.
+    // at this distance that is the difference between somewhere to walk to and
+    // no reason to set off.
     [OUT.x, 2.0, foot - 1.1, 45, 24, OUT.height],
   ]) {
     const housing = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.34, 0.5), trimMat);
@@ -365,25 +366,23 @@ export function createGiantHall({ scene, doorway, player }) {
   // Dead ones between them, so the live ones read as what is left rather than
   // as what was installed. Cheap: a housing and a dark lens, no light.
   for (const [fx, fz] of [
-    [midX - 3.4, doorway.z - 6],
-    [midX + 3.4, doorway.z - 17],
-    [midX - 3.4, doorway.z - 28],
-    [midX + 3.4, doorway.z - 39],
-    [midX - 3.4, doorway.z - 50],
-    [midX + 3.4, doorway.z - 56],
+    [midX - 3.0, doorway.z - 7],
+    [midX + 3.0, doorway.z - 18.5],
+    [midX - 3.0, doorway.z - 29.5],
+    [midX + 3.0, doorway.z - 41],
   ]) {
     const housing = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.34, 0.5), trimMat);
-    housing.position.set(fx, 10.72, fz);
+    housing.position.set(fx, 9.62, fz);
     group.add(housing);
     const lens = new THREE.Mesh(
       new THREE.BoxGeometry(0.74, 0.06, 0.38),
       new THREE.MeshStandardMaterial({ color: '#1b1e1c', roughness: 0.6 })
     );
-    lens.position.set(fx, 10.54, fz);
+    lens.position.set(fx, 9.44, fz);
     group.add(lens);
     for (const side of [-1, 1]) {
-      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 8.98, 6), trimMat);
-      rod.position.set(fx + side * 0.3, 11.12 + 4.49, fz);
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, HEIGHT - 9.7, 6), trimMat);
+      rod.position.set(fx + side * 0.3, 10.02 + (HEIGHT - 9.7) / 2, fz);
       group.add(rod);
     }
   }
@@ -403,8 +402,8 @@ export function createGiantHall({ scene, doorway, player }) {
    * lamp inside it above. The staff door's passage had to be a dark throat
    * because the whole of its job was to hide what was on the other side until
    * you were standing in it. This one is the opposite: it is the only thing in
-   * sixty-two metres of hall you can aim at, and you can see it from the door
-   * you come in by.
+   * the whole hall you can aim at, and you can see it from the door you come in
+   * by.
    */
   const OUT_DEPTH = 3.2;
   const outEnd = foot - OUT_DEPTH;

@@ -3,7 +3,10 @@ import {
   makeWallSurface,
   makeFloorSurface,
   makeCeilingSurface,
+  makeMetalPanelSurface,
+  makeHazardSurface,
   cloneSurface,
+  metalRepeat,
   worldRepeat,
   UNITS_PER_TILE,
 } from './textures.js';
@@ -19,9 +22,24 @@ import { showNote, setObjective } from './hud.js';
  *
  * And every wall, on six courses going up, is full of rectangular openings.
  * They are 1.7 by 2.3 — bigger than a door and the wrong shape for one — set on
- * a regular pitch of 2.7, in five columns per wall, with some of them filled in
- * and the rest open onto a metre and a half of unlit nothing. Ninety-odd of them
- * in a room with two doors.
+ * a regular pitch of 2.7, in five columns per wall, with some of them filled in.
+ * Ninety-odd of them in a room with two doors.
+ *
+ * They are not holes. Each one has a short platform sitting in it, on a pair of
+ * rails that run out to the lip and stop a hand's width proud of the wall, and
+ * the platforms slide. Most are pulled right back with only the front edge
+ * showing; one in seven or so is standing part-way out, and two or three are
+ * out far enough to be a step somebody could take. Nothing moves — there is no
+ * mechanism here and nothing triggers one — but the room has to be read before
+ * that is known, and what it says on being read is that this wall is a machine
+ * for putting a walkway anywhere in it.
+ *
+ * That is the whole difference between this room and the one it was yesterday.
+ * A wall full of dark rectangles is a wall full of dark rectangles: unpleasant,
+ * inert, nothing to do with you. A wall full of dark rectangles with the ends of
+ * rails sticking out of them, and three platforms already halfway out at twenty
+ * metres, is a wall that has been used, that works, and that could do it again
+ * while you are standing under it.
  *
  * What makes it work is that they are all identical and all out of reach. The
  * lowest sill is at 3.2, which is a metre clear of the top of your jump, so
@@ -54,6 +72,24 @@ const HEIGHT = 34;
  * looking like it is trying to be.
  */
 const HOLE = { wide: 1.7, high: 2.3, deep: 1.5 };
+
+/**
+ * The platform in each opening, and the rails it sits on.
+ *
+ * `inset` is how far back inside the mouth a fully retracted one parks — a
+ * couple of hand's widths, so the front edge is in shadow but the top of it
+ * still catches light. Flush with the wall it reads as a filled-in hole; any
+ * further back and there is nothing to see at all, and the openings go back to
+ * being holes.
+ *
+ * The rails run the depth of the recess and 0.12 past the lip. That overhang is
+ * the detail doing the most work in this room: it is the one part of the
+ * mechanism that is outside the wall, so it is the only part legible from
+ * across the floor and from twenty metres below, and it is what makes a row of
+ * dark rectangles read as sockets rather than as damage.
+ */
+const PLATFORM = { deep: 1.25, thick: 0.2, inset: 0.24 };
+const RAIL = { wide: 0.09, high: 0.07, proud: 0.12 };
 const SILLS = [3.2, 7.4, 11.6, 15.8, 20.0, 24.2];
 const COLUMNS = [-5.4, -2.7, 0, 2.7, 5.4];
 
@@ -73,6 +109,23 @@ const COLUMNS = [-5.4, -2.7, 0, 2.7, 5.4];
 function isOpen(wall, course, column) {
   const n = Math.sin(wall * 12.9898 + course * 78.233 + column * 37.719) * 43758.5453;
   return ((n % 1) + 1) % 1 > 0.26;
+}
+
+/**
+ * How far this one's platform is standing out of its socket.
+ *
+ * Zero for most of them. About one in seven is out by something, and of those a
+ * few go most of a metre — which is a plank of floor sticking out of a wall
+ * with nothing under it, and is the reading the whole room turns on. Hashed
+ * like everything else in here, so it is the same three every time and can be
+ * screenshotted and walked past twice.
+ */
+function platformOut(wall, course, column) {
+  const n = Math.sin(wall * 33.17 + course * 61.9 + column * 14.31) * 17331.71;
+  const r = ((n % 1) + 1) % 1;
+  if (r < 0.855) return 0;
+  // 0.28 to 0.95, spread over the top sliver of the hash.
+  return 0.28 + ((r - 0.855) / 0.145) * 0.67;
 }
 
 /** And which of the open ones have run down the wall underneath them. */
@@ -235,6 +288,22 @@ export function createTallRoom({ scene, doorway, player }) {
     metalness: 0,
     side: THREE.BackSide,
   });
+  const railMat = new THREE.MeshStandardMaterial({
+    color: '#4e534f',
+    roughness: 0.42,
+    metalness: 0.7,
+  });
+  const deckMat = new THREE.MeshStandardMaterial({
+    ...makeMetalPanelSurface(...metalRepeat(1.5, 1.25), '#5b605a'),
+    color: '#5b605a',
+    roughness: 0.6,
+    metalness: 0.45,
+  });
+  const stripeMat = new THREE.MeshStandardMaterial({
+    ...makeHazardSurface(2, 1),
+    roughness: 0.75,
+    metalness: 0.05,
+  });
   const stainMat = new THREE.MeshStandardMaterial({
     color: '#25231f',
     roughness: 0.98,
@@ -293,6 +362,53 @@ export function createTallRoom({ scene, doorway, player }) {
         );
         recess.position.set(column, sill + HOLE.high / 2, -HOLE.deep / 2 - 0.01);
         wall.add(recess);
+
+        // The rails, out to the lip and a little past it.
+        for (const side of [-1, 1]) {
+          const rail = new THREE.Mesh(
+            new THREE.BoxGeometry(RAIL.wide, RAIL.high, HOLE.deep + RAIL.proud),
+            railMat
+          );
+          rail.position.set(
+            column + side * (HOLE.wide / 2 - 0.3),
+            sill + RAIL.high / 2,
+            -HOLE.deep / 2 + RAIL.proud / 2
+          );
+          wall.add(rail);
+        }
+
+        // And the platform on them. Steel against the concrete of the wall,
+        // which is most of what says it is a separate object that moves rather
+        // than a ledge cast into the opening.
+        const out = platformOut(index, course, i);
+        const deck = new THREE.Mesh(
+          new THREE.BoxGeometry(HOLE.wide - 0.24, PLATFORM.thick, PLATFORM.deep),
+          deckMat
+        );
+        deck.position.set(
+          column,
+          sill + RAIL.high + PLATFORM.thick / 2,
+          -PLATFORM.inset - PLATFORM.deep / 2 + out
+        );
+        deck.castShadow = out > 0;
+        wall.add(deck);
+
+        // A hazard line on the leading edge of the ones that are out. Only on
+        // those: on all ninety it is a wall of yellow dashes and the room turns
+        // into a poster, and on none of them the three that matter are grey
+        // slabs in a grey hole from any distance at all.
+        if (out > 0) {
+          const lip = new THREE.Mesh(
+            new THREE.BoxGeometry(HOLE.wide - 0.24, PLATFORM.thick + 0.02, 0.1),
+            stripeMat
+          );
+          lip.position.set(
+            column,
+            sill + RAIL.high + PLATFORM.thick / 2,
+            -PLATFORM.inset + out - 0.04
+          );
+          wall.add(lip);
+        }
 
         // And the run down the wall under some of them.
         if (!isStained(index, course, i)) return;

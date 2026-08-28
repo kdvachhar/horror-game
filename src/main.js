@@ -12,6 +12,7 @@ import { createOrangeRoom } from './orangeRoom.js';
 import { createCorpseHall } from './corpseHall.js';
 import { createControlRoom } from './controlRoom.js';
 import { createGiantHall } from './giantHall.js';
+import { createTallRoom } from './tallRoom.js';
 import { createEmployeeDoor } from './employeeDoor.js';
 import { paintRoomStripes } from './wallStripes.js';
 import {
@@ -207,6 +208,16 @@ room.colliders.push(...controlRoom.colliders);
  */
 const giantHall = createGiantHall({ scene, doorway: controlRoom.wayOn, player });
 room.colliders.push(...giantHall.colliders);
+
+/**
+ * And through the far end of that: a shaft thirty-four metres high with the
+ * walls full of rectangular openings.
+ *
+ * Hung off the hall's own way out, like every room in this stretch is hung off
+ * the opening before it.
+ */
+const tallRoom = createTallRoom({ scene, doorway: giantHall.wayOn, player });
+room.colliders.push(...tallRoom.colliders);
 
 /**
  * The staff doors, in five rooms, none of which own them.
@@ -599,6 +610,7 @@ function resetSequences() {
   corpseHall.reset();
   controlRoom.reset();
   giantHall.reset();
+  tallRoom.reset();
   handoverSaid = false;
   // The loop fires the cutscene the moment a door that has been open closes.
   // Clearing this stops a jump from immediately retriggering it underneath you.
@@ -850,6 +862,32 @@ const SCENES = [
       setObjective('Get to the far end');
     },
   },
+  {
+    label: '13 · The tall room',
+    hint: 'Through the end of the long hall — the shaft with the holes in it',
+    go() {
+      resetSequences();
+      medical.openDoor();
+      medical.shutDown();
+      room.lightUpBackRoom();
+      gauntlet.powerUp();
+      exitRoom.powerUp();
+      possession.unlock();
+      orangeRoom.solve();
+
+      const entry = tallRoom.entry;
+      player.teleport({ position: entry.position, yaw: entry.yaw, pitch: 0 });
+      // The bucket waits in the hall. There is nothing in here it could help
+      // with and nothing in here it could reach, and a room whose whole effect
+      // is that you are the only thing in it standing on the floor is a room
+      // to be in on your own.
+      const hall = giantHall.entry;
+      friend.spawn(new THREE.Vector3(hall.position[0], 0, hall.position[2]));
+      friend.collect();
+
+      setObjective('Find the way on');
+    },
+  },
 ];
 
 const debugMenu = createDebugMenu({
@@ -1066,6 +1104,7 @@ renderer.setAnimationLoop((time) => {
   corpseHall.update(delta);
   controlRoom.update(delta);
   giantHall.update(delta);
+  tallRoom.update(delta);
   // After that, not before it, and for the same reason the view is: the shadow
   // body is drawn where the player is, and on a swing the player is wherever
   // the room has just put them. Updated ahead of the rooms it lagged a frame
@@ -1112,7 +1151,7 @@ renderer.setAnimationLoop((time) => {
 
 // Dev-only handle for poking at the scene from the console.
 if (import.meta.env.DEV) {
-  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, corpseHall, controlRoom, giantHall, wakeUp, possession, painter, monologue };
+  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, corpseHall, controlRoom, giantHall, tallRoom, wakeUp, possession, painter, monologue };
   window.game.__tvLines = TV_LINES;
   // Console handles for diagnosing silence: game.audio.state() / .test()
   window.game.perf = () => ({

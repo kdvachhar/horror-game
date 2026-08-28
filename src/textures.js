@@ -295,13 +295,20 @@ function finish(surface, repeatX, repeatY, options = {}) {
 /**
  * Re-points a finished surface's maps at a new repeat. Clones share the
  * underlying canvases, so this costs nothing but a texture object.
+ *
+ * `offsetX`/`offsetY` slide the sampled window as well as sizing it, which is
+ * what lets several meshes read as one continuous surface: a wall built in
+ * pieces round an opening has each piece sampling its own part of the same
+ * texture space, so the shutter boards run straight across the join instead of
+ * every panel starting the pattern again at its own left edge.
  */
-export function cloneSurface(surface, repeatX, repeatY) {
+export function cloneSurface(surface, repeatX, repeatY, offsetX = 0, offsetY = 0) {
   const clone = { ...surface, normalScale: surface.normalScale.clone() };
   for (const key of ['map', 'normalMap', 'roughnessMap']) {
     clone[key] = surface[key].clone();
     clone[key].needsUpdate = true;
     clone[key].repeat.set(repeatX, repeatY);
+    clone[key].offset.set(offsetX, offsetY);
   }
   return clone;
 }

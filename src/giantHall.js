@@ -389,9 +389,15 @@ export function createGiantHall({ scene, doorway, player }) {
   }
 
   /**
-   * What is through the opening at the end: a lined passage, capped, exactly
-   * the way the staff door's was before this hall was built on the end of it.
-   * `wayOn` hands the far end over for whatever comes next.
+   * What is through the opening at the end: a lined passage, with the tall room
+   * on the far side of it.
+   *
+   * It was capped for one commit — a dark plane across the end and a collider
+   * behind it, the way the staff door's was before this hall was built on it.
+   * tallRoom.js is built on the far end now, off `wayOn`, so the cap is gone and
+   * that room's near wall is what you come out into. Leaving it would have put a
+   * black plane in the same place as a wall with a doorway in it: two coincident
+   * surfaces fighting over the same pixels, with the way on behind them.
    *
    * Lit, unlike that one, and for a reason rather than by accident — see the
    * lamp inside it above. The staff door's passage had to be a dark throat
@@ -417,20 +423,13 @@ export function createGiantHall({ scene, doorway, player }) {
       panel.receiveShadow = true;
       group.add(panel);
     }
-    const cap = new THREE.Mesh(
-      new THREE.PlaneGeometry(OUT.width, OUT.height),
-      new THREE.MeshStandardMaterial({ color: '#0a0b09', roughness: 1 })
-    );
-    cap.position.set(OUT.x, OUT.height / 2, outEnd);
-    group.add(cap);
-
-    // The sides and the end. Not the floor — the passage is at the hall's own
-    // level now, and the hall's floor is the world's, so there is nothing to
-    // carry through. Not the top either: a collider has no underside, and a box
-    // over the passage would be a ceiling you could not walk under.
+    // The sides only. Not the floor — the passage is at the hall's own level and
+    // the hall's floor is the world's, so there is nothing to carry through. Not
+    // the top either: a collider has no underside, and a box over the passage
+    // would be a ceiling you could not walk under. And not the end, which is a
+    // doorway into the tall room now rather than the back of a hole.
     solid(outLow - 0.6, outLow, outEnd, foot, {});
     solid(outHigh, outHigh + 0.6, outEnd, foot, {});
-    solid(outLow - 0.6, outHigh + 0.6, outEnd - 0.6, outEnd, {});
   }
 
   /** Inside the hall at all. The passage in does not count. */

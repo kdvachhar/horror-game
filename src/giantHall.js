@@ -21,7 +21,7 @@ import { showNote, setObjective } from './hud.js';
  * opened for you, and warning you about who is on the other side.
  *
  * This is on the other side. It is fifteen metres across, forty-eight long and
- * eighteen high, and you come into it through a doorway one metre wide.
+ * twelve high, and you come into it through a doorway one metre wide.
  *
  * The scale IS the content, and it is now the only content: there was a tower
  * standing in here for one commit and it has been taken out again, so what the
@@ -31,7 +31,7 @@ import { showNote, setObjective } from './hud.js';
  * have to cross on foot.
  *
  * Which is why the door you arrive by is left plainly visible in the wall behind
- * you and why that wall is otherwise bare for twenty metres above it — the one
+ * you and why that wall is otherwise bare all the way up — the one
  * readable object in a flat expanse is what gives the expanse its size, and a
  * person's door in a wall this tall is the only ruler the player has.
  *
@@ -51,10 +51,18 @@ import { showNote, setObjective } from './hud.js';
  *
  * Forty-eight metres long against fifteen wide, so it is a hallway and not a
  * hangar — it has a direction, and the direction is away from the door you came
- * in by. Eighteen high against fifteen wide, so it is still taller than it is
- * broad, which is the proportion that reads as a shaft rather than as a
- * warehouse and is the only one that makes the ceiling worth not being able to
- * see.
+ * in by.
+ *
+ * Twelve high, down from eighteen. Eighteen was taller than the hall was broad,
+ * which is the proportion that reads as a shaft, and the ceiling was too far up
+ * to make out — the room was doing its height and its length at the same time.
+ * It does not need to do its height any more: the tall room at the far end is
+ * thirty-four, and a shaft at the end of a shaft is nothing arriving at nothing.
+ * At twelve the hall is wider than it is high for the first time, so it presses
+ * down and runs away from you instead of standing over you, the ceiling is close
+ * enough to read as a ceiling — and the room you come out into afterwards is
+ * nearly three times its height, which is a drop the old hall gave away in
+ * advance.
  *
  * It has been three sizes now, and the middle one was wrong. Thirty-eight while
  * there was a tower in it, when the length was mostly the approach to the tower;
@@ -67,7 +75,7 @@ import { showNote, setObjective } from './hud.js';
  */
 const WIDTH = 15;
 const LENGTH = 48;
-const HEIGHT = 18;
+const HEIGHT = 12;
 
 /**
  * How the long walls are divided up, and how far the ribs stand proud.
@@ -80,7 +88,17 @@ const HEIGHT = 18;
 const BAYS = 8;
 const RIB = { wide: 1.3, deep: 0.55 };
 /** The two string courses, which are the only horizontal lines in here. */
-const COURSES = [4.0, 9.0];
+const COURSES = [3.0, 7.0];
+
+/**
+ * The height the lamps hang at, which is a proportion of the ceiling and not a
+ * number: they have always come down to a bit under two thirds of it, so that
+ * there is a band of dark above them and the fitting is somewhere it can be seen
+ * to be a fitting. Written once because there are two sets of them — the live
+ * ones and the dead ones between them — and a ceiling change that moved one set
+ * and not the other would put half the fittings through the slab.
+ */
+const LAMP_Y = 7.6;
 
 // Colder and greyer than anything behind you. The plant room was a green-grey
 // because nobody decorated it; this was never decorated at all — it is the
@@ -294,16 +312,22 @@ export function createGiantHall({ scene, doorway, player }) {
   // ----------------------------------------------------------------- light ---
 
   /**
-   * Five lights for six hundred square metres, and the top half of the room
-   * left dark.
+   * Five lights for six hundred square metres, and the run of it left dark
+   * between them.
    *
    * The renderer is forward: every light shades every fragment and the count is
    * compiled into the materials, so this is a budget and not a dial — the scene
    * was at forty-one before this hall existed. Which turns out to be the right
    * constraint. Floodlighting a space this size would make it a warehouse; four
-   * pools of light down a hallway with black between them, and nothing at all
-   * above ten metres, is what makes you aware there is a ceiling up there you
-   * cannot see.
+   * pools of light down a hallway with black between them is what makes the
+   * length of it something you have to walk into rather than something you can
+   * take in from the door.
+   *
+   * They hang at `LAMP_Y`, a bit under two thirds of the way up. On the
+   * eighteen-metre ceiling that left the whole top half unlit and the slab out
+   * of sight; at twelve it washes the beams instead, which is the point of
+   * lowering the ceiling — there is no reason to hide a ceiling that is now
+   * close enough to be part of the room.
    *
    * The fifth is inside the way out. There were six while the hall was sixty-two
    * long; at forty-eight, four down the run is the same twelve-metre spacing,
@@ -322,11 +346,19 @@ export function createGiantHall({ scene, doorway, player }) {
   // of a hallway lights a strip of floor and leaves both walls to fall away into
   // nothing, which is a corridor; staggered, each one washes the wall it is
   // nearest, and the bays come out of the dark one at a time as you walk.
+  //
+  // And every one of them sits in the middle of a bay, six metres off the beam
+  // either side. They used to be spaced off the doorway on round numbers, which
+  // put four of the eight fittings — two live, two dead — inside a ceiling beam
+  // with their rods running up through it. At eighteen metres that was eighteen
+  // metres away and nobody was ever going to see it. At twelve it is a light
+  // fitting buried in a girder, so they are hung off the bay grid instead, which
+  // is what the ceiling is actually divided by. Same twelve-metre spacing.
   for (const [fx, fy, fz, watt, range, under = HEIGHT] of [
-    [midX + 3.0, 9.4, doorway.z - 1.5, 130, 40],
-    [midX - 3.0, 9.4, doorway.z - 13, 130, 40],
-    [midX + 3.0, 9.4, doorway.z - 24, 125, 40],
-    [midX - 3.0, 9.4, doorway.z - 35, 120, 40],
+    [midX + 3.0, LAMP_Y, doorway.z - 4.2, 130, 40],
+    [midX - 3.0, LAMP_Y, doorway.z - 16.2, 130, 40],
+    [midX + 3.0, LAMP_Y, doorway.z - 28.2, 125, 40],
+    [midX - 3.0, LAMP_Y, doorway.z - 40.2, 120, 40],
     // And one just inside the way out. It is doing a third job again — it is
     // the only thing in the hall that says where you are going before you start
     // climbing.
@@ -366,23 +398,24 @@ export function createGiantHall({ scene, doorway, player }) {
   // Dead ones between them, so the live ones read as what is left rather than
   // as what was installed. Cheap: a housing and a dark lens, no light.
   for (const [fx, fz] of [
-    [midX - 3.0, doorway.z - 7],
-    [midX + 3.0, doorway.z - 18.5],
-    [midX - 3.0, doorway.z - 29.5],
-    [midX + 3.0, doorway.z - 41],
+    [midX - 3.0, doorway.z + 1.8],
+    [midX + 3.0, doorway.z - 10.2],
+    [midX - 3.0, doorway.z - 22.2],
+    [midX + 3.0, doorway.z - 34.2],
   ]) {
     const housing = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.34, 0.5), trimMat);
-    housing.position.set(fx, 9.62, fz);
+    housing.position.set(fx, LAMP_Y + 0.22, fz);
     group.add(housing);
     const lens = new THREE.Mesh(
       new THREE.BoxGeometry(0.74, 0.06, 0.38),
       new THREE.MeshStandardMaterial({ color: '#1b1e1c', roughness: 0.6 })
     );
-    lens.position.set(fx, 9.44, fz);
+    lens.position.set(fx, LAMP_Y + 0.04, fz);
     group.add(lens);
+    const drop = HEIGHT - LAMP_Y - 0.3;
     for (const side of [-1, 1]) {
-      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, HEIGHT - 9.7, 6), trimMat);
-      rod.position.set(fx + side * 0.3, 10.02 + (HEIGHT - 9.7) / 2, fz);
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, drop, 6), trimMat);
+      rod.position.set(fx + side * 0.3, LAMP_Y + 0.4 + drop / 2, fz);
       group.add(rod);
     }
   }

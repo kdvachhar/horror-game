@@ -61,9 +61,36 @@ const NAIL = '#5b5344';
  * surface, and one pressed into it is gripping. Nothing below the floor is
  * visible from anywhere in the room, so the only thing this costs is the
  * pretence that the floor is soft.
+ *
+ * Ten point eight, which is as big as the tall room will take.
+ *
+ * The room is fifteen across and fourteen deep, so a cube is capped by the
+ * fourteen however tall the shaft is — and it cannot have the whole fourteen,
+ * because the way on is in the far wall and a cube wall-to-wall is a plug. What
+ * is left over is deliberate and is the only number here with a rule behind it:
+ * an aisle of 2.1m at the sides and 1.6m front and back, against a player 0.84m
+ * across. You get round it. You do not get round it comfortably.
+ *
+ * At this size you cannot see it. That is the point of doing it: at 2.9 it was
+ * a thing in a room and you walked round it reading the faces off it, and at
+ * 10.8 it is the room, and the faces arrive one at a time at a range where a
+ * single eye is wider than you are. The drawings survive being this big far
+ * better than they survived being small — a mouth six metres tall is the same
+ * drawing and a different fact.
  */
-const SIZE = 2.9;
-const STAND = 0.44;
+const SIZE = 10.8;
+const STAND = SIZE * 0.152;
+
+/**
+ * The drawings were laid out on a 2.9m cube and every size below is in those
+ * terms, so this carries them up.
+ *
+ * Positions were always written as fractions of the edge and look after
+ * themselves; sizes were not. Without this the cube grows and its eyes, marks
+ * and nostril stay where they were, which is a ten metre lump of meat with
+ * freckles on it.
+ */
+const S = SIZE / 2.9;
 
 /**
  * How far the surface wanders off the true cube, as a fraction of the edge.
@@ -92,12 +119,17 @@ const HALF = SIZE / 2;
  * every load and a screenshot of it means something.
  */
 function lump(p) {
+  // Frequencies are per metre, so they are divided through by the scale: left
+  // alone, a cube four times the size gets four times as many lumps of the same
+  // depth and comes out as gravel rather than as a swollen thing.
+  const x = p.x / S;
+  const y = p.y / S;
+  const z = p.z / S;
   return (
-    (Math.sin(p.x * 2.1 + 1.7) * Math.sin(p.y * 1.7 - 0.6) * Math.sin(p.z * 2.5 + 2.4) * 0.030 +
-      Math.sin(p.x * 4.3 - 2.1) * Math.sin(p.y * 5.1 + 1.1) * Math.sin(p.z * 3.9 - 0.4) * 0.014 +
-      Math.sin(p.x * 8.7) * Math.sin(p.y * 7.9) * Math.sin(p.z * 9.3) * 0.006) *
-    (SIZE / LUMP) *
-    LUMP
+    (Math.sin(x * 2.1 + 1.7) * Math.sin(y * 1.7 - 0.6) * Math.sin(z * 2.5 + 2.4) * 0.030 +
+      Math.sin(x * 4.3 - 2.1) * Math.sin(y * 5.1 + 1.1) * Math.sin(z * 3.9 - 0.4) * 0.014 +
+      Math.sin(x * 8.7) * Math.sin(y * 7.9) * Math.sin(z * 9.3) * 0.006) *
+    SIZE
   );
 }
 
@@ -207,7 +239,9 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, player }) {
       metalness: 0,
     });
 
-  const flesh = meatMaterial(1);
+  // One tile per 2.9m of face, not one tile per face. Left at one, the creases
+  // stretch with the cube and a fold ends up three metres long.
+  const flesh = meatMaterial(Math.max(1, Math.round(S)));
   // Darker flesh for the insides of things — lids, gums, the roots of teeth.
   const inner = new THREE.MeshStandardMaterial({ color: '#2a0f0d', roughness: 0.5, metalness: 0.03 });
   const toothMat = new THREE.MeshStandardMaterial({ color: TOOTH, roughness: 0.55, metalness: 0.03 });
@@ -518,7 +552,7 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, player }) {
 
       const tooth = new THREE.Group();
       // Point it at the middle of the hole, and lean it out of the face.
-      tooth.position.set(p.x, p.y, 0.01);
+      tooth.position.set(p.x, p.y, 0.01 * S);
       tooth.rotation.z = Math.atan2(-p.y, -p.x) - Math.PI / 2;
       tooth.rotation.x = -0.34 - 0.2 * rand(i, 13);
 
@@ -645,15 +679,24 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, player }) {
     shoulder.castShadow = true;
     arm.add(shoulder);
 
+    // Held much closer to the body than the drawing has them, and this is
+    // forced rather than chosen. The arms are the only part of the cube that
+    // reaches past its own faces, and everything here is multiplied by S: a
+    // lean that put the elbow 0.82 out on a 2.9m cube puts it three metres out
+    // on this one, which is half a metre inside the concrete — measured, on the
+    // -x side, where the surface lump already spends some of the aisle.
+    //
+    // Up rather than out, then, which is what the drawing is mostly doing
+    // anyway. The hands are raised, not spread.
     const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 0.72, 8, 16), flesh);
     upper.castShadow = true;
-    upper.position.set(side * 0.42, 0.24, 0);
-    upper.rotation.z = -side * 1.02;
+    upper.position.set(side * 0.15, 0.36, 0);
+    upper.rotation.z = -side * 0.32;
     arm.add(upper);
 
     // The elbow is a joint the forearm hangs off, so the hand comes with it.
     const elbow = new THREE.Group();
-    elbow.position.set(side * 0.82, 0.56, 0);
+    elbow.position.set(side * 0.2, 0.76, 0);
     arm.add(elbow);
 
     const knuckle = new THREE.Mesh(new THREE.SphereGeometry(0.17, 14, 10), flesh);
@@ -711,35 +754,40 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, player }) {
       radiusU: HALF * 0.62,
       radiusV: HALF * 0.58,
       teeth: 26,
-      depth: 0.26,
+      depth: 0.26 * S,
       seed: 1.7,
       lobes: 6,
     });
-    place(face, mouth, 0, 0.02, 0.02);
+    place(face, mouth, 0, 0.02, 0.02 * S);
 
     // The tongue out of the front of it. Lolling, so it touches the floor —
     // which is the detail that says this thing has been standing here.
     const tongue = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 14), inner);
-    tongue.scale.set(HALF * 0.34, HALF * 0.42, 0.16);
+    tongue.scale.set(HALF * 0.34, HALF * 0.42, 0.16 * S);
     place(face, tongue, 0, -HALF * 0.52, -0.02);
     tongue.rotation.x = 0.4;
 
-    place(face, buildEye({ radius: 0.13, seed: 2.2 }), -HALF * 0.62, HALF * 0.58, 0.01);
-    place(face, buildEye({ radius: 0.115, seed: 5.1 }), HALF * 0.6, -HALF * 0.56, 0.01);
+    place(face, buildEye({ radius: 0.13 * S, seed: 2.2 }), -HALF * 0.62, HALF * 0.58, 0.01 * S);
+    place(face, buildEye({ radius: 0.115 * S, seed: 5.1 }), HALF * 0.6, -HALF * 0.56, 0.01 * S);
   }
 
   // -- top: the big eye, and the arms ---------------------------------------
   {
     const face = faces.top;
-    place(face, buildEye({ radius: 0.3, lidded: true, seed: 0.4 }), 0, HALF * 0.28, 0.01);
-    place(face, buildMark(0.26), -HALF * 0.1, -HALF * 0.62, 0.01);
+    place(face, buildEye({ radius: 0.3 * S, lidded: true, seed: 0.4 }), 0, HALF * 0.28, 0.01 * S);
+    place(face, buildMark(0.26 * S), -HALF * 0.1, -HALF * 0.62, 0.01 * S);
   }
   const arms = [];
   for (const [name, side] of [['left', -1], ['right', 1]]) {
     const arm = buildArm(side);
     // Out of the shoulder of each side face, up near the top, which is where
     // the drawing has them leaving the cube.
-    place(faces[name], arm.group, HALF * 0.1 * side, HALF * 0.72, -0.06);
+    // Built at the size the drawings were laid out at, then carried up whole —
+    // one scale on the group takes the limb, the hand and every finger joint
+    // with it, which is the only way to enlarge a chain of nested transforms
+    // without going through it a number at a time.
+    arm.group.scale.setScalar(S);
+    place(faces[name], arm.group, HALF * 0.1 * side, HALF * 0.72, -0.06 * S);
     // The arm's own frame is the world's: it reaches up and out, not out of
     // the face it is attached to.
     arm.group.rotation.y = name === 'left' ? Math.PI / 2 : -Math.PI / 2;
@@ -753,11 +801,11 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, player }) {
       radiusU: HALF * 0.29,
       radiusV: HALF * 0.56,
       teeth: 26,
-      depth: 0.22,
+      depth: 0.22 * S,
       seed: 3.3,
       lobes: 4,
     });
-    place(face, mouth, -HALF * 0.14, HALF * 0.04, 0.02);
+    place(face, mouth, -HALF * 0.14, HALF * 0.04, 0.02 * S);
 
     // The eye inside the mouth. It is the single worst thing in the drawings
     // and it costs nothing: an eye where teeth are is an eye that is not on the
@@ -772,39 +820,39 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, player }) {
     // origin is the middle of the cube, not its surface — so the eye in the
     // mouth and the throat under it spent every version of this buried at the
     // core of the thing, a metre and a half behind the face they belong to.
-    place(face, buildEye({ radius: 0.13, bare: true, seed: 6.6 }), -HALF * 0.14, HALF * 0.06, 0.12);
+    place(face, buildEye({ radius: 0.13 * S, bare: true, seed: 6.6 }), -HALF * 0.14, HALF * 0.06, 0.12 * S);
 
     // The drawing's dark arch at the bottom of the mouth is not built. Against
     // a flat black opening there is nothing for it to be darker than, and a
     // second black shape inside the first is a shape nobody can see.
 
-    place(face, buildEye({ radius: 0.17, seed: 1.1 }), HALF * 0.52, HALF * 0.55, 0.01);
-    place(face, buildEye({ radius: 0.145, seed: 4.4 }), -HALF * 0.55, HALF * 0.44, 0.01);
-    place(face, buildEye({ radius: 0.125, seed: 7.7 }), HALF * 0.46, -HALF * 0.48, 0.01);
-    place(face, buildMark(0.2), HALF * 0.3, HALF * 0.42, 0.01);
+    place(face, buildEye({ radius: 0.17 * S, seed: 1.1 }), HALF * 0.52, HALF * 0.55, 0.01 * S);
+    place(face, buildEye({ radius: 0.145 * S, seed: 4.4 }), -HALF * 0.55, HALF * 0.44, 0.01 * S);
+    place(face, buildEye({ radius: 0.125 * S, seed: 7.7 }), HALF * 0.46, -HALF * 0.48, 0.01 * S);
+    place(face, buildMark(0.2 * S), HALF * 0.3, HALF * 0.42, 0.01 * S);
   }
 
   // -- back: nothing but creases and two eyes --------------------------------
   {
     const face = faces.back;
-    place(face, buildEye({ radius: 0.19, seed: 8.2 }), HALF * 0.16, HALF * 0.18, 0.01);
-    place(face, buildEye({ radius: 0.15, seed: 9.5 }), -HALF * 0.34, -HALF * 0.12, 0.01);
-    place(face, buildMark(0.22), -HALF * 0.24, HALF * 0.24, 0.01);
+    place(face, buildEye({ radius: 0.19 * S, seed: 8.2 }), HALF * 0.16, HALF * 0.18, 0.01 * S);
+    place(face, buildEye({ radius: 0.15 * S, seed: 9.5 }), -HALF * 0.34, -HALF * 0.12, 0.01 * S);
+    place(face, buildMark(0.22 * S), -HALF * 0.24, HALF * 0.24, 0.01 * S);
   }
 
   // -- left: an eye and a pit ------------------------------------------------
   {
     const face = faces.left;
-    place(face, buildEye({ radius: 0.18, seed: 2.9 }), HALF * 0.22, HALF * 0.3, 0.01);
-    place(face, buildPit(0.3, 4.8), -HALF * 0.4, -HALF * 0.04, 0.01);
+    place(face, buildEye({ radius: 0.18 * S, seed: 2.9 }), HALF * 0.22, HALF * 0.3, 0.01 * S);
+    place(face, buildPit(0.3 * S, 4.8), -HALF * 0.4, -HALF * 0.04, 0.01 * S);
   }
 
   // -- right: the slit eye and the nostril -----------------------------------
   {
     const face = faces.right;
-    place(face, buildEye({ radius: 0.24, slit: true, lidded: true, seed: 3.7 }), 0, HALF * 0.12, 0.01);
-    place(face, buildNostril(0.11), -HALF * 0.02, -HALF * 0.42, 0.01);
-    place(face, buildMark(0.22), 0, HALF * 0.56, 0.01);
+    place(face, buildEye({ radius: 0.24 * S, slit: true, lidded: true, seed: 3.7 }), 0, HALF * 0.12, 0.01 * S);
+    place(face, buildNostril(0.11 * S), -HALF * 0.02, -HALF * 0.42, 0.01 * S);
+    place(face, buildMark(0.22 * S), 0, HALF * 0.56, 0.01 * S);
   }
 
   // ------------------------------------------------------------- collision ---

@@ -642,23 +642,28 @@ export function createTallRoom({ scene, doorway, player }) {
   // ------------------------------------------------------------------ meat ---
 
   /**
-   * And the thing standing in it.
+   * And the thing standing in it, which is now most of it.
    *
-   * Off the centre line and in the near half, so it is the first thing the room
-   * gives you and you meet its front face: you come in through fifteen metres of
-   * open wall and it is already looking at you, off to one side, rather than
-   * being discovered in the middle of the floor like an exhibit. Clear of the
-   * grating, clear of the way on, and inside the pool of the side lamp so it is
-   * lit from below and across — see meatCube.js for what is on which face.
+   * Dead centre, and square to the walls. Both of those were choices before and
+   * are not any more: it is 10.8 metres in a room 15 by 14, so anywhere but the
+   * middle puts it through a wall, and any angle at all puts its corners through
+   * two — the diagonal of this cube is 15.3, which is wider than the room.
+   *
+   * What is left is an aisle: 2.1m down either side, 1.6m across the ends. The
+   * way on is in the far wall, so getting to it means going down the side of the
+   * thing and along the back of it, at arm's length, the whole way. That is the
+   * room now. It used to be a shaft with an object in it and it is a gap between
+   * a wall and an animal.
+   *
+   * It stands over the floor grating, which is where whatever runs down these
+   * walls was always going.
    */
   const meat = createMeatCube({
     parent: group,
     colliders,
-    x: midX + 2.6,
-    z: midZ + 2.0,
-    // Turned a little off square to the room. Set true to the walls it reads as
-    // furniture, because nothing else in this building is at an angle.
-    yaw: -0.38,
+    x: midX,
+    z: midZ,
+    yaw: 0,
     player,
   });
 
@@ -673,9 +678,16 @@ export function createTallRoom({ scene, doorway, player }) {
     holes: holeCount,
     meat,
 
-    /** Just inside the door, looking across it. */
+    /**
+     * Just inside, in the mouth of the side aisle, looking down it.
+     *
+     * Not on the centre line any more: the centre line is inside the cube's
+     * collider now, and dropping the player there puts them wedged against it
+     * and shoved out sideways by the resolver. This is where you end up anyway
+     * once you have walked in and found you cannot go straight on.
+     */
     get entry() {
-      return { position: [doorway.x, 0, maxZ - 1.5], yaw: 0 };
+      return { position: [doorway.x + 6.4, 0, maxZ - 1.2], yaw: 0 };
     },
 
     /** The far end of the passage out, for whatever gets built on it. */

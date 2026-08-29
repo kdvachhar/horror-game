@@ -227,7 +227,7 @@ function blobPath(radius, wobble, lobes, seed, points = 40) {
   return path;
 }
 
-export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, entrance, player }) {
+export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player }) {
   /**
    * Where the skin is, for a point on the ideal cube — squeezed into `fit`.
    *
@@ -882,27 +882,30 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, entrance
     });
 
     /**
-     * Lined up with the top of the way in.
+     * Sat down on the floor, bottom lip first.
      *
-     * The front face is the one thing on this cube anybody sees, and it is seen
-     * through a hole 15 by 12 at the end of a 48 metre hall. So the mouth is
-     * not placed on the face, it is placed against the opening: its top edge
-     * sits exactly at the head of the entrance, and at nearly eleven metres tall
-     * it runs from there down to about waist height off the floor.
+     * It hung off the head of the entrance before this, which put its top lip
+     * on the lintel and left it a metre and a bit clear of the ground. Dropped,
+     * it takes that metre and a bit — which is the whole of what there is to
+     * take, the mouth being 10.84 tall in an opening 12 high. Any further and
+     * the bottom of it starts going under the floor, where the bottom face's
+     * mouth already is.
      *
-     * Which means the mouth is what the opening frames. Walk up the hall and the
-     * lintel over the way in and the top lip of the mouth are the same line, so
-     * there is no moment where you see meat with a mouth in it — the doorway is
-     * the mouth, until you are close enough to see it is not.
+     * The two anchors do not coexist: something 10.84 long in a 12 hole is
+     * either against the top or against the bottom. Against the bottom is the
+     * better of the two anyway — a mouth hung from the lintel is a decoration
+     * over a doorway, and one sitting on the floor is something that has come
+     * down to where you are. What is left above it is a metre of forehead,
+     * which is enough to say the head goes on past the top of the way in.
      *
-     * `reach.top` off the built outline, not the radius: the wobble is worth a
-     * quarter of the radius and lining up the number it was asked for leaves the
-     * edge you can see a metre out.
+     * `reach.bottom` off the built outline, not the radius it was asked for: the
+     * wobble is worth a quarter of the radius either way, and anchoring on the
+     * nominal number leaves the edge you can actually see a metre out.
      */
     const MOUTH_U = -HALF * 0.1;
-    const mouthV = entrance
-      ? entrance - group.position.y - mouth.userData.reach.top
-      : HALF * 0.04;
+    // World y = 0 in the face's own frame. The face group carries no offset of
+    // its own, so this is the cube's placement height and nothing else.
+    const mouthV = -group.position.y - mouth.userData.reach.bottom;
     place(face, mouth, MOUTH_U, mouthV, 0.02 * S);
 
     // The eye inside the mouth. It is the single worst thing in the drawings

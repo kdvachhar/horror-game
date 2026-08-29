@@ -644,16 +644,21 @@ export function createTallRoom({ scene, doorway, player }) {
   /**
    * And the thing standing in it, which is now most of it.
    *
-   * Dead centre, and square to the walls. Both of those were choices before and
-   * are not any more: it is 10.8 metres in a room 15 by 14, so anywhere but the
-   * middle puts it through a wall, and any angle at all puts its corners through
-   * two — the diagonal of this cube is 15.3, which is wider than the room.
+   * Dead centre, square to the walls, and touching them.
    *
-   * What is left is an aisle: 2.1m down either side, 1.6m across the ends. The
-   * way on is in the far wall, so getting to it means going down the side of the
-   * thing and along the back of it, at arm's length, the whole way. That is the
-   * room now. It used to be a shaft with an object in it and it is a gap between
-   * a wall and an animal.
+   * None of that is a choice any more. It is 14.6 metres in a room fifteen by
+   * fourteen — deliberately over the room's depth — so anywhere but the middle
+   * puts it through a wall and any angle at all puts its corners through two:
+   * its diagonal is 20.6 and the room is 15. `fit` is the room's own inside
+   * handed to it as half-extents, and the cube's surface is clamped to that,
+   * which is what lets a cube touch four walls of a room that is not square.
+   * Front and back are pressed flat against the concrete for their whole area;
+   * the sides reach it where the meat swells.
+   *
+   * There is no aisle. The room is sealed — the far wall it is pressed against
+   * is the one with the way on in it, and its front face stands in the plane of
+   * the opening. You walk the length of the hall and what is at the end of it is
+   * not a room you can enter.
    *
    * It stands over the floor grating, which is where whatever runs down these
    * walls was always going.
@@ -664,6 +669,9 @@ export function createTallRoom({ scene, doorway, player }) {
     x: midX,
     z: midZ,
     yaw: 0,
+    // A hair inside the wall planes, so it presses on them without the two
+    // surfaces fighting over the same pixels.
+    fit: { x: WIDTH / 2 - 0.02, z: DEPTH / 2 - 0.02 },
     player,
   });
 
@@ -679,15 +687,16 @@ export function createTallRoom({ scene, doorway, player }) {
     meat,
 
     /**
-     * Just inside, in the mouth of the side aisle, looking down it.
+     * Outside it, in the hall, looking at the opening.
      *
-     * Not on the centre line any more: the centre line is inside the cube's
-     * collider now, and dropping the player there puts them wedged against it
-     * and shoved out sideways by the resolver. This is where you end up anyway
-     * once you have walked in and found you cannot go straight on.
+     * There is nowhere in this room to stand any more — the cube is against all
+     * four walls and its collider is the room's inside. So the debug jump puts
+     * you where you would actually be: three metres back down the hall, with the
+     * thing filling the way in. `contains` is false here, which is correct and
+     * is the point.
      */
     get entry() {
-      return { position: [doorway.x + 6.4, 0, maxZ - 1.2], yaw: 0 };
+      return { position: [doorway.x, 0, maxZ + 3.0], yaw: 0 };
     },
 
     /** The far end of the passage out, for whatever gets built on it. */

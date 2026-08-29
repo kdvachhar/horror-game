@@ -62,23 +62,37 @@ const NAIL = '#5b5344';
  * visible from anywhere in the room, so the only thing this costs is the
  * pretence that the floor is soft.
  *
- * Ten point eight, which is as big as the tall room will take.
+ * Fourteen point six, which is bigger than the room is deep. It touches.
  *
- * The room is fifteen across and fourteen deep, so a cube is capped by the
- * fourteen however tall the shaft is — and it cannot have the whole fourteen,
- * because the way on is in the far wall and a cube wall-to-wall is a plug. What
- * is left over is deliberate and is the only number here with a rule behind it:
- * an aisle of 2.1m at the sides and 1.6m front and back, against a player 0.84m
- * across. You get round it. You do not get round it comfortably.
+ * The room is fifteen across and fourteen deep, so a cube cannot touch all four
+ * of its walls without being bigger than the room on one axis. This one is: at
+ * 14.6 it is over the depth and under the width, and the difference is taken
+ * out of it by the walls. See `fit` — every point of the surface is clamped to
+ * the room's inside, so the front and back are pressed flat against the
+ * concrete for their whole area and the sides reach it wherever the meat swells
+ * and fall away from it where it does not.
  *
- * At this size you cannot see it. That is the point of doing it: at 2.9 it was
- * a thing in a room and you walked round it reading the faces off it, and at
- * 10.8 it is the room, and the faces arrive one at a time at a range where a
- * single eye is wider than you are. The drawings survive being this big far
- * better than they survived being small — a mouth six metres tall is the same
- * drawing and a different fact.
+ * Sized at exactly fourteen it came out 0.145 short of the side walls, because
+ * the swell is a product of three sines and never reaches its own maximum on a
+ * real vertex — measured, not reasoned about. Overshooting the room and letting
+ * it be clamped is the version that cannot be wrong.
+ *
+ * A soft thing in a tight box spreads against the box, and the flat patches
+ * where it does are the whole of what says this was put in here rather than
+ * built in here.
+ *
+ * It seals the room. That is what touching the walls means: there is no aisle,
+ * the far wall it is pressed against is the one with the way on in it, and the
+ * front face stands in the plane of the opening you would come in by. You walk
+ * the length of the hall and what is at the end of it is not a room.
+ *
+ * At this size you cannot see it, and that is the point of it. At 2.9 it was a
+ * thing in a room and you walked round it reading the faces off; here it is the
+ * room, and one eye is wider than you are. The drawings survive being this big
+ * far better than they survived being small — a mouth eight metres tall is the
+ * same drawing and a different fact.
  */
-const SIZE = 10.8;
+const SIZE = 14.6;
 const STAND = SIZE * 0.152;
 
 /**
@@ -137,12 +151,6 @@ function lump(p) {
 function rounded(p) {
   const out = p.clone();
   return out.lerp(out.clone().normalize().multiplyScalar(HALF), ROUND);
-}
-
-/** Where the skin is, for a point on the ideal cube. */
-function skin(p) {
-  const r = rounded(p);
-  return r.clone().addScaledVector(r.clone().normalize(), lump(r));
 }
 
 /** Deterministic 0..1 from a couple of integers. Never Math.random here. */
@@ -211,7 +219,33 @@ function blobPath(radius, wobble, lobes, seed, points = 40) {
   return path;
 }
 
-export function createMeatCube({ parent, colliders, x, z, yaw = 0, player }) {
+export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player }) {
+  /**
+   * Where the skin is, for a point on the ideal cube — squeezed into `fit`.
+   *
+   * `fit` is the room's own inside, as half-extents about the cube's centre,
+   * and every displaced vertex is clamped to it. That single clamp is what lets
+   * a cube touch the walls of a room that is not square: the surface swells as
+   * far as it likes and then simply stops at the concrete, so it is flush where
+   * it meets a wall and lumpy where it does not, and it can never pass through
+   * one into a wall socket on the far side.
+   *
+   * It only works because the cube is square to the room — which at this size
+   * it is obliged to be, the diagonal being wider than the room is.
+   *
+   * Local to the factory rather than module scope, because it is the one part
+   * of the shape that depends on the room the cube was put in.
+   */
+  const skin = (p) => {
+    const r = rounded(p);
+    const out = r.clone().addScaledVector(r.clone().normalize(), lump(r));
+    if (fit) {
+      out.x = Math.min(Math.max(out.x, -fit.x), fit.x);
+      out.z = Math.min(Math.max(out.z, -fit.z), fit.z);
+    }
+    return out;
+  };
+
   const group = new THREE.Group();
   group.position.set(x, STAND + HALF, z);
   group.rotation.y = yaw;
@@ -780,17 +814,27 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, player }) {
   const arms = [];
   for (const [name, side] of [['left', -1], ['right', 1]]) {
     const arm = buildArm(side);
-    // Out of the shoulder of each side face, up near the top, which is where
-    // the drawing has them leaving the cube.
     // Built at the size the drawings were laid out at, then carried up whole —
     // one scale on the group takes the limb, the hand and every finger joint
     // with it, which is the only way to enlarge a chain of nested transforms
     // without going through it a number at a time.
     arm.group.scale.setScalar(S);
-    place(faces[name], arm.group, HALF * 0.1 * side, HALF * 0.72, -0.06 * S);
-    // The arm's own frame is the world's: it reaches up and out, not out of
-    // the face it is attached to.
-    arm.group.rotation.y = name === 'left' ? Math.PI / 2 : -Math.PI / 2;
+    /**
+     * Out of the top face, near its left and right edges.
+     *
+     * They used to come out of the shoulders of the side faces, which worked
+     * while there was an aisle to reach into. There is no aisle now — the sides
+     * are against the wall — so an arm leaving that way leaves into concrete.
+     *
+     * The top is where the drawing has them anyway. They are on the Top sheet,
+     * either side of the square, and putting them there means the only thing on
+     * this cube that reaches past its own faces reaches into the one direction
+     * the room has thirty-four metres of: up.
+     */
+    place(faces.top, arm.group, HALF * 0.78 * side, 0, -0.05 * S);
+    // The face's own +z is world up, so the arm — built along +y — is turned a
+    // quarter about x to stand up out of it.
+    arm.group.rotation.x = Math.PI / 2;
     arms.push(arm);
   }
 
@@ -857,12 +901,14 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, player }) {
 
   // ------------------------------------------------------------- collision ---
 
-  // A plain box, and no `top`: it is three and a half metres to the crown of it
-  // with the stand, so there is no standing on it and nothing to be gained by
-  // pretending its lumps are climbable. The arms are outside this and stay
-  // outside it — they are over head height and there is nothing to walk into.
-  const half = HALF + 0.08;
-  colliders.push({ minX: x - half, maxX: x + half, minZ: z - half, maxZ: z + half });
+  // The box it actually occupies, which is the squeezed one: out to the wall on
+  // every side it reaches a wall. No `top` — it is sixteen metres to the crown
+  // of it and there is nothing to be gained by pretending its lumps are
+  // climbable. The arms are inside this now; they come off the top face and go
+  // up, so nothing reaches past it in plan.
+  const halfX = fit ? fit.x : HALF + 0.08;
+  const halfZ = fit ? fit.z : HALF + 0.08;
+  colliders.push({ minX: x - halfX, maxX: x + halfX, minZ: z - halfZ, maxZ: z + halfZ });
 
   // --------------------------------------------------------------- alive ----
 

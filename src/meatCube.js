@@ -227,7 +227,7 @@ function blobPath(radius, wobble, lobes, seed, points = 40) {
   return path;
 }
 
-export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player }) {
+export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, entrance, player }) {
   /**
    * Where the skin is, for a point on the ideal cube — squeezed into `fit`.
    *
@@ -552,22 +552,20 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player }
 
     const rim = [];
     const STEPS = 52;
-    for (let i = 0; i < STEPS; i++) rim.push(at((i / STEPS) * Math.PI * 2));
+    let top = -Infinity;
+    let bottom = Infinity;
+    for (let i = 0; i < STEPS; i++) {
+      const p = at((i / STEPS) * Math.PI * 2);
+      rim.push(p);
+      top = Math.max(top, p.y);
+      bottom = Math.min(bottom, p.y);
+    }
+    // How far the opening actually reaches, measured off the outline it ended
+    // up with rather than off the radius it was asked for — the wobble is worth
+    // a quarter either way and the caller wants to line the real edge up with
+    // something.
+    mouth.userData.reach = { top, bottom };
 
-    // The hole. Unlit black, front-facing, so there is never a frame in which
-    // you can see out the far side of the animal; the shaded bowl behind it is
-    // what stops that black being a hole cut in the picture.
-    // Exactly a hemisphere, and not a degree more. At 0.62π the cap runs 21°
-    // past its own equator, so once it is turned to face into the cube it still
-    // stands a fifth of its depth proud of the skin — and since it is BackSide
-    // and lit, what you get is a pale dome sitting over the mouth with the
-    // teeth poking out of it.
-    //
-    // The bowl first, then a flat unlit black behind it. In that order: the
-    // bowl is what gives the inside of the mouth a shape to shade, and the
-    // black is only there so that there is never an angle from which you can
-    // see out of the far side of the animal. Put the black in front of the bowl
-    // and it hides the only thing worth seeing in there.
     // The opening: one unlit black face, cut to the outline, standing just off
     // the skin.
     //
@@ -597,10 +595,13 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player }
       true
     );
     const gum = new THREE.Mesh(
-      new THREE.TubeGeometry(gumCurve, 72, Math.min(radiusU, radiusV) * 0.075, 7, true),
+      new THREE.TubeGeometry(gumCurve, 72, Math.min(radiusU, radiusV) * 0.045, 7, true),
       inner
     );
-    gum.position.z = 0.03;
+    // Behind the teeth, not among them. It sat proud of their roots, which at a
+    // mouth this size put a half-metre rope weaving over the front of them —
+    // the gum's whole job is to be the line they come out of.
+    gum.position.z = 0.008;
     mouth.add(gum);
 
     for (let i = 0; i < teeth; i++) {
@@ -872,14 +873,37 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player }
   {
     const face = faces.front;
     const mouth = buildMouth({
-      radiusU: HALF * 0.29,
-      radiusV: HALF * 0.56,
-      teeth: 26,
+      radiusU: HALF * 0.44,
+      radiusV: HALF * 0.72,
+      teeth: 30,
       depth: 0.22 * S,
       seed: 3.3,
       lobes: 4,
     });
-    place(face, mouth, -HALF * 0.14, HALF * 0.04, 0.02 * S);
+
+    /**
+     * Lined up with the top of the way in.
+     *
+     * The front face is the one thing on this cube anybody sees, and it is seen
+     * through a hole 15 by 12 at the end of a 48 metre hall. So the mouth is
+     * not placed on the face, it is placed against the opening: its top edge
+     * sits exactly at the head of the entrance, and at nearly eleven metres tall
+     * it runs from there down to about waist height off the floor.
+     *
+     * Which means the mouth is what the opening frames. Walk up the hall and the
+     * lintel over the way in and the top lip of the mouth are the same line, so
+     * there is no moment where you see meat with a mouth in it — the doorway is
+     * the mouth, until you are close enough to see it is not.
+     *
+     * `reach.top` off the built outline, not the radius: the wobble is worth a
+     * quarter of the radius and lining up the number it was asked for leaves the
+     * edge you can see a metre out.
+     */
+    const MOUTH_U = -HALF * 0.1;
+    const mouthV = entrance
+      ? entrance - group.position.y - mouth.userData.reach.top
+      : HALF * 0.04;
+    place(face, mouth, MOUTH_U, mouthV, 0.02 * S);
 
     // The eye inside the mouth. It is the single worst thing in the drawings
     // and it costs nothing: an eye where teeth are is an eye that is not on the
@@ -894,7 +918,15 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player }
     // origin is the middle of the cube, not its surface — so the eye in the
     // mouth and the throat under it spent every version of this buried at the
     // core of the thing, a metre and a half behind the face they belong to.
-    place(face, buildEye({ radius: 0.13 * S, bare: true, seed: 6.6 }), -HALF * 0.14, HALF * 0.06, 0.12 * S);
+    // Off the mouth's own middle, so it stays in the mouth wherever the mouth
+    // is put rather than at a spot on the face the mouth used to be over.
+    place(
+      face,
+      buildEye({ radius: 0.15 * S, bare: true, seed: 6.6 }),
+      MOUTH_U,
+      mouthV + HALF * 0.04,
+      0.12 * S
+    );
 
     // The drawing's dark arch at the bottom of the mouth is not built. Against
     // a flat black opening there is nothing for it to be darker than, and a

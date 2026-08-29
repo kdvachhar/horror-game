@@ -672,6 +672,10 @@ export function createTallRoom({ scene, doorway, player }) {
     // A hair inside the wall planes, so it presses on them without the two
     // surfaces fighting over the same pixels.
     fit: { x: WIDTH / 2 - 0.02, z: DEPTH / 2 - 0.02 },
+    // The head of the way in, so the front mouth can line its top lip up with
+    // it. The cube is only ever seen through this hole, so the hole is what its
+    // face should be composed against.
+    entrance: doorway.height,
     player,
   });
 

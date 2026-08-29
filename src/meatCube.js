@@ -54,13 +54,21 @@ const PUPIL = '#050406';
 const NAIL = '#5b5344';
 
 /**
- * Edge of the cube, and how far the bottom teeth hold it off the floor.
+ * Edge of the cube, and how far its underside is pressed below the floor.
  *
- * It stands on them. The tips run a little under floor level rather than
- * resting exactly on it — a tooth stopping dead at y=0 is a prop set down on a
- * surface, and one pressed into it is gripping. Nothing below the floor is
- * visible from anywhere in the room, so the only thing this costs is the
- * pretence that the floor is soft.
+ * It sat on the tips of its bottom teeth with two metres of air under it. It
+ * does not now: it is down on the floor, and the floor is what the underside is
+ * set into rather than what it stands on.
+ *
+ * `SETTLE` is not the interesting number — the interesting one is worked out at
+ * build time. The underside is not flat, and dropping the cube until its
+ * *lowest* point met the floor would have left every hollow in it riding clear,
+ * a gap you can see under at the edges from thirty metres down the hall. So the
+ * cube is set down until its *highest* underside point is below floor level and
+ * everything else follows it under. That buries up to a metre of it, which
+ * costs nothing: the floor is opaque and you are always above it. It also
+ * buries the whole of the bottom face's mouth, which is the price of the thing
+ * touching the floor and is not recoverable — see the bottom of the drawings.
  *
  * Fourteen point six, which is bigger than the room is deep. It touches.
  *
@@ -93,7 +101,7 @@ const NAIL = '#5b5344';
  * same drawing and a different fact.
  */
 const SIZE = 14.6;
-const STAND = SIZE * 0.152;
+const SETTLE = 0.06;
 
 /**
  * The drawings were laid out on a 2.9m cube and every size below is in those
@@ -247,9 +255,31 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player }
   };
 
   const group = new THREE.Group();
-  group.position.set(x, STAND + HALF, z);
+  group.position.set(x, HALF, z);
   group.rotation.y = yaw;
   parent.add(group);
+
+  /**
+   * Set it down, by asking the surface where its underside actually is.
+   *
+   * Sampled rather than derived. The displacement is three sines multiplied
+   * together and its true maximum never lands on a real point of the surface,
+   * so the only honest way to know how high the underside rides is to walk the
+   * bottom face and look — the same lesson as sizing it to the walls, which was
+   * 0.145 short for exactly this reason.
+   */
+  {
+    let highest = -Infinity;
+    const STEPS = 48;
+    const probe = new THREE.Vector3();
+    for (let i = 0; i <= STEPS; i++) {
+      for (let j = 0; j <= STEPS; j++) {
+        probe.set(-HALF + (i / STEPS) * SIZE, -HALF, -HALF + (j / STEPS) * SIZE);
+        highest = Math.max(highest, skin(probe).y);
+      }
+    }
+    group.position.y = -highest - SETTLE;
+  }
 
   // Everything that breathes hangs off this, so the collider and the floor
   // position stay put while the body swells.
@@ -921,21 +951,35 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player }
   return {
     group,
     /** For the harness: what got built, and where. */
-    parts: { eyes: eyes.length, arms: arms.length, size: SIZE, stand: STAND },
+    parts: { eyes: eyes.length, arms: arms.length, size: SIZE, sunk: +(HALF - group.position.y).toFixed(3) },
 
     reset() {
       body.scale.setScalar(1);
+      body.position.y = 0;
       group.position.y = home;
     },
 
     update(delta) {
       const t = performance.now() / 1000;
 
-      // Breathing. One slow swell, and the whole thing rides up and down on it
-      // a little, because a body that changes size without moving is a balloon.
+      /**
+       * Breathing, and only upward.
+       *
+       * It used to swell on all three axes and ride up and down as well, which
+       * was right for something standing in the middle of a room. This one is
+       * wedged: swelling sideways drives the baked surface through the side
+       * walls it is already touching, and riding up lifts the underside clear of
+       * the floor and opens a gap you can see under from down the hall — the
+       * 0.016 on y alone was worth 0.117m at this size, which is not subtle.
+       *
+       * So it breathes on y, anchored at the bottom rather than the middle: the
+       * underside stays where it was set down and the swell goes up, into the
+       * one direction the room has any room in. Which is the correct thing for
+       * the shape to do anyway, and it took being this big to notice.
+       */
       const breath = Math.sin(t * 0.52);
-      body.scale.set(1 + breath * 0.012, 1 + breath * 0.016, 1 + breath * 0.012);
-      group.position.y = home + breath * 0.02;
+      body.scale.set(1, 1 + breath * 0.008, 1);
+      body.position.y = HALF * (body.scale.y - 1);
 
       // The eyes. All of them look at you, which is free — they are already
       // built as balls in sockets — and is the only thing this does that

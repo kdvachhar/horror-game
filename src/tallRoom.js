@@ -10,6 +10,7 @@ import {
   worldRepeat,
   UNITS_PER_TILE,
 } from './textures.js';
+import { createMeatCube } from './meatCube.js';
 import { showNote, setObjective } from './hud.js';
 
 /**
@@ -638,6 +639,29 @@ export function createTallRoom({ scene, doorway, player }) {
     // height swallows without noticing.
   }
 
+  // ------------------------------------------------------------------ meat ---
+
+  /**
+   * And the thing standing in it.
+   *
+   * Off the centre line and in the near half, so it is the first thing the room
+   * gives you and you meet its front face: you come in through fifteen metres of
+   * open wall and it is already looking at you, off to one side, rather than
+   * being discovered in the middle of the floor like an exhibit. Clear of the
+   * grating, clear of the way on, and inside the pool of the side lamp so it is
+   * lit from below and across — see meatCube.js for what is on which face.
+   */
+  const meat = createMeatCube({
+    parent: group,
+    colliders,
+    x: midX + 2.6,
+    z: midZ + 2.0,
+    // Turned a little off square to the room. Set true to the walls it reads as
+    // furniture, because nothing else in this building is at an angle.
+    yaw: -0.38,
+    player,
+  });
+
   /** Inside the room at all — the passage in does not count. */
   const contains = (x, z) => x > minX && x < maxX && z > minZ && z < maxZ;
 
@@ -647,6 +671,7 @@ export function createTallRoom({ scene, doorway, player }) {
     contains,
     /** How many openings ended up open, for the harness. */
     holes: holeCount,
+    meat,
 
     /** Just inside the door, looking across it. */
     get entry() {
@@ -660,6 +685,7 @@ export function createTallRoom({ scene, doorway, player }) {
 
     reset() {
       entered = false;
+      meat.reset();
     },
 
     update(delta) {
@@ -670,6 +696,8 @@ export function createTallRoom({ scene, doorway, player }) {
         fitting.lamp.intensity = fitting.watt * fitting.level;
         fitting.lens.material.color.setScalar(0.5 + 0.4 * fitting.level);
       }
+
+      meat.update(delta);
 
       if (!entered && contains(player.position.x, player.position.z)) {
         entered = true;

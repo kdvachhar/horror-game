@@ -41,6 +41,18 @@ export const PALETTE = {
 };
 
 /**
+ * Flesh. Its own palette because it shares nothing with the building: this is
+ * the only thing in the game that is not concrete, steel or paint.
+ */
+export const MEAT = {
+  muscle: '#2e120e',
+  fat: (a) => `rgba(146,116,88,${a})`,
+  bruise: (a) => `rgba(24,10,12,${a})`,
+  blood: (a) => `rgba(74,16,16,${a})`,
+  crease: (a) => `rgba(16,6,6,${a})`,
+};
+
+/**
  * World units covered by one texture tile. Applying this everywhere is what
  * makes the detail scale match from floor to wall to pillar — mismatched
  * density is the main thing that makes procedural surfaces look unrelated.
@@ -758,6 +770,158 @@ export function makeRockSurface(repeatX = 2, repeatY = 2) {
     normalStrength: 2.8,
     roughMin: 0.72,
     roughMax: 1.0,
+  });
+}
+
+/**
+ * Meat.
+ *
+ * The one surface in this game that is not a building material, and the only
+ * one whose job is to be unpleasant rather than to be ignored. Four layers, in
+ * the order you would see them on a cut of something: dark muscle, the paler
+ * fat marbling through it, the creases where it has folded and dried, and the
+ * pores.
+ *
+ * Kept very dark. Everything here is tone mapped at exposure 1.42, and meat
+ * authored at the red you actually picture comes out of that a hot glowing
+ * pink — this is two stops down from where the eye wants to put it, which is
+ * what makes it read as flesh in a dark room rather than as ham.
+ *
+ * The creases are drawn at this scale rather than as geometry because they are
+ * the same feature at every size on the thing: a metre-long fold across a face
+ * and a centimetre-long wrinkle beside an eye are one texture seen at two
+ * distances, and drawing them once means they never disagree.
+ */
+export function makeMeatSurface(repeatX = 1, repeatY = 1) {
+  const s = beginSurface(MEAT.muscle);
+
+  // Bruising and the darker blood-heavy patches, laid down first so everything
+  // else sits on top of them.
+  blotches(s.c, 34, MEAT.bruise, 170, 0.5);
+  blotches(s.c, 26, MEAT.blood, 120, 0.34);
+  blotches(s.c, 14, MEAT.crease, 70, 0.4);
+
+  // Fat, marbling through it. Branching, because a straight streak of fat reads
+  // as a paint stroke: each one walks a short way, forks, and both halves walk
+  // on thinner than the parent.
+  const streak = (x, y, angle, width, life) => {
+    if (life <= 0 || width < 0.7) return;
+    let px = x;
+    let py = y;
+    let a = angle;
+    const steps = 5 + Math.floor(Math.random() * 5);
+    const pts = [];
+    for (let i = 0; i < steps; i++) {
+      a += (Math.random() - 0.5) * 0.9;
+      px += Math.cos(a) * 9;
+      py += Math.sin(a) * 9;
+      pts.push([px, py, a]);
+    }
+    const path = (ctx) => {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      for (const [qx, qy] of pts) ctx.lineTo(qx, qy);
+      ctx.stroke();
+    };
+    wrapped(s.c, () => {
+      s.c.strokeStyle = MEAT.fat(0.15);
+      s.c.lineWidth = width;
+      s.c.lineCap = 'round';
+      path(s.c);
+    });
+    wrapped(s.h, () => {
+      s.h.strokeStyle = raise(0.12);
+      s.h.lineWidth = width;
+      s.h.lineCap = 'round';
+      path(s.h);
+    });
+    const [ex, ey, ea] = pts[pts.length - 1];
+    streak(ex, ey, ea + 0.6, width * 0.62, life - 1);
+    streak(ex, ey, ea - 0.6, width * 0.62, life - 1);
+  };
+  for (let i = 0; i < 8; i++) {
+    streak(Math.random() * SIZE, Math.random() * SIZE, Math.random() * Math.PI * 2, 4, 2);
+  }
+
+  // The creases. Long, slack, roughly horizontal curves — the folds a heavy
+  // soft thing settles into. Carved deep, because on a lump this size the
+  // normal map is doing most of the work of saying it is not a painted box.
+  for (let i = 0; i < 7; i++) {
+    const y = Math.random() * SIZE;
+    const amp = 18 + Math.random() * 46;
+    const period = 120 + Math.random() * 220;
+    const phase = Math.random() * Math.PI * 2;
+    const lean = (Math.random() - 0.5) * 0.5;
+    const width = 4 + Math.random() * 7;
+    const path = (ctx) => {
+      ctx.beginPath();
+      for (let x = -20; x <= SIZE + 20; x += 8) {
+        const py = y + Math.sin(x / period * Math.PI * 2 + phase) * amp + x * lean;
+        x === -20 ? ctx.moveTo(x, py) : ctx.lineTo(x, py);
+      }
+      ctx.stroke();
+    };
+    wrapped(s.c, () => {
+      s.c.strokeStyle = MEAT.crease(0.5);
+      s.c.lineWidth = width;
+      path(s.c);
+    });
+    wrapped(s.h, () => {
+      s.h.strokeStyle = carve(0.5);
+      s.h.lineWidth = width;
+      path(s.h);
+    });
+    // A highlight riding just above each crease: the lip of the fold catching
+    // light is what makes it a fold rather than a drawn line.
+    wrapped(s.c, () => {
+      s.c.strokeStyle = MEAT.fat(0.07);
+      s.c.lineWidth = width * 0.8;
+      s.c.translate(0, -width);
+      path(s.c);
+    });
+    wrapped(s.h, () => {
+      s.h.strokeStyle = raise(0.1);
+      s.h.lineWidth = width * 0.8;
+      s.h.translate(0, -width);
+      path(s.h);
+    });
+  }
+
+  // Pores.
+  for (let i = 0; i < 420; i++) {
+    const x = Math.random() * SIZE;
+    const y = Math.random() * SIZE;
+    const r = 0.7 + Math.random() * 2.4;
+    wrapped(s.c, () => {
+      s.c.fillStyle = MEAT.crease(0.3);
+      s.c.beginPath();
+      s.c.arc(x, y, r, 0, Math.PI * 2);
+      s.c.fill();
+    });
+    wrapped(s.h, () => {
+      s.h.fillStyle = carve(0.5);
+      s.h.beginPath();
+      s.h.arc(x, y, r, 0, Math.PI * 2);
+      s.h.fill();
+    });
+  }
+
+  grain(s.c, 10);
+  grain(s.h, 16);
+
+  // Wet, and unevenly so. Meat that is uniformly shiny is plastic; the fat
+  // catches and the muscle does not, which is what roughInvert buys here —
+  // the pale streaks come out as the glossy ones.
+  // Damp rather than wet. The first pass came back at roughness 0.3 with the
+  // normals at 3.2 and read as crumpled foil in a dark room: every crease was
+  // a specular line and the albedo never got a look in. Meat is mostly matte
+  // with the fat catching — a narrow range, high, with the invert putting the
+  // shine on the pale streaks only.
+  return finish(s, repeatX, repeatY, {
+    normalStrength: 0.75,
+    roughMin: 0.58,
+    roughMax: 0.94,
+    roughInvert: true,
   });
 }
 

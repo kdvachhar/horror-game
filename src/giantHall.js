@@ -30,6 +30,11 @@ import { showNote, setObjective } from './hud.js';
  * the small part, and it says it by being forty-eight metres of somewhere you
  * have to cross on foot.
  *
+ * The far end of it is open now — no door, no passage, just the hall stopping
+ * and the tall room starting — so the walk has something at the end of it that
+ * gets bigger as you come up to it rather than a lit rectangle that stays the
+ * same size until you are through it.
+ *
  * Which is why the door you arrive by is left plainly visible in the wall behind
  * you and why that wall is otherwise bare all the way up — the one
  * readable object in a flat expanse is what gives the expanse its size, and a
@@ -193,9 +198,24 @@ export function createGiantHall({ scene, doorway, player }) {
     high: doorway.z + doorway.width / 2,
     height: doorway.height,
   };
-  const OUT = { x: midX, width: 2.4, height: 2.8 };
-  const outLow = OUT.x - OUT.width / 2;
-  const outHigh = OUT.x + OUT.width / 2;
+  /**
+   * The way out, which is not a door any more: it is the whole end of the hall.
+   *
+   * It was a 2.4 by 2.8 hole with a lintel and a lined passage behind it, and
+   * the hall stopped at a wall you went through. It does not stop now. The end
+   * wall is gone, the passage with it, and the far end of the hall is open for
+   * its full fifteen metres and its full twelve — the tall room's floor is this
+   * floor carried on, its side walls are these side walls carried on, and the
+   * only thing that changes at the join is that the ceiling stops.
+   *
+   * Which is the entire reason to do it. Twelve metres of ceiling ending in mid
+   * air with thirty-four metres of room above it does something a doorway
+   * cannot: you do not arrive somewhere tall, the tall part opens over your head
+   * while you are still walking. A door would have given you a rectangle to
+   * frame it in and a threshold to cross, and both of those are ways of being
+   * told about a room before you are in it.
+   */
+  const OUT = { x: midX, width: WIDTH, height: HEIGHT };
 
   // The near wall, in three pieces round the door you come in by.
   for (const [w, h, pz, py] of [
@@ -228,24 +248,13 @@ export function createGiantHall({ scene, doorway, player }) {
   }
   solid(far - 1, far, foot - 1, head + 1, {});
 
-  // The end wall you are walking towards, in four pieces round the opening at
-  // the far end.
-  for (const [w, h, px, py] of [
-    [outLow - far, HEIGHT, (far + outLow) / 2, HEIGHT / 2],
-    [near - outHigh, HEIGHT, (outHigh + near) / 2, HEIGHT / 2],
-    [OUT.width, HEIGHT - OUT.height, OUT.x, (HEIGHT + OUT.height) / 2],
-  ]) {
-    if (w <= 0 || h <= 0) continue;
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(w, h), wallOf(w, h));
-    wall.position.set(px, py, foot);
-    group.add(wall);
-    wall.receiveShadow = true;
-  }
-  solid(far - 1, outLow, foot - 1, foot, {});
-  solid(outHigh, near + 1, foot - 1, foot, {});
-  // And the lintel over it, the same arrangement as the door you came in by:
-  // solid only to somebody whose head is above the opening.
-  solid(outLow, outHigh, foot - 1, foot, { bottom: OUT.height });
+  // There is no end wall. It used to be built here in three pieces round a
+  // door-sized hole, with a lintel over it; the opening is the full section of
+  // the hall now, so all three pieces have no width or no height left and there
+  // is nothing to build. No collider either — the one thing that must not be at
+  // the foot of this hall is anything to walk into. What closes the hall off at
+  // this end is the tall room's own header, twelve metres up, which is that
+  // room's business and not this one's.
 
   // And the end wall behind you, whole.
   {
@@ -359,16 +368,12 @@ export function createGiantHall({ scene, doorway, player }) {
     [midX - 3.0, LAMP_Y, doorway.z - 16.2, 130, 40],
     [midX + 3.0, LAMP_Y, doorway.z - 28.2, 125, 40],
     [midX - 3.0, LAMP_Y, doorway.z - 40.2, 120, 40],
-    // And one just inside the way out. It is doing a third job again — it is
-    // the only thing in the hall that says where you are going before you start
-    // climbing.
-    //
-    // Inside the throat rather than on the wall beside the opening. A lit
-    // passage mouth is a rectangle; a lamp washing the wall around a dark hole
-    // is a bright patch of wall with nothing readable in the middle of it, and
-    // at this distance that is the difference between somewhere to walk to and
-    // no reason to set off.
-    [OUT.x, 2.0, foot - 1.1, 45, 24, OUT.height],
+    // There used to be a fifth, inside the throat of the passage, and it was
+    // the only thing in the hall you could aim at. The passage is gone and so is
+    // it: what you aim at now is the tall room's own light coming back through
+    // an opening fifteen metres wide, which is a better answer to the same
+    // problem and one this renderer does not have to shade every fragment
+    // against.
   ]) {
     const housing = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.34, 0.5), trimMat);
     housing.position.set(fx, fy + 0.22, fz);
@@ -421,49 +426,19 @@ export function createGiantHall({ scene, doorway, player }) {
   }
 
   /**
-   * What is through the opening at the end: a lined passage, with the tall room
-   * on the far side of it.
+   * What is through the opening at the end: the tall room, directly, with
+   * nothing in between.
    *
-   * It was capped for one commit — a dark plane across the end and a collider
-   * behind it, the way the staff door's was before this hall was built on it.
-   * tallRoom.js is built on the far end now, off `wayOn`, so the cap is gone and
-   * that room's near wall is what you come out into. Leaving it would have put a
-   * black plane in the same place as a wall with a doorway in it: two coincident
-   * surfaces fighting over the same pixels, with the way on behind them.
-   *
-   * Lit, unlike that one, and for a reason rather than by accident — see the
-   * lamp inside it above. The staff door's passage had to be a dark throat
-   * because the whole of its job was to hide what was on the other side until
-   * you were standing in it. This one is the opposite: it is the only thing in
-   * the whole hall you can aim at, and you can see it from the door you come in
-   * by.
+   * There was a 3.2 metre lined passage here, and before that a cap across the
+   * back of it. Both are gone. A passage between two rooms is a decompression —
+   * it takes the first room away, holds you in the dark for a second and then
+   * gives you the second one, and it is the right thing when what is coming has
+   * to be hidden until you are standing in it, which is what the staff door's
+   * throat is for. It is the wrong thing here, because what is coming is height,
+   * and height is the one thing you cannot be handed in a 2.8 metre tunnel. The
+   * rooms are simply adjacent now, and the hall's ceiling running out over your
+   * head is the transition.
    */
-  const OUT_DEPTH = 3.2;
-  const outEnd = foot - OUT_DEPTH;
-  {
-    const liner = new THREE.MeshStandardMaterial({ color: '#33352f', roughness: 0.94 });
-    const throat = foot - OUT_DEPTH / 2;
-    for (const [w, h, px, py, rx, ry] of [
-      [OUT_DEPTH, OUT.height, outLow, OUT.height / 2, 0, Math.PI / 2],
-      [OUT_DEPTH, OUT.height, outHigh, OUT.height / 2, 0, -Math.PI / 2],
-      [OUT.width, OUT_DEPTH, OUT.x, OUT.height, Math.PI / 2, 0],
-      [OUT.width, OUT_DEPTH, OUT.x, 0.004, -Math.PI / 2, 0],
-    ]) {
-      const panel = new THREE.Mesh(new THREE.PlaneGeometry(w, h), liner);
-      panel.position.set(px, py, throat);
-      panel.rotation.set(rx, ry, 0);
-      panel.receiveShadow = true;
-      group.add(panel);
-    }
-    // The sides only. Not the floor — the passage is at the hall's own level and
-    // the hall's floor is the world's, so there is nothing to carry through. Not
-    // the top either: a collider has no underside, and a box over the passage
-    // would be a ceiling you could not walk under. And not the end, which is a
-    // doorway into the tall room now rather than the back of a hole.
-    solid(outLow - 0.6, outLow, outEnd, foot, {});
-    solid(outHigh, outHigh + 0.6, outEnd, foot, {});
-  }
-
   /** Inside the hall at all. The passage in does not count. */
   const contains = (x, z) => x < near && x > far && z > foot && z < head;
 
@@ -485,11 +460,13 @@ export function createGiantHall({ scene, doorway, player }) {
     },
 
     /**
-     * The far end of the passage at the top, for whatever gets built on it.
-     * Handed over in the same terms as every other opening in this game.
+     * The open end, for whatever gets built on it. Handed over in the same terms
+     * as every other opening in this game — it is just that this one is the size
+     * of the room. Anything built on it has to close its own top: it is being
+     * given a fifteen by twelve hole, not a door.
      */
     get wayOn() {
-      return { x: OUT.x, y: 0, z: outEnd, width: OUT.width, height: OUT.height };
+      return { x: OUT.x, y: 0, z: foot, width: OUT.width, height: OUT.height };
     },
 
     reset() {

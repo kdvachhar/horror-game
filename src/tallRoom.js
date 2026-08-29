@@ -15,15 +15,28 @@ import { showNote, setObjective } from './hud.js';
 /**
  * The tall room, and the holes in the walls of it.
  *
- * Fourteen metres square and thirty-four high, which is a room you cannot see
- * the top of — the hall before it was twenty and you could just about make out
- * its ceiling; here the light gives out somewhere around twelve and there is
- * another twenty-two metres of it above that which you have to take on trust.
+ * Fifteen by fourteen and thirty-four high, which is a room you cannot see the
+ * top of — the light gives out somewhere around twelve and there is another
+ * twenty-two metres of it above that which you have to take on trust.
+ *
+ * You do not come into it through a door. The hall's far end is simply open, the
+ * whole fifteen metres of it and the whole twelve, and this room's floor and
+ * side walls are that hall's carried straight on. The only thing that changes at
+ * the join is that the ceiling stops: you walk out from under twelve metres of
+ * slab and there is thirty-four metres of nothing over you, and there was no
+ * threshold and no rectangle to see it through first.
+ *
+ * That is worth more here than anywhere else in the game so far. Every other
+ * room in this building is entered through a hole about the size of a person,
+ * which is a way of being told about a room before you are in it — the doorway
+ * frames it, and a framed thing is a thing you have already begun to take in.
+ * The one room whose whole content is how big it is above your head is the one
+ * room that must not be framed.
  *
  * And every wall, on six courses going up, is full of rectangular openings.
  * They are 1.7 by 2.3 — bigger than a door and the wrong shape for one — set on
  * a regular pitch of 2.7, in five columns per wall, with some of them filled in.
- * Ninety-odd of them in a room with two doors.
+ * Ninety-odd of them in a room with one door and one open end.
  *
  * They are not holes. Each one has a short platform sitting in it, on a pair of
  * rails that run out to the lip and stop a hand's width proud of the wall, and
@@ -57,8 +70,17 @@ import { showNote, setObjective } from './hud.js';
  * under than irregular — irregular is a ruin, and a ruin is nobody's fault.
  */
 
-/** Fourteen square and thirty-four up. */
-const WIDTH = 14;
+/**
+ * Fourteen deep and thirty-four up. The width is not written here.
+ *
+ * The hall's way out is the whole end of the hall — fifteen metres of it — and
+ * this room's near wall is that opening, so the width has to be the hall's or
+ * the two would not line up and there would be a step in the side walls at the
+ * join. It is read off the opening handed over, the same way the room's position
+ * is, because a number that must equal another number should never be typed
+ * twice. See the top of controlRoom.js for why every room in here is built this
+ * way round.
+ */
 const DEPTH = 14;
 const HEIGHT = 34;
 
@@ -222,6 +244,7 @@ export function createTallRoom({ scene, doorway, player }) {
   const solid = (minX, maxX, minZ, maxZ, extra) =>
     colliders.push({ minX, maxX, minZ, maxZ, ...extra });
 
+  const WIDTH = doorway.width;
   const maxZ = doorway.z;
   const minZ = maxZ - DEPTH;
   const minX = doorway.x - WIDTH / 2;
@@ -344,6 +367,12 @@ export function createTallRoom({ scene, doorway, player }) {
         // assumed to fit, because the day the room stops being square is the day
         // two of these walk off the end of it.
         if (Math.abs(column) + HOLE.wide / 2 > span / 2 - 0.5) return;
+        // And not where there is no wall to put one in. The near wall's opening
+        // is the full width and full height of the hall now, so the bottom three
+        // courses of it would be rails and platforms hanging in mid-air over the
+        // hall's mouth. Skipped before the count, because these are not filled
+        // openings — they do not exist.
+        if (door && sill < door.h && Math.abs(column - door.u) < (door.w + HOLE.wide) / 2) return;
         if (!isOpen(index, course, i)) {
           holeCount.filled++;
           return;
@@ -457,8 +486,14 @@ export function createTallRoom({ scene, doorway, player }) {
   const inHigh = doorway.x + doorway.width / 2;
   const outLow = OUT.x - OUT.width / 2;
   const outHigh = OUT.x + OUT.width / 2;
-  solid(minX - 1, inLow, maxZ, maxZ + 1, {});
-  solid(inHigh, maxX + 1, maxZ, maxZ + 1, {});
+  // The near wall is all header. The opening is the full width, so the returns
+  // either side of it have nothing left to be and are not built; what is left is
+  // the piece above the hall's ceiling, which is solid only to somebody whose
+  // head is over twelve metres and is therefore solid to nobody. It is here so
+  // that the wall means the same thing to the collision code as it does to the
+  // eye, and so that the day something in this room can get up there, it stops.
+  if (inLow > minX) solid(minX - 1, inLow, maxZ, maxZ + 1, {});
+  if (inHigh < maxX) solid(inHigh, maxX + 1, maxZ, maxZ + 1, {});
   solid(inLow, inHigh, maxZ, maxZ + 1, { bottom: doorway.height });
   solid(minX - 1, outLow, minZ - 1, minZ, {});
   solid(outHigh, maxX + 1, minZ - 1, minZ, {});
@@ -514,13 +549,25 @@ export function createTallRoom({ scene, doorway, player }) {
    *
    * Wall brackets rather than the hall's pendants. A fitting hung on a rod from
    * a slab you cannot see is a fitting hanging from nothing.
+   *
+   * All three are on the side walls. There is no near wall to hang one on below
+   * twelve metres any more, and that turns out to matter for the approach: the
+   * hall's own last lamp is thirty-odd metres back, so what you can see through
+   * the open end as you walk up to it is this room's light on this room's walls
+   * — light with no visible source in it, coming from a room you cannot see the
+   * shape of yet.
    */
   const trimMat = new THREE.MeshStandardMaterial({ color: TRIM, roughness: 0.7, metalness: 0.3 });
   const fittings = [];
   for (const [fx, fy, fz, watt, range, ry] of [
     [maxX - 0.5, 5.6, midZ + 3.4, 95, 26, -Math.PI / 2],
     [minX + 0.5, 5.6, midZ - 3.4, 95, 26, Math.PI / 2],
-    [midX + 2.6, 11.2, maxZ - 0.5, 70, 30, Math.PI],
+    // This one used to hang on the near wall at eleven metres. That wall is a
+    // hole now for its whole bottom twelve, so it has come round onto the side
+    // wall by the entrance — same height, same job of lighting the courses over
+    // your head as you come in, on a wall that exists. It is also the first
+    // light in the room you see, from the hall, through the opening.
+    [minX + 0.5, 11.2, maxZ - 2.6, 70, 30, Math.PI / 2],
   ]) {
     const bracket = new THREE.Group();
     bracket.position.set(fx, fy, fz);

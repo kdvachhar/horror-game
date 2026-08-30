@@ -8,6 +8,7 @@ import {
   worldRepeat,
   metalRepeat,
 } from './textures.js';
+import { createRockfall, BREACH } from './rockfall.js';
 import { showNote, setObjective } from './hud.js';
 
 /**
@@ -217,9 +218,29 @@ export function createGiantHall({ scene, doorway, player }) {
    */
   const OUT = { x: midX, width: WIDTH, height: HEIGHT };
 
-  // The near wall, in three pieces round the door you come in by.
+  /**
+   * Where the wall came down, and which wall.
+   *
+   * The right-hand one as you walk down the hall, which is the wall the door
+   * you came in by is in — walking -z your right is +x, and that is `near`.
+   * It was on the other one for a commit and that was the wrong side of the
+   * room: the hall has one direction and the thing worth finding in it should
+   * be on the hand you are already looking at.
+   *
+   * And down at the last bay, three metres short of the end. Next to the cube,
+   * which is the point of it being there at all — you walk the whole length of
+   * this hall, find the way on filled with an animal, turn round, and it is the
+   * first thing you are looking at.
+   */
+  const COLLAPSE = { z: doorway.z - 40.2 };
+  const collapseLow = COLLAPSE.z - BREACH.width / 2;
+  const collapseHigh = COLLAPSE.z + BREACH.width / 2;
+
+  // The near wall: two holes in it now, so five pieces.
   for (const [w, h, pz, py] of [
-    [IN.low - foot, HEIGHT, (foot + IN.low) / 2, HEIGHT / 2],
+    [collapseLow - foot, HEIGHT, (foot + collapseLow) / 2, HEIGHT / 2],
+    [IN.low - collapseHigh, HEIGHT, (collapseHigh + IN.low) / 2, HEIGHT / 2],
+    [BREACH.width, HEIGHT - BREACH.height, COLLAPSE.z, (HEIGHT + BREACH.height) / 2],
     [head - IN.high, HEIGHT, (IN.high + head) / 2, HEIGHT / 2],
     [doorway.width, HEIGHT - IN.height, IN.z, (HEIGHT + IN.height) / 2],
   ]) {
@@ -230,15 +251,26 @@ export function createGiantHall({ scene, doorway, player }) {
     wall.receiveShadow = true;
     group.add(wall);
   }
-  solid(near, near + 1, foot - 1, IN.low, {});
+  solid(near, near + 1, foot - 1, collapseLow, {});
+  solid(near, near + 1, collapseHigh, IN.low, {});
   solid(near, near + 1, IN.high, head + 1, {});
+  // The breach's lintel. The opening's own box is the rockfall's, because what
+  // is in the opening is what decides who gets through it.
+  solid(near, near + 1, collapseLow, collapseHigh, { bottom: BREACH.height });
   // And the lintel over it: solid, but only to somebody whose head is above the
   // opening. `bottom` is what a collider has instead of a height — see
   // resolveCollisions. Standing on the floor you pass under it; jumping in the
   // doorway you hit it, which is what a lintel is.
   solid(near, near + 1, IN.low, IN.high, { bottom: IN.height });
 
-  // The far long wall, whole: nothing is cut into it.
+  /**
+   * The far long wall, whole.
+   *
+   * Nothing is cut into it. The hall is a walk and a walk wants one thing at
+   * the end of it and one thing to find on the way — both of those are on the
+   * other side now, so this one goes back to being what it is best at, which is
+   * forty-eight metres of nothing to look at.
+   */
   {
     const wall = new THREE.Mesh(new THREE.PlaneGeometry(LENGTH, HEIGHT), wallOf(LENGTH, HEIGHT));
     wall.position.set(far, HEIGHT / 2, midZ);
@@ -439,6 +471,26 @@ export function createGiantHall({ scene, doorway, player }) {
    * rooms are simply adjacent now, and the hall's ceiling running out over your
    * head is the transition.
    */
+  /**
+   * And what is in that hole: a staff door on the floor and the rock that put
+   * it there, with a gap in the heap the bucket fits through and you do not.
+   *
+   * Built here rather than in the wall above it because the wall's job is to
+   * have a hole and the collapse's job is to fill it — see rockfall.js, which
+   * owns the opening's collider for the same reason the control room owns its
+   * door's.
+   */
+  const collapse = createRockfall({
+    scene,
+    parent: group,
+    colliders,
+    x: near,
+    z: COLLAPSE.z,
+    // The hall is at -x of this wall, so everything the collapse measures out
+    // from it goes the other way.
+    side: -1,
+  });
+
   /** Inside the hall at all. The passage in does not count. */
   const contains = (x, z) => x < near && x > far && z > foot && z < head;
 
@@ -446,6 +498,7 @@ export function createGiantHall({ scene, doorway, player }) {
     group,
     colliders,
     contains,
+    collapse,
     /**
      * Just inside the door, looking down the length of it.
      *

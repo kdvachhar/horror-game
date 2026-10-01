@@ -1338,6 +1338,17 @@ renderer.setAnimationLoop((time) => {
 if (import.meta.env.DEV) {
   window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, corpseHall, controlRoom, giantHall, tallRoom, wakeUp, possession, painter, monologue, death };
   window.game.__tvLines = TV_LINES;
+  /**
+   * The scene jumps, so a harness can walk all fifteen of them.
+   *
+   * The debug panel already renders this list; exposing it means the jumps
+   * can be driven without clicking, which is what `npm run check:scenes`
+   * does. Every one of them runs `resetSequences`, and that is a
+   * hand-maintained list of every stateful module in the game — correct
+   * today, and exactly the sort of list that goes quietly out of date when a
+   * room is added.
+   */
+  window.game.__scenes = SCENES;
   // The library itself, so a harness can raycast the scene and name what it
   // hit. Everything else on this handle is a thing the game built; this is
   // the one entry that is just a way to ask questions about them.

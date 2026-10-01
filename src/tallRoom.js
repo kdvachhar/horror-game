@@ -14,6 +14,7 @@ import {
 import { createMeatCube } from './meatCube.js';
 import { showNote, setObjective } from './hud.js';
 import { playSpikeGrind, playGurgle, playMeatLunge, playScreech } from './audio.js';
+import { planClimb, refugeLane } from './climbLanes.js';
 
 /**
  * The tall room, and the holes in the walls of it.
@@ -744,21 +745,6 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
   const hubU = (index) =>
     index === 0 ? midX - hub.x : index === 1 ? hub.x - midX : index === 2 ? hub.z - midZ : midZ - hub.z;
   /**
-   * A triangle wave, not a modulo.
-   *
-   * The two flights of a course and the flight of the course above it have to
-   * be on *adjacent* columns: that is the step across at the wall and the jump
-   * across in the middle, and at 2.7 apart both are something a body can do.
-   * A wrapping counter gets that right four times out of five and then jumps
-   * from column 4 to column 0, which is 10.8 metres of air. Bouncing off the
-   * ends instead means every consecutive pair is one column apart, always.
-   */
-  const bounce = (n, span) => {
-    const period = 2 * (span - 1);
-    const r = ((n % period) + period) % period;
-    return r < span ? r : period - r;
-  };
-  /**
    * Which wall owns which stretch of the climb, and in what order.
    *
    * Every wall used to carry a complete ladder from the floor to the hub,
@@ -806,43 +792,21 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
    * this room builds deliberately rather than a gap anybody has to cross. So
    * the long band goes there and all three real handovers stay short.
    */
-  const BANDS = (() => {
-    const out = [];
-    let at = 0;
-    ORDER.forEach((wall, k) => {
-      const left = ORDER.length - k;
-      const size = left === 1 ? SILLS.length - at : Math.floor((SILLS.length - at) / left);
-      out[wall] = { from: at, to: at + size - 1, step: k };
-      at += size;
-    });
-    return out;
-  })();
-  const owns = (index, course) => course >= BANDS[index].from && course <= BANDS[index].to;
-
   /**
-   * Where a wall's lane walk starts: the middle column, every time.
+   * The lane plan, which is arithmetic and lives in climbLanes.js.
    *
-   * The bounce is re-based on the band rather than run from course zero, and
-   * the reason is the handover. A band's first inward flight is the thing the
-   * band below has to reach, and the middle column is the one place on a wall
-   * that is nearest to every adjacent wall's middle — measured, not guessed:
-   * middle to middle across a corner is 1.22m and the next best pairing is
-   * 2.03m. Starting every band at the same column makes every handover the
-   * short one.
-   *
-   * It only fixes one end. A band's lanes are a walk of 2n entries stepping
-   * one column at a time, so getting back to where it started would take an
-   * odd number of steps to undo an even displacement, which cannot be done —
-   * the last outward flight of a band is always one column off the middle,
-   * and always 2.03m from the next band's first. That is what the landings
-   * are for; see them below.
+   * Out of this file because it is the only part of the room with no geometry
+   * in it, which makes it the only part that can be tested in a millisecond
+   * rather than behind a ninety-second headless boot — and it is where the two
+   * worst bugs in the room came from. See test/lanes.test.js.
    */
-  const LANE_START = 2;
-  const rung = (index, course) => (course - BANDS[index].from) * 2 + LANE_START;
+  const PLAN = planClimb({
+    order: ORDER,
+    courseCount: SILLS.length,
+    columnCount: COLUMNS.length,
+  });
+  const { bands: BANDS, owns, laneIn, laneOut } = PLAN;
 
-  /** The flight you walk in along, and the one you walk out along. */
-  const laneIn = (index, course) => bounce(rung(index, course), COLUMNS.length);
-  const laneOut = (index, course) => bounce(rung(index, course) + 1, COLUMNS.length);
   /*
    * There was a `laneHole` here that picked a column for the refuge — one
    * clear of the two the stair was using, so the hole sat beside the flights
@@ -1043,7 +1007,7 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
         if (!owns(index, course)) return null;
         // The flight you come up. The socket below is this same column, and
         // the refuge starts where that socket's head stops.
-        const col = laneIn(index, course);
+        const col = refugeLane(PLAN, index, course);
         const u = COLUMNS[col];
         const v = sill + HOLE.high;
         if (Math.abs(u) + REFUGE.wide / 2 > span / 2 - 0.5) return null;
@@ -1817,9 +1781,10 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
    * first inward flight finish at the same height — that falls out of the
    * arithmetic, because half a course up from one course is half a course
    * down from the next — but they finish 2.03m apart, and they cannot be
-   * made to finish closer. See LANE_START: every band starts its lane walk
-   * on the middle column, which is the near one, and no walk of 2n entries
-   * stepping a column at a time can come back to the column it started on.
+   * made to finish closer. See LANE_START in climbLanes.js: every band
+   * starts its lane walk on the middle column, which is the near one, and no
+   * walk of 2n entries stepping a column at a time can come back to the
+   * column it started on.
    * The player's standing jump is about 2.1. Three centimetres of margin
    * over a forty metre drop is not a design, it is a dare.
    *

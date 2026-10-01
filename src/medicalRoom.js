@@ -1239,6 +1239,25 @@ export function createMedicalRoom(scene) {
     { minX: cx - width / 2 - t, maxX: cx - width / 2, minZ: cz - depth / 2 - t, maxZ: cz + depth / 2 },
     { minX: cx + width / 2, maxX: cx + width / 2 + t, minZ: cz - depth / 2 - t, maxZ: cz + depth / 2 },
     { minX: cx - width / 2 - t, maxX: cx + width / 2 + t, minZ: cz - depth / 2 - t, maxZ: cz - depth / 2 },
+    /**
+     * And the lids: the ward, and the two rectangles of the store room's L.
+     *
+     * In world terms, which for this room means offset by `MEDICAL.center` —
+     * the group carries that translation and `HALLWAY`/`STORE` are written in
+     * its local frame, so their numbers are small and their colliders are not.
+     *
+     * `ceiling` is read by the player's head clamp; `bottom` at the same
+     * height keeps each one out of the sideways collision, which would
+     * otherwise see a box with no `top` and treat the whole room as solid.
+     */
+    { minX: cx - width / 2, maxX: cx + width / 2, minZ: cz - depth / 2, maxZ: cz + depth / 2,
+      bottom: height, ceiling: height },
+    { minX: cx + HALLWAY.minX, maxX: cx + HALLWAY.maxX,
+      minZ: cz + HALLWAY.near, maxZ: cz + HALLWAY.far,
+      bottom: STORE.height, ceiling: STORE.height },
+    { minX: cx + STORE.minX, maxX: cx + STORE.maxX,
+      minZ: cz + STORE.near, maxZ: cz + STORE.far,
+      bottom: STORE.height, ceiling: STORE.height },
   ];
 
   // The arms, out of the wall either side of the television and not attached to

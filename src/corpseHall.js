@@ -253,6 +253,25 @@ export function createCorpseHall({ scene, passage, player }) {
   ceiling.position.set(axis, HEIGHT, midZ);
   group.add(ceiling);
 
+  /**
+   * And the ceiling as a thing your head stops against.
+   *
+   * `ceiling` is read by the player's head clamp and by nothing else;
+   * `bottom` at the same height keeps it out of the way of the sideways
+   * collision, which would otherwise treat a slab with no `top` as solid at
+   * every height and make the whole room impassable. See `ceilingHeight` in
+   * player.js for why a ceiling has to say it is one rather than be inferred
+   * from having an underside.
+   */
+  colliders.push({
+    minX: (axis) - (HALF * 2) / 2,
+    maxX: (axis) + (HALF * 2) / 2,
+    minZ: (midZ) - (LENGTH) / 2,
+    maxZ: (midZ) + (LENGTH) / 2,
+    bottom: HEIGHT,
+    ceiling: HEIGHT,
+  });
+
   const staffZ = near + LENGTH * STAFF.along;
   const staffLow = staffZ - EMPLOYEE_OPENING.width / 2;
   const staffHigh = staffZ + EMPLOYEE_OPENING.width / 2;

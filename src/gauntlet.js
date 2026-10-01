@@ -696,6 +696,25 @@ export function createGauntlet({ scene, onCaught }) {
   ceiling.position.set(midX, HEIGHT, AXIS);
   group.add(ceiling);
 
+  /**
+   * And the ceiling as a thing your head stops against.
+   *
+   * `ceiling` is read by the player's head clamp and by nothing else;
+   * `bottom` at the same height keeps it out of the way of the sideways
+   * collision, which would otherwise treat a slab with no `top` as solid at
+   * every height and make the whole room impassable. See `ceilingHeight` in
+   * player.js for why a ceiling has to say it is one rather than be inferred
+   * from having an underside.
+   */
+  colliders.push({
+    minX: (midX) - (length) / 2,
+    maxX: (midX) + (length) / 2,
+    minZ: (AXIS) - (HALF * 2) / 2,
+    maxZ: (AXIS) + (HALF * 2) / 2,
+    bottom: HEIGHT,
+    ceiling: HEIGHT,
+  });
+
   // The two long walls. A plane turned about y has its width running in x, so
   // these are as wide as the hall is long.
   for (const side of [PLAYER_SIDE, FRIEND_SIDE]) {

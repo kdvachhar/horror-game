@@ -1082,6 +1082,32 @@ function buildWallColliders() {
   // in the collider is a mistake this project has now made twice.
   add(-bw - t, BACK_DOOR.x - halfBack, far - share, far + share);
   add(BACK_DOOR.x + halfBack, bw + thin, far - share, far + share);
+
+  /**
+   * And the two ceilings.
+   *
+   * Here rather than beside their meshes for the same reason the paint tin is
+   * here: this is the function whose boxes are torn down and rebuilt with the
+   * shell, and a ceiling registered in `buildShell` would survive a resize and
+   * leave the old room's lid hanging over the new one.
+   *
+   * Neither is reachable — 22 and 8 against a jump that peaks at 1.31 — and
+   * they are built anyway, because "the ceilings collide" is a rule about the
+   * building and not a list of the ones you happen to be able to touch.
+   */
+  const lid = (minX, maxX, minZ, maxZ, y) => {
+    const box = { minX, maxX, minZ, maxZ, bottom: y, ceiling: y };
+    colliders.push(box);
+    shellColliders.push(box);
+  };
+  lid(-width / 2, width / 2, -depth / 2, depth / 2, ROOM.height);
+  lid(
+    -BACK_ROOM.width / 2,
+    BACK_ROOM.width / 2,
+    DOOR.z - BACK_ROOM.depth,
+    DOOR.z,
+    BACK_ROOM.height
+  );
 }
 
 /**

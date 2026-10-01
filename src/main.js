@@ -28,6 +28,7 @@ import {
   insideBackRoom,
 } from './config.js';
 import { createPlayer } from './player.js';
+import { validateColliders } from './collision.js';
 import { createWallText } from './wallText.js';
 import { createInteractions } from './interaction.js';
 import { setObjective, showPrompt, showNote } from './hud.js';
@@ -300,6 +301,18 @@ const tallRoom = createTallRoom({
   death,
 });
 room.colliders.push(...tallRoom.colliders);
+
+/**
+ * Every room has now put its boxes in, so this is the one moment the world is
+ * complete and nothing has moved yet.
+ *
+ * Dev only, and a warning rather than a throw: a bad collider is something to
+ * fix, not a reason the game should refuse to start. The rule that earns this
+ * is the unknown-field one — a collider carrying a key no reader looks at does
+ * not fail, it quietly means something else, which is what `ceiling` was for
+ * two days. See collision.js.
+ */
+if (import.meta.env.DEV) validateColliders(room.colliders);
 
 /**
  * And the wire between the two of them, which is the only thing either room

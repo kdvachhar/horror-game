@@ -164,3 +164,77 @@ export function ceilingHeight(colliders, body, at) {
   }
   return lowest;
 }
+
+/**
+ * ── and the schema, enforced ──────────────────────────────────────────────
+ *
+ * The fields above are a tagged union held together by prose. That was
+ * survivable while two files read it and both were written by the same person
+ * in the same week; it stops being survivable the moment a field is renamed,
+ * because a collider with a key nobody reads does not fail — it silently
+ * means something else. `ceiling` was exactly that for two days: thirteen
+ * boxes carrying a field that one body honoured and the other had never heard
+ * of.
+ *
+ * So: a known-key list, checked. The unknown-key rule is the one that earns
+ * its keep — a typo, or a field deleted from the reader and left on the
+ * writer, is otherwise invisible.
+ */
+const KNOWN = new Set([
+  'minX', 'maxX', 'minZ', 'maxZ',
+  'top', 'bottom', 'passHeight', 'rise', 'stopsFriend', 'enabled',
+]);
+
+const finite = (v) => typeof v === 'number' && Number.isFinite(v);
+
+/** Everything wrong with one collider, as a list of sentences. Empty is good. */
+export function checkCollider(box) {
+  const wrong = [];
+  if (!box || typeof box !== 'object') return ['not an object'];
+
+  for (const edge of ['minX', 'maxX', 'minZ', 'maxZ']) {
+    if (!finite(box[edge])) wrong.push(`${edge} is not a finite number`);
+  }
+  if (finite(box.minX) && finite(box.maxX) && box.minX > box.maxX) wrong.push('minX is past maxX');
+  if (finite(box.minZ) && finite(box.maxZ) && box.minZ > box.maxZ) wrong.push('minZ is past maxZ');
+
+  for (const field of ['top', 'bottom', 'passHeight', 'rise']) {
+    if (box[field] !== undefined && !finite(box[field])) wrong.push(`${field} is not a finite number`);
+  }
+  // A box cannot have its underside above its surface.
+  if (finite(box.top) && finite(box.bottom) && box.bottom > box.top) {
+    wrong.push(`bottom ${box.bottom} is above top ${box.top}`);
+  }
+  // `rise` is how far `top` moved. Without a top it describes nothing.
+  if (box.rise !== undefined && box.top === undefined) wrong.push('rise without top');
+  if (box.enabled !== undefined && typeof box.enabled !== 'function') wrong.push('enabled is not a function');
+  if (box.stopsFriend !== undefined && typeof box.stopsFriend !== 'boolean') {
+    wrong.push('stopsFriend is not a boolean');
+  }
+
+  for (const key of Object.keys(box)) {
+    if (!KNOWN.has(key)) wrong.push(`unknown field \`${key}\``);
+  }
+  return wrong;
+}
+
+/**
+ * Check the whole world and report, rather than throw.
+ *
+ * Reporting because a bad collider is a thing to fix, not a reason the game
+ * should refuse to start — and because the first run of this found nothing,
+ * which is only reassuring if it would have printed something had it not.
+ */
+export function validateColliders(colliders, log = console.warn) {
+  const faults = [];
+  colliders.forEach((box, i) => {
+    for (const fault of checkCollider(box)) faults.push({ i, fault, box });
+  });
+  if (faults.length) {
+    log(`collision: ${faults.length} bad collider${faults.length === 1 ? '' : 's'}`);
+    for (const { i, fault, box } of faults.slice(0, 20)) {
+      log(`  [${i}] ${fault}`, box);
+    }
+  }
+  return faults;
+}

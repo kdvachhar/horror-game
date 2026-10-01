@@ -17,6 +17,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkCollider } from '../src/collision.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const fixture = JSON.parse(readFileSync(resolve(HERE, 'fixtures/colliders.json'), 'utf8'));
@@ -177,3 +178,16 @@ test('every ceiling leaves a body room to stand under it', () => {
  * Left as a note rather than deleted silently, because the next person to
  * think of it should know it was tried.
  */
+
+test('every collider in the world obeys the schema', () => {
+  // The offline half of the same check main.js runs in dev. The fixture drops
+  // `enabled` (a closure cannot be serialised) and adds `gated` in its place,
+  // so that one field is translated back before checking.
+  const faults = [];
+  fixture.boxes.forEach((box, i) => {
+    const { gated, ...rest } = box;
+    if (gated) rest.enabled = () => true;
+    for (const fault of checkCollider(rest)) faults.push(`[${i}] ${fault}`);
+  });
+  assert.deepEqual(faults, [], `bad colliders in the fixture:\n  ${faults.join('\n  ')}`);
+});

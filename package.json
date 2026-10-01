@@ -5,6 +5,7 @@
   "scripts": {
     "test": "node --test \"test/**/*.test.js\"",
     "dump:colliders": "node tools/dumpColliders.mjs",
+    "bench:collision": "node tools/benchCollision.mjs",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --port 4173"

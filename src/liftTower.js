@@ -577,15 +577,14 @@ export function createLiftTower({ scene, parent = scene, colliders, chamber, cam
     ceiling.position.set(rx, CROWN, rz);
     group.add(ceiling);
 
-    // And it stops your head. `ceiling` is what the player's clamp reads;
-    // `bottom` keeps it out of the sideways collision while you are under it.
+    // And it stops your head: a `bottom` with no `top` is an underside with
+    // open space beneath, which is the whole definition of a lid.
     colliders.push({
       minX: rx - WIDE / 2,
       maxX: rx + WIDE / 2,
       minZ: rz - DEEP / 2,
       maxZ: rz + DEEP / 2,
       bottom: CROWN,
-      ceiling: CROWN,
     });
 
     const mid = TOP + ROOM.high / 2;

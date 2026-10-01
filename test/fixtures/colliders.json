@@ -136,8 +136,7 @@
    "maxX": 22,
    "minZ": -21,
    "maxZ": 21,
-   "bottom": 22,
-   "ceiling": 22
+   "bottom": 22
   },
   {
    "minX": -22.2,
@@ -391,8 +390,7 @@
    "maxX": -9,
    "minZ": -38,
    "maxZ": -32.8,
-   "bottom": 8,
-   "ceiling": 8
+   "bottom": 8
   },
   {
    "minX": -48.2,
@@ -429,8 +427,7 @@
    "maxX": 8,
    "minZ": -52.5,
    "maxZ": -41.5,
-   "bottom": 3.6,
-   "ceiling": 3.6
+   "bottom": 3.6
   },
   {
    "minX": -5.8,
@@ -563,8 +560,7 @@
    "maxX": -52.75,
    "minZ": -15.2,
    "maxZ": 1.8,
-   "bottom": 2.9,
-   "ceiling": 2.9
+   "bottom": 2.9
   },
   {
    "minX": -56.1,
@@ -636,8 +632,7 @@
    "maxX": -50.6,
    "minZ": -39.4,
    "maxZ": -31.4,
-   "bottom": 4.2,
-   "ceiling": 4.2
+   "bottom": 4.2
   },
   {
    "minX": -57.8016,
@@ -794,8 +789,7 @@
    "maxX": -48.2,
    "minZ": -28.8,
    "maxZ": -17.8,
-   "bottom": 3,
-   "ceiling": 3
+   "bottom": 3
   },
   {
    "minX": -61.2,
@@ -859,8 +853,7 @@
    "maxX": -56.1,
    "minZ": -13.94,
    "maxZ": -4.34,
-   "bottom": 3.6,
-   "ceiling": 3.6
+   "bottom": 3.6
   },
   {
    "minX": -63.3,
@@ -1035,8 +1028,7 @@
    "maxX": -50.9,
    "minZ": -60.04,
    "maxZ": -46.04,
-   "bottom": 76,
-   "ceiling": 76
+   "bottom": 76
   },
   {
    "minX": -65.9,
@@ -6675,8 +6667,7 @@
    "maxX": 8,
    "minZ": -39,
    "maxZ": -21,
-   "bottom": 8,
-   "ceiling": 8
+   "bottom": 8
   },
   {
    "minX": -80.02,
@@ -7448,16 +7439,14 @@
    "maxX": -65.9,
    "minZ": -49.04,
    "maxZ": -1.04,
-   "bottom": 12,
-   "ceiling": 12
+   "bottom": 12
   },
   {
    "minX": -80.9,
    "maxX": -65.9,
    "minZ": -63.04,
    "maxZ": -49.04,
-   "bottom": 76,
-   "ceiling": 76
+   "bottom": 76
   },
   {
    "minX": -80.9,
@@ -8474,8 +8463,7 @@
    "maxX": 8,
    "minZ": -41.5,
    "maxZ": -39,
-   "bottom": 3.4,
-   "ceiling": 3.4
+   "bottom": 3.4
   },
   {
    "minX": 2.6,
@@ -8596,8 +8584,7 @@
    "maxX": 13.9,
    "minZ": -41.5,
    "maxZ": -37.4,
-   "bottom": 3.4,
-   "ceiling": 3.4
+   "bottom": 3.4
   },
   {
    "minX": 8,

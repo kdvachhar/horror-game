@@ -157,10 +157,11 @@ test('the four walls in order chain to the hub', () => {
 test('every ceiling leaves a body room to stand under it', () => {
   // A ceiling below head height is a room you cannot be in. The lowest in the
   // game is 2.9 against a body of 1.8.
-  const lids = fixture.boxes.filter((b) => b.ceiling !== undefined);
+  // A lid is a box with an underside and nothing to climb onto.
+  const lids = fixture.boxes.filter((b) => b.bottom !== undefined && b.top === undefined);
   assert.ok(lids.length >= 10, `only ${lids.length} ceilings have colliders`);
   for (const lid of lids) {
-    assert.ok(lid.ceiling > BODY, `a ceiling at ${lid.ceiling} is below head height`);
+    assert.ok(lid.bottom > BODY, `a ceiling at ${lid.bottom} is below head height`);
   }
 });
 

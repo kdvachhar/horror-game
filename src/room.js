@@ -1096,7 +1096,7 @@ function buildWallColliders() {
    * building and not a list of the ones you happen to be able to touch.
    */
   const lid = (minX, maxX, minZ, maxZ, y) => {
-    const box = { minX, maxX, minZ, maxZ, bottom: y, ceiling: y };
+    const box = { minX, maxX, minZ, maxZ, bottom: y };
     colliders.push(box);
     shellColliders.push(box);
   };

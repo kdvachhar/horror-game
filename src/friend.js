@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { PLAYER } from './config.js';
+import * as collision from './collision.js';
 import { buildBucketMesh } from './bucket.js';
 import { PALETTE } from './textures.js';
 import { playBucketStep, playBucketJump, playBucketLand } from './audio.js';
@@ -324,113 +325,50 @@ export function createFriend(scene) {
   // standing on. R is its footprint for pushing out of props.
   const R = BODY_RADIUS;
 
+  /**
+   * This body, as collision.js wants it.
+   *
+   * The three queries live there now. They used to live here and in player.js
+   * both, as copies this file's comments promised to keep in step with that
+   * one by hand — which worked for two of them. See collision.js.
+   */
+  const BODY = {
+    kind: collision.FRIEND,
+    radius: R,
+    height: FRIEND_HEIGHT,
+    stepHeight: STEP_HEIGHT,
+  };
+
+  /** Scratch, so the per-frame queries do not allocate. */
+  const probe = { x: 0, z: 0, feetY: 0, grounded: false, previousFeetY: 0, previousHeadY: 0 };
+
+  const at = (previousFeetY, previousHeadY) => {
+    probe.x = position.x;
+    probe.z = position.z;
+    probe.feetY = position.y;
+    probe.grounded = grounded;
+    probe.previousFeetY = previousFeetY ?? position.y;
+    probe.previousHeadY = previousHeadY ?? position.y + FRIEND_HEIGHT;
+    return probe;
+  };
+
   function resolveCollisions(colliders) {
     // No room clamp — the shell is wall colliders now, so it can follow you
     // through the doorway.
-    for (const box of colliders) {
-      if (box.enabled?.() === false) continue;
-      // Same rule as the player: anything it has climbed above no longer blocks,
-      // and a box whose top rose this frame counts as cleared by that much as
-      // well. See player.js — a floor that comes up under a body in mid air has
-      // to carry it rather than eject it sideways, and the two bodies have to
-      // mean the same thing by every field on a collider.
-      if (position.y >= (box.top ?? Infinity) - 0.02 - (box.rise ?? 0)) continue;
-      // And low enough to step onto rather than be stopped by, from the ground.
-      if (grounded && box.top !== undefined && box.top - position.y <= STEP_HEIGHT) continue;
-      // And the other way about: a gap sized for something this short is not
-      // a wall to it at all.
-      if (FRIEND_HEIGHT <= (box.passHeight ?? -Infinity)) continue;
-      // Ducked clean under it. A box with a `bottom` is a thing up in the air
-      // with open space beneath, so passing below it is not passing through it.
-      if (position.y + FRIEND_HEIGHT <= (box.bottom ?? -Infinity)) continue;
-      if (
-        position.x < box.minX - R ||
-        position.x > box.maxX + R ||
-        position.z < box.minZ - R ||
-        position.z > box.maxZ + R
-      ) {
-        continue;
-      }
-
-      const pushLeft = position.x - (box.minX - R);
-      const pushRight = box.maxX + R - position.x;
-      const pushBack = position.z - (box.minZ - R);
-      const pushFront = box.maxZ + R - position.z;
-      const smallest = Math.min(pushLeft, pushRight, pushBack, pushFront);
-
-      if (smallest === pushLeft) position.x = box.minX - R;
-      else if (smallest === pushRight) position.x = box.maxX + R;
-      else if (smallest === pushBack) position.z = box.minZ - R;
-      else position.z = box.maxZ + R;
-    }
+    const spot = at();
+    collision.pushOut(colliders, BODY, spot);
+    position.x = spot.x;
+    position.z = spot.z;
   }
 
-  /**
-   * Highest surface under it that it could land on this frame.
-   *
-   * `previousFeetY` is the guard, and it is the whole point of the function.
-   * Without it any box whose footprint you merely touch counts as ground, so
-   * walking into the side of a bed snapped the bucket a clear 0.86m into the
-   * air and left it standing on top — it teleported onto anything it bumped.
-   * A surface only supports you if you were already above it; otherwise it is
-   * a wall, and resolveCollisions below is what deals with it.
-   */
   function supportHeight(colliders, previousFeetY) {
-    let ground = 0;
-    for (const box of colliders) {
-      if (box.top === undefined || box.enabled?.() === false) continue;
-      // A step's worth of reach while grounded, which is what carries it up
-      // onto whatever resolveCollisions just let it walk into. Airborne it
-      // stays at a hair, or a jump would snap it onto ledges it flew past.
-      // Except a surface that came up to meet it, which is allowed the distance
-      // it actually climbed — that is what lets the hoist collect a bucket that
-      // is off the deck when it starts moving.
-      // The larger of the two, not the grounded one. See player.js: a step's
-      // worth of reach is for climbing a step, and a floor that rises faster
-      // than that is still a floor. This body is the one it bit — 0.25 against
-      // a crown doing 0.4 a frame.
-      const reach = Math.max(grounded ? STEP_HEIGHT : 0.02, (box.rise ?? 0) + 0.02);
-      if (box.top > previousFeetY + reach) continue;
-      if (box.top <= ground) continue;
-      if (
-        position.x > box.minX - R &&
-        position.x < box.maxX + R &&
-        position.z > box.minZ - R &&
-        position.z < box.maxZ + R
-      ) {
-        ground = box.top;
-      }
-    }
-    return ground;
+    return collision.supportHeight(colliders, BODY, at(previousFeetY));
   }
 
-  /**
-   * The lowest underside overhead, so a jump taken beneath something stops
-   * against it instead of passing up through it.
-   *
-   * Only boxes that declare a `bottom` count — everything else is solid to the
-   * floor and was never something you could be underneath. `previousHeadY` is
-   * where the head was at the start of the frame: an underside already below
-   * that has been cleared, and clamping to it would drag the bucket back down
-   * through a board it is standing on.
-   */
   function ceilingHeight(colliders, previousHeadY) {
-    let ceiling = Infinity;
-    for (const box of colliders) {
-      if (box.bottom === undefined || box.enabled?.() === false) continue;
-      if (box.bottom < previousHeadY - 0.02) continue;
-      if (box.bottom >= ceiling) continue;
-      if (
-        position.x > box.minX - R &&
-        position.x < box.maxX + R &&
-        position.z > box.minZ - R &&
-        position.z < box.maxZ + R
-      ) {
-        ceiling = box.bottom;
-      }
-    }
-    return ceiling;
+    return collision.ceilingHeight(colliders, BODY, at(undefined, previousHeadY));
   }
+
 
   /**
    * Swing the legs in proportion to how fast it is actually travelling, so the

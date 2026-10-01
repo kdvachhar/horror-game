@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { PLAYER, SPAWN } from './config.js';
+import * as collision from './collision.js';
 import { playFootstep, playLanding } from './audio.js';
 
 const MOVE_KEYS = {
@@ -115,130 +116,47 @@ export function createPlayer(camera, domElement, colliders) {
   // it, walking onto a bed snaps the view up 0.86 in a single frame.
   let stepLag = 0;
 
-  /** True when the player's footprint overlaps this box in plan view. */
-  function overlaps(box, x, z, r) {
-    return x > box.minX - r && x < box.maxX + r && z > box.minZ - r && z < box.maxZ + r;
-  }
+  /**
+   * This body, as collision.js wants it.
+   *
+   * The three queries live there now rather than here. They used to live here
+   * *and* in friend.js, as copies kept in step by hand — which held for two of
+   * them and then quietly failed on the third. See collision.js.
+   */
+  const BODY = {
+    kind: collision.PLAYER,
+    radius: PLAYER.radius,
+    height: HEIGHT,
+    stepHeight: STEP_HEIGHT,
+  };
+
+  /** Scratch, so the per-frame queries do not allocate. */
+  const probe = { x: 0, z: 0, feetY: 0, grounded: false, previousFeetY: 0, previousHeadY: 0 };
 
   function resolveCollisions(next, feetY) {
-    const r = PLAYER.radius;
-
-    // The shell used to be a clamp to the room's rectangle. It's a set of wall
-    // colliders now — a rectangle can't have a doorway in it.
-    //
-    // Props and walls alike: push the player out along whichever axis they
-    // overlap least,
-    // which slides them around corners instead of sticking.
-    for (const box of colliders) {
-      // A box can gate itself — the doorway is only solid while the door is
-      // down.
-      if (box.enabled?.() === false) continue;
-      // Anything the player has jumped clear of no longer blocks them. Boxes
-      // without a top (walls, pillars, the machine) block at any height.
-      //
-      // `rise` is how far this box's top climbed this frame, and it widens
-      // "clear of it" by exactly that. Only the hoist declares one — see
-      // liftTower.js. Without it, a floor coming up under you while you are in
-      // the air is a box you are abruptly *inside*, and a box you are inside is
-      // resolved by pushing you out of its nearest side: jump on the hoist and
-      // it fires you through the shaft wall and out of the world. A surface
-      // that catches up with you has to carry you, and the distance it is
-      // allowed to catch up by is the distance it actually moved.
-      if (feetY >= (box.top ?? Infinity) - 0.02 - (box.rise ?? 0)) continue;
-      // Low enough to walk up onto rather than be stopped by. Only from the
-      // ground — stepping in mid air would drag you onto ledges you jumped
-      // past, and the point of a step is that your feet are on something.
-      if (grounded && box.top !== undefined && box.top - feetY <= STEP_HEIGHT) continue;
-      // A gap only short things fit through. The player is not one of them —
-      // this is the wall around the medical room's broken window, and it is
-      // what makes that room reachable by the bucket and by nothing else.
-      if (HEIGHT <= (box.passHeight ?? -Infinity)) continue;
-      // And the other way round: a box that is there for the bucket and not
-      // for you. `passHeight` is a hole too small for a body; this is a body
-      // that will not go somewhere. See the window bay in liftTower.js, which
-      // is an opening you walk through and it does not.
-      if (box.stopsFriend) continue;
-      // Ducked clean under it — a box with a `bottom` is up in the air with
-      // open space beneath. Nothing the player can reach declares one yet, but
-      // the two bodies have to agree on what a box means.
-      if (feetY + HEIGHT <= (box.bottom ?? -Infinity)) continue;
-      if (!overlaps(box, next.x, next.z, r)) continue;
-
-      const pushLeft = next.x - (box.minX - r);
-      const pushRight = box.maxX + r - next.x;
-      const pushBack = next.z - (box.minZ - r);
-      const pushFront = box.maxZ + r - next.z;
-      const smallest = Math.min(pushLeft, pushRight, pushBack, pushFront);
-
-      if (smallest === pushLeft) next.x = box.minX - r;
-      else if (smallest === pushRight) next.x = box.maxX + r;
-      else if (smallest === pushBack) next.z = box.minZ - r;
-      else next.z = box.maxZ + r;
-    }
-
+    probe.x = next.x;
+    probe.z = next.z;
+    probe.feetY = feetY;
+    probe.grounded = grounded;
+    collision.pushOut(colliders, BODY, probe);
+    next.x = probe.x;
+    next.z = probe.z;
     return next;
   }
 
-  /**
-   * Lowest thing over the player's head, or Infinity where there is sky.
-   *
-   * Only boxes that say `ceiling`. That is the whole of the care in this
-   * function, and it is not fussiness — it is the difference between a
-   * ceiling and a staircase. Every deck in the tall room already carries a
-   * `bottom`, which is its underside, and a clamp that took the lowest
-   * underside overhead would read the next tread up as a ceiling: the treads
-   * are 2.2 deep on a 1.7 pitch, so they overlap, and the one 0.7 above you
-   * is partly over your head while you stand on yours. `resolveCollisions`
-   * only survives that because of the step rule, which does not apply in the
-   * air. Clamping to it would push you through the floor of your own
-   * staircase.
-   *
-   * So a ceiling is a thing that declares itself one. Rooms do; platforms do
-   * not, and the underside of a platform goes on being what it has always
-   * been, which is a box you are pushed sideways out of.
-   */
-  function ceilingHeight(x, z) {
-    let lowest = Infinity;
-    for (const box of colliders) {
-      if (box.ceiling === undefined) continue;
-      if (box.enabled?.() === false) continue;
-      if (!overlaps(box, x, z, PLAYER.radius)) continue;
-      if (box.ceiling < lowest) lowest = box.ceiling;
-    }
-    return lowest;
+  function supportHeight(x, z, previousFeetY) {
+    probe.x = x;
+    probe.z = z;
+    probe.grounded = grounded;
+    probe.previousFeetY = previousFeetY;
+    return collision.supportHeight(colliders, BODY, probe);
   }
 
-  /**
-   * Highest surface under the player they could land on this frame. Only
-   * counts a box the player was already above, so you can't be snapped up
-   * through a crate you jumped into from below.
-   */
-  function supportHeight(x, z, previousFeetY) {
-    let ground = 0;
-    for (const box of colliders) {
-      const top = box.top;
-      if (top === undefined || box.enabled?.() === false || box.stopsFriend) continue;
-      // Normally only a surface already underfoot supports you, so you cannot
-      // be snapped up through a crate you jumped into from below. Standing on
-      // the ground, that reach opens up to a step's worth, which is what
-      // carries you onto the thing resolveCollisions just let you walk into.
-      // Airborne that reach is a hair, except against a surface that came up
-      // to meet you, which gets the distance it travelled and not a millimetre
-      // more — enough for the hoist to collect you out of a jump, too little to
-      // snap you onto anything that is merely sitting there.
-      // `rise` applies whether or not you are standing on it. Grounded, this
-      // used to be STEP_HEIGHT alone — which is a tolerance for *climbing* a
-      // step, not for a floor that climbs you — so a surface moving faster than
-      // one step per frame simply stopped supporting whatever was on it. The
-      // meat cube at eight metres a second is 0.4 a frame against a bucket's
-      // 0.25, and it climbed out from under it and left it to fall thirty-two
-      // metres. Take whichever is larger.
-      const reach = Math.max(grounded ? STEP_HEIGHT : 0.02, (box.rise ?? 0) + 0.02);
-      if (top > previousFeetY + reach) continue;
-      if (top <= ground) continue;
-      if (overlaps(box, x, z, PLAYER.radius)) ground = top;
-    }
-    return ground;
+  function ceilingHeight(x, z, previousHeadY) {
+    probe.x = x;
+    probe.z = z;
+    probe.previousHeadY = previousHeadY;
+    return collision.ceilingHeight(colliders, BODY, probe);
   }
 
   const forward = new THREE.Vector3();
@@ -425,7 +343,7 @@ export function createPlayer(camera, domElement, colliders) {
        * only rising. Falling through the plane of a ceiling is how you get
        * into a room in the first place on every lift in this game.
        */
-      const ceiling = ceilingHeight(nextPosition.x, nextPosition.z);
+      const ceiling = ceilingHeight(nextPosition.x, nextPosition.z, previousFeetY + HEIGHT);
       if (nextPosition.y + HEIGHT > ceiling) {
         nextPosition.y = Math.max(ground, ceiling - HEIGHT);
         if (verticalVelocity > 0) verticalVelocity = 0;

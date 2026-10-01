@@ -1246,18 +1246,19 @@ export function createMedicalRoom(scene) {
      * the group carries that translation and `HALLWAY`/`STORE` are written in
      * its local frame, so their numbers are small and their colliders are not.
      *
-     * `ceiling` is read by the player's head clamp; `bottom` at the same
-     * height keeps each one out of the sideways collision, which would
-     * otherwise see a box with no `top` and treat the whole room as solid.
+     * A `bottom` with no `top` is the whole definition of a lid: an
+     * underside with open space beneath. It is what `ceilingHeight` reads,
+     * and it is also what keeps the slab out of the sideways collision,
+     * which would otherwise treat it as solid at every height.
      */
     { minX: cx - width / 2, maxX: cx + width / 2, minZ: cz - depth / 2, maxZ: cz + depth / 2,
-      bottom: height, ceiling: height },
+      bottom: height },
     { minX: cx + HALLWAY.minX, maxX: cx + HALLWAY.maxX,
       minZ: cz + HALLWAY.near, maxZ: cz + HALLWAY.far,
-      bottom: STORE.height, ceiling: STORE.height },
+      bottom: STORE.height },
     { minX: cx + STORE.minX, maxX: cx + STORE.maxX,
       minZ: cz + STORE.near, maxZ: cz + STORE.far,
-      bottom: STORE.height, ceiling: STORE.height },
+      bottom: STORE.height },
   ];
 
   // The arms, out of the wall either side of the television and not attached to

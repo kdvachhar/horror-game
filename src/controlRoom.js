@@ -340,12 +340,12 @@ export function createControlRoom({ scene, doorway, player }) {
   /**
    * And the ceiling as a thing your head stops against.
    *
-   * `ceiling` is read by the player's head clamp and by nothing else;
-   * `bottom` at the same height keeps it out of the way of the sideways
-   * collision, which would otherwise treat a slab with no `top` as solid at
-   * every height and make the whole room impassable. See `ceilingHeight` in
-   * player.js for why a ceiling has to say it is one rather than be inferred
-   * from having an underside.
+   * A lid is a box with a `bottom` and no `top`: an underside with open space
+   * beneath and nothing to climb onto. That is all it has to be —
+   * `ceilingHeight` in collision.js takes the lowest underside overhead, and
+   * the `bottom` also keeps the slab out of the sideways collision, which
+   * would otherwise treat a box with no `top` as solid at every height and
+   * make the room impassable.
    */
   colliders.push({
     minX: (midX) - (DEPTH) / 2,
@@ -353,7 +353,6 @@ export function createControlRoom({ scene, doorway, player }) {
     minZ: (midZ) - (maxZ - minZ) / 2,
     maxZ: (midZ) + (maxZ - minZ) / 2,
     bottom: HEIGHT,
-    ceiling: HEIGHT,
   });
 
   // Back wall and the two ends. The back one is in three pieces round the way

@@ -329,8 +329,12 @@ export function createFriend(scene) {
     // through the doorway.
     for (const box of colliders) {
       if (box.enabled?.() === false) continue;
-      // Same rule as the player: anything it has climbed above no longer blocks.
-      if (position.y >= (box.top ?? Infinity) - 0.02) continue;
+      // Same rule as the player: anything it has climbed above no longer blocks,
+      // and a box whose top rose this frame counts as cleared by that much as
+      // well. See player.js — a floor that comes up under a body in mid air has
+      // to carry it rather than eject it sideways, and the two bodies have to
+      // mean the same thing by every field on a collider.
+      if (position.y >= (box.top ?? Infinity) - 0.02 - (box.rise ?? 0)) continue;
       // And low enough to step onto rather than be stopped by, from the ground.
       if (grounded && box.top !== undefined && box.top - position.y <= STEP_HEIGHT) continue;
       // And the other way about: a gap sized for something this short is not
@@ -378,7 +382,15 @@ export function createFriend(scene) {
       // A step's worth of reach while grounded, which is what carries it up
       // onto whatever resolveCollisions just let it walk into. Airborne it
       // stays at a hair, or a jump would snap it onto ledges it flew past.
-      if (box.top > previousFeetY + (grounded ? STEP_HEIGHT : 0.02)) continue;
+      // Except a surface that came up to meet it, which is allowed the distance
+      // it actually climbed — that is what lets the hoist collect a bucket that
+      // is off the deck when it starts moving.
+      // The larger of the two, not the grounded one. See player.js: a step's
+      // worth of reach is for climbing a step, and a floor that rises faster
+      // than that is still a floor. This body is the one it bit — 0.25 against
+      // a crown doing 0.4 a frame.
+      const reach = Math.max(grounded ? STEP_HEIGHT : 0.02, (box.rise ?? 0) + 0.02);
+      if (box.top > previousFeetY + reach) continue;
       if (box.top <= ground) continue;
       if (
         position.x > box.minX - R &&

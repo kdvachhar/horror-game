@@ -9,6 +9,8 @@ import {
   metalRepeat,
 } from './textures.js';
 import { createRockfall, BREACH } from './rockfall.js';
+import { createLiftTower } from './liftTower.js';
+import { DEPTH as TALL_DEPTH, HEIGHT as TALL_HIGH } from './tallRoom.js';
 import { showNote, setObjective } from './hud.js';
 
 /**
@@ -63,7 +65,7 @@ import { showNote, setObjective } from './hud.js';
  * which is the proportion that reads as a shaft, and the ceiling was too far up
  * to make out — the room was doing its height and its length at the same time.
  * It does not need to do its height any more: the tall room at the far end is
- * thirty-four, and a shaft at the end of a shaft is nothing arriving at nothing.
+ * seventy-six, and a shaft at the end of a shaft is nothing arriving at nothing.
  * At twelve the hall is wider than it is high for the first time, so it presses
  * down and runs away from you instead of standing over you, the ceiling is close
  * enough to read as a ceiling — and the room you come out into afterwards is
@@ -121,7 +123,7 @@ const TRIM = '#2b302e';
  * the passage arrives facing -x and the hall is the space at -x of it. See the
  * top of controlRoom.js for why none of these are written to be orientable.
  */
-export function createGiantHall({ scene, doorway, player }) {
+export function createGiantHall({ scene, doorway, player, camera, bodies }) {
   const group = new THREE.Group();
   scene.add(group);
 
@@ -176,6 +178,25 @@ export function createGiantHall({ scene, doorway, player }) {
   group.add(ceiling);
 
   /**
+   * And the ceiling as a thing your head stops against.
+   *
+   * `ceiling` is read by the player's head clamp and by nothing else;
+   * `bottom` at the same height keeps it out of the way of the sideways
+   * collision, which would otherwise treat a slab with no `top` as solid at
+   * every height and make the whole room impassable. See `ceilingHeight` in
+   * player.js for why a ceiling has to say it is one rather than be inferred
+   * from having an underside.
+   */
+  colliders.push({
+    minX: (midX) - (WIDTH) / 2,
+    maxX: (midX) + (WIDTH) / 2,
+    minZ: (midZ) - (LENGTH) / 2,
+    maxZ: (midZ) + (LENGTH) / 2,
+    bottom: HEIGHT,
+    ceiling: HEIGHT,
+  });
+
+  /**
    * The way in, and the way on.
    *
    * The first is the doorway the control room hands over, in the near wall. The
@@ -210,7 +231,7 @@ export function createGiantHall({ scene, doorway, player }) {
    * only thing that changes at the join is that the ceiling stops.
    *
    * Which is the entire reason to do it. Twelve metres of ceiling ending in mid
-   * air with thirty-four metres of room above it does something a doorway
+   * air with seventy-six metres of room above it does something a doorway
    * cannot: you do not arrive somewhere tall, the tall part opens over your head
    * while you are still walking. A door would have given you a rectangle to
    * frame it in and a threshold to cross, and both of those are ways of being
@@ -251,17 +272,30 @@ export function createGiantHall({ scene, doorway, player }) {
     wall.receiveShadow = true;
     group.add(wall);
   }
-  solid(near, near + 1, foot - 1, collapseLow, {});
-  solid(near, near + 1, collapseHigh, IN.low, {});
-  solid(near, near + 1, IN.high, head + 1, {});
+  /**
+   * And the boxes for it, which stop at the ceiling.
+   *
+   * `top: HEIGHT` on a wall is not normally worth writing — a wall may as well
+   * be solid to the sky when the only bodies in the game are on the floor of
+   * the room it encloses. It matters here because this wall is a metre thick
+   * and there is now a room on the other side of it, seventy-two metres up: the
+   * hoist's landing shares this plane. Without a top, a metre of this wall
+   * stood inside that room at every height, and what that looks like from in
+   * there is a piece of floor you cannot walk on for no reason you can see.
+   *
+   * Nothing in this hall can be above twelve, so nothing here loses a wall.
+   */
+  solid(near, near + 1, foot - 1, collapseLow, { top: HEIGHT });
+  solid(near, near + 1, collapseHigh, IN.low, { top: HEIGHT });
+  solid(near, near + 1, IN.high, head + 1, { top: HEIGHT });
   // The breach's lintel. The opening's own box is the rockfall's, because what
   // is in the opening is what decides who gets through it.
-  solid(near, near + 1, collapseLow, collapseHigh, { bottom: BREACH.height });
+  solid(near, near + 1, collapseLow, collapseHigh, { bottom: BREACH.height, top: HEIGHT });
   // And the lintel over it: solid, but only to somebody whose head is above the
   // opening. `bottom` is what a collider has instead of a height — see
   // resolveCollisions. Standing on the floor you pass under it; jumping in the
   // doorway you hit it, which is what a lintel is.
-  solid(near, near + 1, IN.low, IN.high, { bottom: IN.height });
+  solid(near, near + 1, IN.low, IN.high, { bottom: IN.height, top: HEIGHT });
 
   /**
    * The far long wall, whole.
@@ -491,6 +525,40 @@ export function createGiantHall({ scene, doorway, player }) {
     side: -1,
   });
 
+  /**
+   * And what is in the room behind the rock: a hoist, and a floor at the top of
+   * it that only the bucket will ever stand on.
+   *
+   * Built from the chamber the collapse hands over rather than from any number
+   * written here, so this file does not know or care where the lift is — see
+   * liftTower.js. The hall's only stake in it is that it is on this side of this
+   * wall, which is already decided by where the collapse went.
+   */
+  const lift = createLiftTower({
+    scene,
+    parent: group,
+    colliders,
+    chamber: collapse.chamber,
+    camera,
+    // Both bodies, for the treads at the top: they are pressed by being stood
+    // on, so the thing that presses them has to be reachable from in here.
+    bodies,
+    // The room at the top is sized off the room it looks into, so the two are
+    // the same size where they meet, and told where that room *is* as well, so
+    // it can run its window along the part of the wall that has something
+    // behind it. All four numbers are read from where they are already decided
+    // — this hall's width, which the tall room inherits; that room's own depth;
+    // and the open end of this hall, which is the end the tall room hangs off —
+    // rather than written down a third time.
+    match: {
+      wide: WIDTH,
+      deep: TALL_DEPTH,
+      high: TALL_HIGH,
+      minZ: foot - TALL_DEPTH,
+      maxZ: foot,
+    },
+  });
+
   /** Inside the hall at all. The passage in does not count. */
   const contains = (x, z) => x < near && x > far && z > foot && z < head;
 
@@ -499,6 +567,9 @@ export function createGiantHall({ scene, doorway, player }) {
     colliders,
     contains,
     collapse,
+    lift,
+    /** The lever on the hoist, and nothing else in this hall has one. */
+    interactions: lift.interactions,
     /**
      * Just inside the door, looking down the length of it.
      *
@@ -524,9 +595,12 @@ export function createGiantHall({ scene, doorway, player }) {
 
     reset() {
       entered = false;
+      lift.reset();
     },
 
     update(delta) {
+      lift.update(delta);
+
       const t = performance.now() / 1000;
       // The floods breathe, out of step with each other. Nothing in this hall
       // moves and nothing in it is going to; this is the only thing separating

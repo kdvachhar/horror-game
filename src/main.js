@@ -13,6 +13,7 @@ import { createCorpseHall } from './corpseHall.js';
 import { createControlRoom } from './controlRoom.js';
 import { createGiantHall } from './giantHall.js';
 import { createTallRoom } from './tallRoom.js';
+import { createDeathScreen } from './death.js';
 import { createEmployeeDoor } from './employeeDoor.js';
 import { paintRoomStripes } from './wallStripes.js';
 import {
@@ -39,6 +40,9 @@ import {
   audioPlayed,
   playTestTone,
   mountAudioIndicator,
+  tapOutput,
+  playMeatLunge,
+  playScreech,
 } from './audio.js';
 import { createDebugMenu } from './debug.js';
 import { createCutscene } from './cutscene.js';
@@ -206,18 +210,111 @@ room.colliders.push(...controlRoom.colliders);
  * the control room's own passage, like everything else here is hung off the
  * opening before it.
  */
-const giantHall = createGiantHall({ scene, doorway: controlRoom.wayOn, player });
+const giantHall = createGiantHall({
+  scene,
+  doorway: controlRoom.wayOn,
+  player,
+  camera,
+  // Read live rather than captured: the treads in the room at the top are
+  // pressed by standing on them, and either body can be the one standing.
+  bodies: () => [player.position, friend.position],
+});
 room.colliders.push(...giantHall.colliders);
 
 /**
- * And through the far end of that: a shaft thirty-four metres high with the
+ * And through the far end of that: a shaft seventy-six metres high with the
  * walls full of rectangular openings.
  *
  * Hung off the hall's own way out, like every room in this stretch is hung off
  * the opening before it.
  */
-const tallRoom = createTallRoom({ scene, doorway: giantHall.wayOn, player });
+// The window in the room at the top of the hoist is a hole in a wall these
+// two rooms share a side of each. It is cut here rather than agreed on:
+// the lift owns the opening and the tall room is handed it.
+/**
+ * The screen you get when something kills you, and the way back off it.
+ *
+ * Built before the room that uses it, because the room takes it as an
+ * argument — and the way back points at that same room, which does not exist
+ * yet when this is written. That is fine and it is why `respawn` is a function
+ * rather than a value: nothing in it runs until somebody has died, by which
+ * time every room in the building has been standing for several minutes.
+ *
+ * There is exactly one death in the game and it is the meat cube, so the way
+ * back is the tall room's own threshold — three metres down the hall from the
+ * thing that just ate you, which is a floor at every point in its cycle and is
+ * the same spot the debug menu uses for the same reason. The room is wound
+ * back with you: the animal goes back to the bottom of its shaft with nothing
+ * scripted holding it, and it is waiting in the doorway again when the black
+ * lifts.
+ */
+const death = createDeathScreen({
+  onRestart() {
+    tallRoom.reset();
+    const entry = tallRoom.entry;
+    player.teleport({ position: entry.position, yaw: entry.yaw, pitch: 0 });
+
+    /**
+     * And the bucket goes back to its post at the top of the hoist.
+     *
+     * Not beside you, which is what every other respawn in a game does and
+     * what this one did until now — it left the bucket wherever the death
+     * happened to catch it, which after a death at the meat cube is standing
+     * in a hall seventy metres below the only room it has any business being
+     * in. The puzzle is the bucket working the treads behind the glass while
+     * you climb; a run that begins with it loose at the bottom of the shaft
+     * begins in a state the puzzle cannot be solved from.
+     *
+     * `spawn` and not `collect`. Spawn is "alive but not yet trailing
+     * anyone", which is exactly right: it waits up there. Collecting it would
+     * set it following a body seventy metres down a shaft it cannot climb,
+     * and it would spend the rest of the run trying. You pick it up the
+     * ordinary way — by arriving.
+     *
+     * The car goes up with it, and that is not decoration. The car is the
+     * floor of that landing when it is at this end, so parking it is what
+     * stops the bucket being spawned over an open shaft; it is also simply
+     * true, because the way the bucket got up there is that the car carried
+     * it. The one other place in this file that puts a body at the top of the
+     * hoist does the same thing for the same reason — see scene 15.
+     */
+    const lift = giantHall.lift;
+    lift.parkAtTop();
+    const { room: top, top: floor } = lift.state;
+    friend.spawn(
+      new THREE.Vector3(top.minX + 4.2, floor + 0.05, (top.minZ + top.maxZ) / 2 + 1.4)
+    );
+
+    setObjective('Find the way on');
+  },
+});
+
+const tallRoom = createTallRoom({
+  scene,
+  doorway: giantHall.wayOn,
+  player,
+  port: giantHall.lift.port,
+  // For the one scene in this building that takes the camera off you and does
+  // not give it back.
+  camera,
+  death,
+});
 room.colliders.push(...tallRoom.colliders);
+
+/**
+ * And the wire between the two of them, which is the only thing either room
+ * needed the other for.
+ *
+ * The treads are in the room at the top of the hoist and the walls they run are
+ * sixty metres down the other side of that room's window. Neither file knows
+ * about the other and neither should: the panel counts presses and hands out a
+ * number, the tall room takes a number and runs that wall out, and this line is
+ * where the number crosses. It is bound here rather than passed in because the
+ * tall room is built after the hoist — it needs the window the hoist owns
+ * before it can cut its own side of it — so at the moment the panel is made,
+ * the thing it drives does not exist yet.
+ */
+giantHall.lift.board.wireTo((label) => tallRoom.showWall(label));
 
 /**
  * The staff doors, in five rooms, none of which own them.
@@ -323,6 +420,9 @@ for (const target of exitRoom.interactions) interactions.add(target);
 for (const target of orangeRoom.interactions) interactions.add(target);
 // One target: the switch that brings the set in the control room up.
 for (const target of controlRoom.interactions) interactions.add(target);
+// And one the player can never reach: the lever on the hoist behind the
+// rockfall, which is on the far side of a hole only the bucket fits through.
+for (const target of giantHall.interactions) interactions.add(target);
 
 /**
  * What you think, turning round and finding the way you came in is shut.
@@ -589,6 +689,9 @@ let doorHasOpened = false;
  * have already seen does nothing at all: each one refuses to start twice.
  */
 function resetSequences() {
+  // Off the death screen first. Every jump below is a way out of wherever you
+  // are, and "wherever you are" includes dead.
+  death.clear();
   cutscene.reset();
   wakeUp.reset();
   possession.reset();
@@ -888,6 +991,70 @@ const SCENES = [
       setObjective('Find the way on');
     },
   },
+  {
+    label: '14 · The hoist',
+    hint: 'Behind the rockfall — the lift only the bucket can get to',
+    go() {
+      resetSequences();
+      medical.openDoor();
+      medical.shutDown();
+      room.lightUpBackRoom();
+      gauntlet.powerUp();
+      exitRoom.powerUp();
+      possession.unlock();
+      orangeRoom.solve();
+
+      // Straight into the chamber, which is the one place in the game you
+      // cannot walk to — the way in is a gap in a heap of rock that is too
+      // short for you. Being put in here is the only way to look at it, and
+      // being able to look at it is the whole reason this entry exists.
+      const { chamber } = giantHall.collapse;
+      const { shaft } = giantHall.lift.state;
+      player.teleport({ position: [chamber.minX + 1.1, 0, chamber.minZ + 0.9], yaw: -Math.PI / 2 });
+      // And the bucket on the platform, because it is the only thing that can
+      // drive it. Press F and the lever is in front of you.
+      friend.spawn(
+        new THREE.Vector3((shaft.minX + shaft.maxX) / 2, 0.2, (shaft.minZ + shaft.maxZ) / 2)
+      );
+      friend.collect();
+
+      setObjective('Take the bucket up');
+    },
+  },
+  {
+    label: '15 · Top of the hoist',
+    hint: 'The room at the top of the tower, with the window down into it',
+    go() {
+      resetSequences();
+      medical.openDoor();
+      medical.shutDown();
+      room.lightUpBackRoom();
+      gauntlet.powerUp();
+      exitRoom.powerUp();
+      possession.unlock();
+      orangeRoom.solve();
+
+      // The car has to be up here too. It is the floor of the landing when it
+      // is at this end, and an entry that drops you in the room with the lift
+      // still at the bottom is an entry that opens with a hole in the floor.
+      const lift = giantHall.lift;
+      lift.parkAtTop();
+
+      // Facing the window, because the window is the only reason to be in this
+      // room — see liftTower.js. Yaw +PI/2 is -x in this game, and -x is the
+      // wall the glass is in.
+      const { room: top, top: floor } = lift.state;
+      const midZ = (top.minZ + top.maxZ) / 2;
+      player.teleport({ position: [top.minX + 4.2, floor, midZ], yaw: Math.PI / 2, pitch: 0 });
+
+      // And the bucket beside you, since it is the one that is meant to be up
+      // here and the one you will want to walk to the glass.
+      friend.spawn(new THREE.Vector3(top.minX + 4.2, floor + 0.05, midZ + 1.4));
+      friend.collect();
+
+      setObjective('Look out of the window');
+    },
+  },
 ];
 
 const debugMenu = createDebugMenu({
@@ -1105,6 +1272,10 @@ renderer.setAnimationLoop((time) => {
   controlRoom.update(delta);
   giantHall.update(delta);
   tallRoom.update(delta);
+  // After the room that raises it. The screen's own clock is only the beat it
+  // waits before it will take a key — see death.js — and that beat starts on
+  // the frame the room puts it up.
+  death.update(delta);
   // After that, not before it, and for the same reason the view is: the shadow
   // body is drawn where the player is, and on a swing the player is wherever
   // the room has just put them. Updated ahead of the rooms it lagged a frame
@@ -1132,7 +1303,8 @@ renderer.setAnimationLoop((time) => {
   }
   // Prompts only make sense while the mouse is captured, and never during the
   // cutscene or the wake-up — there is no control to act with.
-  if (player.isLocked && !cutscene.isPlaying && !wakeUp.isPlaying) interactions.update();
+  if (player.isLocked && !cutscene.isPlaying && !wakeUp.isPlaying && !death.isShowing)
+    interactions.update();
   else showPrompt(null);
 
   updateFriendLayer();
@@ -1151,8 +1323,12 @@ renderer.setAnimationLoop((time) => {
 
 // Dev-only handle for poking at the scene from the console.
 if (import.meta.env.DEV) {
-  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, corpseHall, controlRoom, giantHall, tallRoom, wakeUp, possession, painter, monologue };
+  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, corpseHall, controlRoom, giantHall, tallRoom, wakeUp, possession, painter, monologue, death };
   window.game.__tvLines = TV_LINES;
+  // The library itself, so a harness can raycast the scene and name what it
+  // hit. Everything else on this handle is a thing the game built; this is
+  // the one entry that is just a way to ask questions about them.
+  window.game.__three = THREE;
   // Console handles for diagnosing silence: game.audio.state() / .test()
   window.game.perf = () => ({
     pixelRatio: renderer.getPixelRatio(),
@@ -1169,5 +1345,12 @@ if (import.meta.env.DEV) {
     footstep: () => playFootstep(false),
     door: playDoorClose,
     blip: playObjectiveBlip,
+    // Measuring what the mix peaks at, rather than adding up the gains in the
+    // source and hoping. See tapOutput.
+    tap: tapOutput,
+    // The jumpscare's two voices, so they can be fired and measured without
+    // having to be eaten first.
+    lunge: playMeatLunge,
+    screech: playScreech,
   };
 }

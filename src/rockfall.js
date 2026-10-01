@@ -1,5 +1,13 @@
 import * as THREE from 'three';
-import { makeRockSurface } from './textures.js';
+import {
+  makeRockSurface,
+  makeWallSurface,
+  makeFloorSurface,
+  makeMetalPanelSurface,
+  cloneSurface,
+  worldRepeat,
+  metalRepeat,
+} from './textures.js';
 import { createFallenEmployeeDoor } from './employeeDoor.js';
 import { FRIEND_HEIGHT } from './friend.js';
 
@@ -56,6 +64,8 @@ const FRAME_ASIDE = 1.0;
 const DEPTH = 3.4;
 
 const ROCK_TINT = '#4a4b44';
+/** The chamber behind it. Colder and greener than the hall, and darker. */
+const LINER_TINT = '#3c403a';
 
 /** Deterministic, because a heap of rock that is different every load cannot be
  * screenshotted, walked twice, or argued about. */
@@ -144,47 +154,89 @@ export function createRockfall({ scene, parent = scene, colliders, x, z, side = 
   // ------------------------------------------------------------- the space ---
 
   /**
-   * What is behind it: a lined stub, capped, and dark.
+   * What is behind it: a chamber, lined, and dark.
    *
    * It has to be somewhere and not a black plane, because the one body that can
    * get through is a body you see out of. Squeezing the bucket into a hole and
-   * arriving in a texture would undo the hole. So it is three and a half metres
-   * of lined passage with a cap on the end and one very dim lamp in it, and
-   * `wayOn` is handed out for whatever gets built past it.
+   * arriving in a texture would undo the hole.
+   *
+   * It was four flat grey panels and a cap while there was nothing past it, on
+   * the reasoning that a place you cannot get further than does not need to be
+   * built. That was wrong twice over. It is the only room in this game the
+   * player never stands in, so it is the only room whose entire account of
+   * itself is what a bucket sees from eight inches off the floor — and a flat
+   * colour at that range does not read as dim, it reads as unfinished. And it
+   * is now the bottom of a lift, which makes it somewhere you wait.
+   *
+   * So it is built like a room: poured wall on three sides, a floor slab, and a
+   * steel kick strip round the bottom of it. The strip is the piece doing the
+   * most work per triangle in here, because it is the one part of a wall that a
+   * body this short is level with.
+   *
+   * There is no ceiling. The lid belongs to whatever goes up out of it — see
+   * liftTower.js, which builds it round its own shaft — for the same reason the
+   * giant hall took the control room's end cap out: two surfaces in one place
+   * is one surface too many, and the one with a hole in it should own the hole.
    */
+  const chamber = { ...spanX(x, back), minZ: low, maxZ: high, height: BREACH.height };
   {
-    const liner = new THREE.MeshStandardMaterial({ color: '#33352f', roughness: 0.94 });
+    const tall = BREACH.height;
     const mid = out(-DEPTH / 2);
-    const head = BREACH.height;
+
+    const wallSurface = makeWallSurface(...worldRepeat(DEPTH, tall), LINER_TINT);
+    const wallOf = (w, h) =>
+      new THREE.MeshStandardMaterial({
+        ...cloneSurface(wallSurface, ...worldRepeat(w, h)),
+        color: LINER_TINT,
+        metalness: 0.02,
+        roughness: 0.94,
+      });
+
     // A PlaneGeometry lies in xy facing +z, so each of these is built with its
-    // own extents the right way round and then turned once. Written out rather
-    // than picked apart from a table: the two cheeks and the two decks want
-    // different geometry as well as different turns, and a table that carries
-    // both ends up being read with a conditional in every column.
-    for (const [w, h, px, py, pz, rx, ry] of [
-      // cheeks, facing across the passage
-      [DEPTH, head, mid, head / 2, low, 0, 0],
-      [DEPTH, head, mid, head / 2, high, 0, Math.PI],
-      // soffit facing down, deck facing up
-      [DEPTH, BREACH.width, mid, head, z, Math.PI / 2, 0],
-      [DEPTH, BREACH.width, mid, 0.004, z, -Math.PI / 2, 0],
+    // own extents the right way round and then turned once.
+    for (const [w, h, px, pz, ry] of [
+      [DEPTH, tall, mid, low, 0],
+      [DEPTH, tall, mid, high, Math.PI],
+      // The end of it. A wall like the other two now rather than a black plate:
+      // the way on out of this room goes up, so nothing is ever going to come
+      // through here and take it out.
+      [BREACH.width, tall, back, z, (side * Math.PI) / 2],
     ]) {
-      const panel = new THREE.Mesh(new THREE.PlaneGeometry(w, h), liner);
-      panel.position.set(px, py, pz);
-      panel.rotation.set(rx, ry, 0);
+      const panel = new THREE.Mesh(new THREE.PlaneGeometry(w, h), wallOf(w, h));
+      panel.position.set(px, tall / 2, pz);
+      panel.rotation.y = ry;
       panel.receiveShadow = true;
       group.add(panel);
     }
-    // The cap. Whatever gets built here takes it out, the way the giant hall
-    // took the control room's out — see giantHall.js for why leaving one in
-    // puts two surfaces in the same place.
-    const cap = new THREE.Mesh(
-      new THREE.PlaneGeometry(BREACH.width, BREACH.height),
-      new THREE.MeshStandardMaterial({ color: '#1c1e1a', roughness: 1 })
+
+    const deck = new THREE.Mesh(
+      new THREE.PlaneGeometry(DEPTH, BREACH.width),
+      new THREE.MeshStandardMaterial({
+        ...makeFloorSurface(...worldRepeat(DEPTH, BREACH.width)),
+        color: '#3a3c37',
+        metalness: 0,
+      })
     );
-    cap.position.set(back, BREACH.height / 2, z);
-    cap.rotation.y = (side * Math.PI) / 2;
-    group.add(cap);
+    deck.rotation.x = -Math.PI / 2;
+    deck.position.set(mid, 0.004, z);
+    deck.receiveShadow = true;
+    group.add(deck);
+
+    const strip = new THREE.MeshStandardMaterial({
+      ...makeMetalPanelSurface(...metalRepeat(DEPTH, 0.34), '#4b4e48'),
+      metalness: 0.5,
+      roughness: 0.64,
+    });
+    for (const [w, d, px, pz] of [
+      [DEPTH, 0.06, mid, low + 0.03],
+      [DEPTH, 0.06, mid, high - 0.03],
+      [0.06, BREACH.width, out(-DEPTH + 0.03), z],
+    ]) {
+      const kick = new THREE.Mesh(new THREE.BoxGeometry(w, 0.34, d), strip);
+      kick.position.set(px, 0.17, pz);
+      kick.receiveShadow = true;
+      group.add(kick);
+    }
 
     // Barely lit. Enough that the bucket's view is a place and not a black
     // frame, and not one lumen more — being sent somewhere you cannot see into
@@ -334,17 +386,44 @@ export function createRockfall({ scene, parent = scene, colliders, x, z, side = 
    * that the rule would be right and the bucket would still be standing outside
    * a pile of stones it cannot get round.
    */
+  /**
+   * Every box here stops at the breach's head, and that is not decoration.
+   *
+   * A wall collider in this game has no top, because a wall may as well be
+   * solid to the sky when the only bodies in the game are on the floor of the
+   * room it encloses. This chamber is two and a half metres of lined concrete
+   * and it was true of it for exactly as long as nothing was built over it.
+   *
+   * There is now a room at the top of the hoist, twenty-four metres up and
+   * directly above this one — same wall line, overlapping footprint. Without a
+   * top, this chamber's side wall stood up through that room as a three-metre
+   * slab of nothing lying between the lift and the window, and the bucket walked
+   * into it every time. Nothing in here can be above the ceiling, so nothing
+   * loses a wall by saying where the wall ends.
+   */
+  const HEAD = BREACH.height;
   colliders.push({
     ...spanX(x - 0.05, x + 0.05),
     minZ: gapZ - GAP.width / 2,
     maxZ: gapZ + GAP.width / 2,
     passHeight: GAP.head,
+    top: HEAD,
   });
   // The rest of the breach is plain wall as far as anything walking is
   // concerned — the rock is in it, but the rock is scenery and this is the line
   // it holds.
-  colliders.push({ ...spanX(x - 0.05, x + 0.05), minZ: low - 0.2, maxZ: gapZ - GAP.width / 2 });
-  colliders.push({ ...spanX(x - 0.05, x + 0.05), minZ: gapZ + GAP.width / 2, maxZ: high + 0.2 });
+  colliders.push({
+    ...spanX(x - 0.05, x + 0.05),
+    minZ: low - 0.2,
+    maxZ: gapZ - GAP.width / 2,
+    top: HEAD,
+  });
+  colliders.push({
+    ...spanX(x - 0.05, x + 0.05),
+    minZ: gapZ + GAP.width / 2,
+    maxZ: high + 0.2,
+    top: HEAD,
+  });
   // And the heap standing in front of it, either side of the lane. Without
   // these the rule is right and the bucket is still stood outside a pile of
   // stones it cannot walk round.
@@ -352,19 +431,35 @@ export function createRockfall({ scene, parent = scene, colliders, x, z, side = 
     [low - 2.6, gapZ - GAP.width / 2],
     [gapZ + GAP.width / 2, high + 2.6],
   ]) {
-    colliders.push({ ...spanX(x, out(1.7)), minZ, maxZ });
+    colliders.push({ ...spanX(x, out(1.7)), minZ, maxZ, top: HEAD });
   }
   // The stub's own cheeks and its far end, so the one body that gets in cannot
   // walk out through the side of it.
-  colliders.push({ ...spanX(back, x), minZ: low - 0.6, maxZ: low });
-  colliders.push({ ...spanX(back, x), minZ: high, maxZ: high + 0.6 });
-  colliders.push({ ...spanX(back, out(-DEPTH - 0.6)), minZ: low - 0.6, maxZ: high + 0.6 });
+  colliders.push({ ...spanX(back, x), minZ: low - 0.6, maxZ: low, top: HEAD });
+  colliders.push({ ...spanX(back, x), minZ: high, maxZ: high + 0.6, top: HEAD });
+  colliders.push({
+    ...spanX(back, out(-DEPTH - 0.6)),
+    minZ: low - 0.6,
+    maxZ: high + 0.6,
+    top: HEAD,
+  });
 
   return {
     group,
     /** The gap, and who fits through it. For the harness and for the record. */
     gap: { head: GAP.head, width: GAP.width, fits: FRIEND_HEIGHT <= GAP.head },
-    /** The far end of the stub, for whatever gets built on it. */
+    /**
+     * The room behind the wall, as a box, for whatever builds up out of it.
+     *
+     * Handed over rather than described in two files, the way every opening in
+     * this game is: the lift is put in the back right corner of *this*, so
+     * moving the chamber moves the lift and there is no second copy of any of
+     * these four numbers to get out of step with it. `height` is the underside
+     * of a lid that does not exist yet — see the note above, the caller builds
+     * it.
+     */
+    chamber,
+    /** The far end of the chamber, for whatever gets built on it. */
     get wayOn() {
       return { x: back, y: 0, z: gapZ, width: GAP.width, height: GAP.head };
     },

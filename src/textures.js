@@ -1582,3 +1582,75 @@ export function makeSoftDotTexture() {
   ctx.fillRect(0, 0, size, size);
   return new THREE.CanvasTexture(canvas);
 }
+
+/**
+ * A single big character on a plate, or painted onto nothing.
+ *
+ * Drawn rather than loaded. Everything in this project is procedural and a font
+ * file would be the first asset in it; canvas text is not an asset, because the
+ * glyph comes out of a font the browser already has. The stack is the one
+ * wallText.js uses, so numerals here and letters there are cut from the same
+ * kind of type.
+ *
+ * `tread` is a plate you stand on — chequer plate under the digit, for the pads
+ * at the window. `paint` is a stencil with nothing behind it, for the numbers
+ * on the walls of the tall room: transparent, so it sits *on* the concrete and
+ * takes the concrete's light rather than being a grey card hung in front of it.
+ */
+export function makeDigitTexture(digit, style = 'tread') {
+  const S = style === 'paint' ? 512 : 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = S;
+  canvas.height = S;
+  const c = canvas.getContext('2d');
+
+  if (style === 'tread') {
+    c.fillStyle = '#33362e';
+    c.fillRect(0, 0, S, S);
+    c.strokeStyle = 'rgba(20,22,18,0.55)';
+    c.lineWidth = 3;
+    for (let i = -S; i < S * 2; i += 16) {
+      c.beginPath();
+      c.moveTo(i, 0);
+      c.lineTo(i + S, S);
+      c.stroke();
+    }
+    for (let i = 0; i < 900; i++) {
+      c.fillStyle = `rgba(${170 + Math.random() * 70},${180 + Math.random() * 60},${160 + Math.random() * 70},${Math.random() * 0.05})`;
+      c.fillRect(Math.random() * S, Math.random() * S, 3, 3);
+    }
+  }
+
+  c.font = `900 ${S * 0.76}px "Impact", "Haettenschweiler", "Arial Black", sans-serif`;
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+
+  if (style === 'paint') {
+    // Sprayed through a stencil and left for years: a soft edge, one pass of
+    // colour, and enough of it missing that it reads as old rather than as a
+    // decal somebody applied this morning.
+    c.fillStyle = 'rgba(206,212,196,0.82)';
+    c.fillText(digit, S / 2, S / 2);
+    c.globalCompositeOperation = 'destination-out';
+    for (let i = 0; i < 2600; i++) {
+      const r = 1 + Math.random() * 7;
+      c.beginPath();
+      c.arc(Math.random() * S, Math.random() * S, r, 0, Math.PI * 2);
+      c.fillStyle = `rgba(0,0,0,${Math.random() * 0.5})`;
+      c.fill();
+    }
+    c.globalCompositeOperation = 'source-over';
+  } else {
+    // Stamped: a dark offset under a light face reads as a digit punched into
+    // the plate rather than painted onto it.
+    c.fillStyle = '#15170f';
+    c.fillText(digit, S / 2 + 5, S / 2 + 6);
+    c.fillStyle = '#cbd0c0';
+    c.fillText(digit, S / 2, S / 2);
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}

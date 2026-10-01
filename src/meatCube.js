@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { makeMeatSurface, cloneSurface, MEAT } from './textures.js';
 import { buildFinger } from './glove.js';
+import { playKnockout, playSpikeGrind, playGurgle } from './audio.js';
+import { PLAYER } from './config.js';
 
 /**
  * The meat cube.
@@ -30,10 +32,24 @@ import { buildFinger } from './glove.js';
  * on two faces has a front, and a thing with a front is facing you or it is
  * not. Walking round this one changes what it is.
  *
- * Nothing here is a mechanism. It does not open, it cannot be interacted with
- * and it does not follow you across the room — it breathes, its eyes move, and
- * that is the entire behaviour. See the tall room's platforms for the same
- * argument at the scale of a wall: the room is read, not solved.
+ * There is one input on it and it is the last one available: touch it, and it
+ * kills you. No key, no prompt, no lit spot on the surface — you are in
+ * contact with the thing or you are not, and the game never says which of
+ * those it would rather you did. See the touch, down with the rest of the
+ * behaviour, for the argument; the short version is that a hall seventy metres
+ * long pointed at a wall of meat is a hall asking you to walk up and put a
+ * hand on it, and for a long time the answer to that was nothing at all.
+ *
+ * What being caught by it means is not decided here. This file notices the
+ * contact, says so once, and moves the animal; the camera, the black and the
+ * screen you end up on belong to tallRoom.js and death.js. Same line
+ * `scripted` is drawn on, same reason.
+ *
+ * Nothing else here is a mechanism. It does not open otherwise, it does not
+ * follow you across the room, and there is nothing to solve on it — it
+ * breathes, its eyes move, it climbs, and it eats you if you handle it. See
+ * the tall room's platforms for the same argument at the scale of a wall: the
+ * room is read, not solved.
  */
 
 // Two stops below where the eye wants to put flesh, because of the tone mapping
@@ -227,7 +243,7 @@ function blobPath(radius, wobble, lobes, seed, points = 40) {
   return path;
 }
 
-export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player }) {
+export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player, travel, onTouched }) {
   /**
    * Where the skin is, for a point on the ideal cube — squeezed into `fit`.
    *
@@ -268,6 +284,7 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player }
    * bottom face and look — the same lesson as sizing it to the walls, which was
    * 0.145 short for exactly this reason.
    */
+  let keel = Infinity;
   {
     let highest = -Infinity;
     const STEPS = 48;
@@ -275,10 +292,44 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player }
     for (let i = 0; i <= STEPS; i++) {
       for (let j = 0; j <= STEPS; j++) {
         probe.set(-HALF + (i / STEPS) * SIZE, -HALF, -HALF + (j / STEPS) * SIZE);
-        highest = Math.max(highest, skin(probe).y);
+        const y = skin(probe).y;
+        highest = Math.max(highest, y);
+        // The other end of the same walk, which only matters once this thing
+        // leaves the floor: the collider needs an underside to be air below,
+        // and the underside is as lumpy as everything else about it.
+        keel = Math.min(keel, y);
       }
     }
     group.position.y = -highest - SETTLE;
+  }
+
+  /**
+   * And the crown of it, walked the same way and for the same reason.
+   *
+   * The top face is as lumpy as the bottom one and its true maximum is no more
+   * derivable, so it is sampled rather than reasoned about — see the note above,
+   * which is the third time in this file that sampling beat algebra.
+   *
+   * This is here because the box below needs a `top`, and it needs a `top`
+   * because of what is nineteen metres over this animal's back. The collider
+   * used to be solid at every height: fine while the cube was the only thing in
+   * a sealed room, and wrong the moment a window opened into that room at
+   * twenty-four metres. What it meant was that the entire volume of the tall
+   * room above the cube — two thirds of the tallest space in the game — was a
+   * solid you could see straight through. Nothing could reach it then. Something
+   * can now, and anything that got in would have been shoved back out by a wall
+   * that is not there.
+   */
+  let crown = -Infinity;
+  {
+    const STEPS = 48;
+    const probe = new THREE.Vector3();
+    for (let i = 0; i <= STEPS; i++) {
+      for (let j = 0; j <= STEPS; j++) {
+        probe.set(-HALF + (i / STEPS) * SIZE, HALF, -HALF + (j / STEPS) * SIZE);
+        crown = Math.max(crown, skin(probe).y);
+      }
+    }
   }
 
   // Everything that breathes hangs off this, so the collider and the floor
@@ -842,6 +893,8 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player }
     place(face, buildEye({ radius: 0.3 * S, lidded: true, seed: 0.4 }), 0, HALF * 0.28, 0.01 * S);
     place(face, buildMark(0.26 * S), -HALF * 0.1, -HALF * 0.62, 0.01 * S);
   }
+  /** Straight up out of the top face, and what the climbing stroke swings from. */
+  const ARM_BASE_X = Math.PI / 2;
   const arms = [];
   for (const [name, side] of [['left', -1], ['right', 1]]) {
     const arm = buildArm(side);
@@ -860,14 +913,21 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player }
      * The top is where the drawing has them anyway. They are on the Top sheet,
      * either side of the square, and putting them there means the only thing on
      * this cube that reaches past its own faces reaches into the one direction
-     * the room has thirty-four metres of: up.
+     * the room has seventy-six metres of: up.
      */
     place(faces.top, arm.group, HALF * 0.78 * side, 0, -0.05 * S);
     // The face's own +z is world up, so the arm — built along +y — is turned a
-    // quarter about x to stand up out of it.
-    arm.group.rotation.x = Math.PI / 2;
+    // quarter about x to stand up out of it. The climb swings from here, so it
+    // is a named base rather than a number written once and read never.
+    arm.group.rotation.x = ARM_BASE_X;
     arms.push(arm);
   }
+
+  /**
+   * The front mouth, kept, because it is the one part of this animal that
+   * something else has a reason to move. See the touch, below.
+   */
+  let jaw = null;
 
   // -- front: the tall mouth with an eye in it -------------------------------
   {
@@ -907,6 +967,12 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player }
     // its own, so this is the cube's placement height and nothing else.
     const mouthV = -group.position.y - mouth.userData.reach.bottom;
     place(face, mouth, MOUTH_U, mouthV, 0.02 * S);
+    // Held on the bottom lip, which is the point it was anchored on. Opening a
+    // mouth by scaling it about its middle drives the bottom lip down through
+    // the floor and the whole thing reads as a growing mouth rather than an
+    // opening one; pivoted on the lip that is resting on the ground, only the
+    // top of it moves, which is what a jaw does.
+    jaw = { group: mouth, restV: mouthV, lip: mouth.userData.reach.bottom, restZ: mouth.position.z };
 
     // The eye inside the mouth. It is the single worst thing in the drawings
     // and it costs nothing: an eye where teeth are is an eye that is not on the
@@ -967,35 +1033,562 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player }
   // ------------------------------------------------------------- collision ---
 
   // The box it actually occupies, which is the squeezed one: out to the wall on
-  // every side it reaches a wall. No `top` — it is sixteen metres to the crown
-  // of it and there is nothing to be gained by pretending its lumps are
-  // climbable. The arms are inside this now; they come off the top face and go
-  // up, so nothing reaches past it in plan.
+  // every side it reaches a wall. The arms are inside this too; they come off
+  // the top face and go up, so nothing reaches past it in plan.
+  //
+  // `top` is the sampled crown. It is not there to be climbed — nothing can get
+  // to it from the floor and nothing is meant to — it is there so that the room
+  // above the animal is air. That mattered not at all until the hoist's window
+  // opened into this room from twenty-four metres up.
   const halfX = fit ? fit.x : HALF + 0.08;
   const halfZ = fit ? fit.z : HALF + 0.08;
-  colliders.push({ minX: x - halfX, maxX: x + halfX, minZ: z - halfZ, maxZ: z + halfZ });
+  const box = {
+    minX: x - halfX,
+    maxX: x + halfX,
+    minZ: z - halfZ,
+    maxZ: z + halfZ,
+    top: group.position.y + crown,
+    /**
+     * And an underside, which it never had and now cannot do without.
+     *
+     * Sat on the floor, a box with a `top` and no `bottom` was exactly right:
+     * solid from the ground to the crown is what a fifteen metre animal wedged
+     * in a room is. The moment it leaves the floor that same box is a column of
+     * meat still filling the room it has climbed out of. `keel` is the lowest
+     * point of the sampled underside, so what is beneath it is air the instant
+     * there is any.
+     */
+    bottom: group.position.y + keel,
+    /**
+     * How far it climbed this frame — the same field the hoist publishes.
+     *
+     * Both bodies read it: a surface rising past a body in the air has to carry
+     * it rather than eject it sideways. See liftTower.js, where it was invented
+     * for a lift, and player.js, which does not care which of them is moving.
+     */
+    rise: 0,
+  };
+  colliders.push(box);
 
   // --------------------------------------------------------------- alive ----
 
   const home = group.position.y;
+
+  /**
+   * Up and down the tower.
+   *
+   * The room was built around this thing being wedged in the bottom of it: a
+   * shaft you cannot enter because the animal is the floor and the walls and
+   * the ceiling of the part you can reach. Moving it does not soften that, it
+   * points it — the room is only sealed while the thing sealing it is *here*,
+   * and now there is a minute and a half of every cycle where it is not.
+   *
+   * `high` is worked out from the room's ceiling rather than handed in, because
+   * only this file knows how tall the animal actually is: the crown was sampled,
+   * not derived. At the top of the travel it is against the slab with its face
+   * across the hoist's window, which is the one place in this building somebody
+   * is standing to look at it.
+   *
+   * Eight metres a second, which is no longer a lift at all.
+   *
+   * It has been 1.6, then 4, and now this: sixty metres in seven and a half
+   * seconds. At 1.6 it was a process, at 4 an event, and at 8 it is something
+   * the building does to you — the whole travel is over inside the time it
+   * takes to cross the room it happens in, and from the floor the first thing
+   * you know about it is that the light has gone.
+   *
+   * The pause is four. There is no point holding the ends of a travel this
+   * short for longer than the travel.
+   *
+   * And it only climbs. Coming down it lets go — see the fall below, which is
+   * the same gravity every body in this game falls under and not a speed at
+   * all. Up is eight metres a second of effort and seven and a half seconds of
+   * watching it work; down is two and a half seconds and no effort whatsoever,
+   * and the asymmetry is the whole character of the thing. Something that hauls
+   * itself up and then drops is something that was holding on.
+   *
+   * This is past a line, and the line is worth naming rather than discovering.
+   * A body standing on the crown is kept there by two separate rules: the free
+   * step, which every grounded body gets, and `rise`, which this box publishes
+   * every frame and which both bodies read. At the clamped 0.05s step eight
+   * metres a second is 0.4 of travel per frame — over the bucket's free step of
+   * 0.25, and so from here on the bucket is carried by `rise` alone. It is the
+   * same mechanism the hoist proved and it holds, but it is now load bearing on
+   * its own, which is why the reach it grants is the movement *plus* the same
+   * hair of slack the rest of the collision code works to. Exactly equal was
+   * true and one rounding error wide.
+   */
+  const RIDE = travel
+    ? {
+        low: home,
+        high: travel.ceiling - crown - (travel.clear ?? 0.1),
+        speed: travel.speed ?? 8.0,
+        pause: travel.pause ?? 4,
+      }
+    : null;
+  let lift = 0;
+  let going = 1;
+  let waiting = RIDE ? RIDE.pause : 0;
+
+  /**
+   * The climb, as an animation, and the one decision in it that matters.
+   *
+   * `climbPhase` is advanced by *distance travelled*, not by time. That is the
+   * whole trick and it is the difference between a thing hauling itself up a
+   * shaft and a thing sliding up a shaft with its arms waving. Hands that keep
+   * their own clock slip against the wall the moment the speed changes — and
+   * this speed has changed three times in an afternoon, from 1.6 to 4 to 8. Tie
+   * the stroke to the metres and it cannot slip: at eight metres a second it
+   * hauls fast, at rest it does not haul at all, and nobody has to remember to
+   * retune it.
+   *
+   * `STROKE` is how far it goes per arm. Three and a half metres on a body
+   * fifteen metres across is a short, fast grab rather than a long reach, which
+   * is what something with arms that size and no shoulders to speak of would
+   * actually do.
+   */
+  const STROKE = 3.5;
+  let climbPhase = 0;
+  let climbing = 0;
+  let falling = 0;
+  /**
+   * Whether something else is driving it.
+   *
+   * The cycle turns itself around at both ends. A scripted beat needs it to
+   * arrive and *stay* arrived until told otherwise — see tallRoom.js, which
+   * drops it in front of you, holds it there while it looks at you, and then
+   * sends it back up. `going` of nought is the state the automatic version
+   * never has: at an end, and not leaving.
+   */
+  let scripted = false;
+  /** Downward speed, metres a second, while it is on its way back down. */
+  let drop = 0;
+  /** How hard the last landing was, decaying, for the squash. */
+  let jolt = 0;
+
   const toPlayer = new THREE.Vector3();
   const local = new THREE.Vector3();
   let blink = 2.4;
   let lid = 0;
+
+  /**
+   * It gurgles. Not on a cue — all the time, because it is always doing it.
+   *
+   * The one in the greeting is the same sound used as a line of dialogue: it
+   * drops in front of you, holds still, and makes it *at* you. That only works
+   * if the thing has been making it all along and you have been hearing it
+   * through a wall for the last five minutes. A creature whose only noise is
+   * the noise it makes during its cutscene is a speaker with a cutscene
+   * attached.
+   *
+   * The gaps are uneven and they come out of a hash rather than Math.random,
+   * for the reason everything else in this file does: the room has to be the
+   * same room twice. Six to fifteen seconds, which is slow enough that you are
+   * never waiting for the next one and often enough that the silence never
+   * gets a chance to become the normal state.
+   */
+  const GURGLE = { near: 46, quiet: 6.5, spread: 8.5, busy: 0.55 };
+  let gurgleIn = 2.5;
+  let gurgleCount = 0;
+
+  // ------------------------------------------------------------- the touch ---
+
+  /**
+   * Put a hand on it and it takes you.
+   *
+   * This is the one input the cube has and the only one it needs, and
+   * everything about how it is built is an argument for why it should be the
+   * only one.
+   *
+   * The room is a hall seventy metres long with this at the end of it. You walk
+   * the whole length towards a wall of meat that breathes, whose eyes have been
+   * following you since the doorway, and which has been gurgling at you through
+   * the concrete for five minutes — and for every version of this room before
+   * now, nothing happened, because it was scenery. Every reading of it was
+   * correct and the thing still never once acknowledged the distance closing.
+   * The eyes tracking you are not an acknowledgement; they do that to an empty
+   * room.
+   *
+   * So: the one input is the last one available. Not a key, not a prompt, not a
+   * lit spot on the surface — you are in contact with it or you are not, and
+   * the game never tells you which of those it would rather you did. A death
+   * you walked into is worth three a room hands you, and the only way to be
+   * sure the player walked into this one is to make walking the whole of the
+   * interface.
+   *
+   * It is once. There is no cooldown and nothing to learn from a second go,
+   * because there is no second go — see `seize`, which does not come back.
+   *
+   * What this file does about it, and what it does not:
+   *
+   *   it does    notice the contact, say so once through `onTouched`, and then
+   *              move the animal — the lunge, the jaw, the eyes, the arms.
+   *   it doesn't take the camera, black the screen, or have any opinion about
+   *              what being caught by it means.
+   *
+   * That line is the same one `scripted` was drawn on and for the same reason:
+   * this file knows how the animal moves and nothing about why. The room that
+   * has a reason is the room that holds the clock. See tallRoom.js.
+   */
+  const SEIZE = {
+    /** Past the body's own radius, in metres, before contact counts. */
+    reach: 0.12,
+    /**
+     * How far it throws itself, and over how long.
+     *
+     * Four metres, which is four times what it was, and the reason is that
+     * nothing else moves any more. The shot used to fly the camera up to the
+     * mouth over two seconds; it does not, it cuts, and then it holds
+     * absolutely still. Something has to close the last five metres and the
+     * only thing left to do it is the animal — which is the better version of
+     * this beat anyway, and not only because it is cheaper. A camera flown
+     * into a mouth is the game moving you. A camera nailed to the floor while
+     * fifteen metres of meat comes across the gap at it is the thing moving,
+     * and being unable to move is most of what is frightening about it.
+     *
+     * Half a second for four metres. Slower than the old lunge and it reads
+     * as faster, because at nine tenths of a metre there was nothing to see:
+     * the distance is what makes a lunge legible, not the speed.
+     */
+    lunge: 4.2,
+    out: 0.5,
+    /**
+     * The beat it waits before coming, with its mouth already open.
+     *
+     * The single most important number here. Cut straight to a mouth already
+     * travelling and there is no jumpscare, there is a smear — you need two
+     * tenths of a second of a held, legible, open mouth for the cut to land
+     * before the thing behind it moves. It is also the whole of the pause: it
+     * looks at you, and then it does not.
+     */
+    hold: 0.22,
+    /** The jaw, which is not on the body's clock. It is open before it moves. */
+    gape: 0.12,
+  };
+
+  /** Seconds since it was seized, or null if it has not been. */
+  let seizedFor = null;
+
+  /**
+   * How far the player's feet are from the side of the animal, in plan.
+   *
+   * Plan only, and then two vertical states thrown out entirely. Standing on
+   * its back and standing clear underneath it are both positions where the
+   * distance to the surface is nought and neither of them is a hand on the
+   * thing — one is a floor and the other is a ceiling, and the collider has
+   * already given you both. Contact means beside it.
+   */
+  const reachToTheMeat = () => {
+    const p = player.position;
+    if (p.y >= box.top - 0.05) return Infinity;
+    if (p.y + PLAYER.eyeHeight <= box.bottom + 0.05) return Infinity;
+    const dx = Math.max(box.minX - p.x, 0, p.x - box.maxX);
+    const dz = Math.max(box.minZ - p.z, 0, p.z - box.maxZ);
+    return Math.hypot(dx, dz);
+  };
+
+  /**
+   * The throw, 0 to 1: nothing for `hold`, then out over `out`, then stays.
+   *
+   * There is no coming back from this one. An earlier version threw the body
+   * at you and pulled it in again over three quarters of a second, which was
+   * right when you survived it and is wrong now — whatever is happening over
+   * the next second is happening inside a mouth that is still open, and an
+   * animal that relaxes while it is eating is an animal playing an animation.
+   *
+   * Linear rather than eased, for the one reason that matters: the whole of a
+   * lunge is that its first frame is already at full speed. An eased
+   * departure is a thing deciding to move, and this one decided during the
+   * pause.
+   */
+  const lungeShape = () =>
+    seizedFor === null ? 0 : Math.min(1, Math.max(0, (seizedFor - SEIZE.hold) / SEIZE.out));
+
+  /**
+   * The jaw, on its own clock and a much faster one.
+   *
+   * Tied to the body's throw it opened as the thing arrived, which is a mouth
+   * opening around you — too late to be seen and too late to be the reason
+   * you are frightened. Open first, then come: what the cut lands on is a
+   * mouth that is already as wide as it goes.
+   */
+  const gapeShape = () =>
+    seizedFor === null ? 0 : Math.min(1, seizedFor / SEIZE.gape);
 
   return {
     group,
     /** For the harness: what got built, and where. */
     parts: { eyes: eyes.length, arms: arms.length, size: SIZE, sunk: +(HALF - group.position.y).toFixed(3) },
 
+    /**
+     * The arms, as numbers, for the harness.
+     *
+     * Handed out rather than found. A harness that goes looking for these in
+     * the scene graph is a harness guessing which of forty groups is a limb,
+     * and the first version of this one guessed wrong and reported an empty
+     * list — which looks exactly like an animation that is not running.
+     */
+    get limbs() {
+      return arms.map((arm) => ({
+        swing: +arm.group.rotation.x.toFixed(3),
+        sweep: +arm.group.rotation.z.toFixed(3),
+        elbow: +arm.elbow.rotation.x.toFixed(3),
+        grip: +arm.fingers[0].joints[0].rotation.x.toFixed(3),
+      }));
+    },
+
+    /**
+     * Taking orders, for a scripted beat.
+     *
+     * `scripted(true)` stops it turning itself round at the ends; everything
+     * else here is a cue. It is deliberately not a "play this cutscene" call —
+     * this file knows how the animal moves and nothing about why, and the room
+     * that has a reason is the room that should be holding the clock. See
+     * tallRoom.js.
+     */
+    scripted(on) {
+      scripted = on;
+      if (!on && going === 0) {
+        going = lift > 0 ? -1 : 1;
+        waiting = RIDE ? RIDE.pause : 0;
+      }
+    },
+    /**
+     * Stop where you are — unless you are falling, in which case land first.
+     *
+     * `scripted` on its own is not enough for this and the difference is the
+     * whole reason it exists as a second call. Scripted means "do not turn
+     * yourself round at the ends", which for a body on its way down is
+     * exactly right: it finishes the fall, hits the floor, thuds, and stays
+     * there. For a body on its way *up* it means it carries on to the top,
+     * and the thing that wants this call has just taken hold of the player —
+     * two more seconds of climbing is seventeen metres of shaft with the
+     * camera dragged up it.
+     *
+     * So the climb is cut here and the fall is not. A thing that stops dead
+     * in mid-air the instant it touches you is a thing whose animation was
+     * switched off; a thing that finishes falling on you is a thing that
+     * fell on you.
+     */
+    takeHold() {
+      scripted = true;
+      if (going > 0) {
+        going = 0;
+        waiting = 0;
+      }
+    },
+
+    /** Straight to the top, no travel — it is sixty metres up and out of sight. */
+    /**
+     * Stop where you are — unless you are falling, in which case land first.
+     *
+     * `scripted` on its own is not enough for this, and the difference is the
+     * whole reason this exists as a second call. Scripted means "do not turn
+     * yourself round at the ends", which for a body on its way down is exactly
+     * right: it finishes the fall, hits the floor, thuds, and stays there. For
+     * a body on its way *up* it means it carries on to the top — and the thing
+     * that wants this call has just taken hold of the player, so two more
+     * seconds of climbing is seventeen metres of shaft with the camera dragged
+     * up it.
+     *
+     * So the climb is cut here and the fall is not. Something that stops dead
+     * in mid-air the instant it touches you is something whose animation was
+     * switched off; something that finishes falling on you is something that
+     * fell on you.
+     */
+    takeHold() {
+      scripted = true;
+      if (going > 0) {
+        going = 0;
+        waiting = 0;
+      }
+    },
+
+    snapToTop() {
+      if (!RIDE) return;
+      lift = RIDE.high - RIDE.low;
+      group.position.y = RIDE.high;
+      box.top = group.position.y + crown;
+      box.bottom = group.position.y + keel;
+      box.rise = 0;
+      drop = 0;
+      going = 0;
+      waiting = 0;
+      climbing = 0;
+      falling = 0;
+    },
+    /** Let go. */
+    letGo() {
+      going = -1;
+      waiting = 0;
+      drop = 0;
+    },
+    /** Haul back up. */
+    haulUp() {
+      going = 1;
+      waiting = 0;
+      drop = 0;
+    },
+    get atTop() {
+      return !RIDE || lift >= RIDE.high - RIDE.low - 0.01;
+    },
+    get landed() {
+      return !RIDE || lift <= 0.01;
+    },
+
+    /**
+     * Seized, for the harness. `out` is how far the lunge has got, in metres,
+     * which is the only part of this with a number on it a test can watch.
+     */
+    get seized() {
+      return {
+        taken: seizedFor !== null,
+        age: seizedFor === null ? null : +seizedFor.toFixed(2),
+        out: +(lungeShape() * SEIZE.lunge).toFixed(3),
+        gape: +gapeShape().toFixed(2),
+        // Whatever is waiting on this thing to finish arriving — see the end
+        // of the shot in tallRoom.js — waits on the animal rather than on a
+        // copy of its clock kept somewhere else.
+        arrived: lungeShape() >= 1,
+        reach: +Math.min(99, reachToTheMeat()).toFixed(2),
+      };
+    },
+
+    /**
+     * The mouth, in world space, and the way out of the face it is on.
+     *
+     * Handed out because something else has to aim a camera down it and this
+     * is the only file that knows where it ended up. It is not a number that
+     * can be written down anywhere else: the mouth was anchored on its own
+     * bottom lip, against an outline that came out of a wobble, on a face
+     * whose skin position was sampled — three separate places where the honest
+     * answer was "measure it", and asking the scene graph is the fourth.
+     */
+    get maw() {
+      if (!jaw) return null;
+      group.updateMatrixWorld(true);
+      const at = jaw.group.getWorldPosition(new THREE.Vector3());
+      // The front face's own +z, in the world. The whole cube is square to its
+      // room so this is an axis, but it is read off the matrix rather than
+      // assumed, because `yaw` is a parameter and one day it will not be nought.
+      const out = new THREE.Vector3(0, 0, 1)
+        .applyQuaternion(faces.front.getWorldQuaternion(new THREE.Quaternion()))
+        .normalize();
+      return { at, out };
+    },
+
+    /** Where it is in its climb, for the harness and for whoever asks. */
+    get ride() {
+      return RIDE && { y: +group.position.y.toFixed(2), crown: +(group.position.y + crown).toFixed(2),
+                       low: +RIDE.low.toFixed(2), high: +RIDE.high.toFixed(2), going,
+                       waiting: +waiting.toFixed(1), drop: +drop.toFixed(1) };
+    },
+
     reset() {
       body.scale.setScalar(1);
-      body.position.y = 0;
+      body.position.set(0, 0, 0);
+      seizedFor = null;
+      // Including the hold a script had on it. Nothing else clears this and
+      // the one thing that sets it is a scene that ends with you dead, so a
+      // reset that left it on would bring you back to a room with a fifteen
+      // metre animal frozen in the doorway for good.
+      scripted = false;
       group.position.y = home;
+      lift = 0;
+      going = 1;
+      gurgleIn = 2.5;
+      gurgleCount = 0;
+      drop = 0;
+      jolt = 0;
+      falling = 0;
+      climbing = 0;
+      waiting = RIDE ? RIDE.pause : 0;
+      box.top = home + crown;
+      box.bottom = home + keel;
+      box.rise = 0;
     },
 
     update(delta) {
       const t = performance.now() / 1000;
+
+      // The climb. Written before the breathing because the breathing is a
+      // scale on the body inside the group, and this moves the group.
+      if (RIDE) {
+        box.rise = 0;
+        // Eased rather than switched, so the arms take up the stroke over a
+        // few frames at each end instead of snapping into it.
+        const hauling = going > 0 && waiting <= 0 ? 1 : 0;
+        climbing += (hauling - climbing) * Math.min(1, delta * 6);
+        // Let go, and the arms know it before the floor does.
+        const loose = going < 0 && waiting <= 0 ? 1 : 0;
+        falling += (loose - falling) * Math.min(1, delta * (loose ? 9 : 3));
+        if (waiting > 0) {
+          waiting = Math.max(0, waiting - delta);
+        } else {
+          const before = group.position.y;
+          const span = RIDE.high - RIDE.low;
+          if (going === 0) {
+            // Told to hold. Nothing moves and nothing turns it round.
+            drop = 0;
+          } else if (going > 0) {
+            drop = 0;
+            lift = Math.min(span, lift + RIDE.speed * delta);
+          } else {
+            /**
+             * Falling, under the same gravity as everything else in the game.
+             *
+             * Not a descent speed. A descent speed is a machine lowering a
+             * load, and this is not a machine — it climbed up there by hand and
+             * what it does at the top is stop holding on. From sixty-one metres
+             * that is two and a half seconds and it arrives at fifty metres a
+             * second, which is the only number in this file that should
+             * frighten anybody.
+             *
+             * The same constant the player falls under, imported rather than
+             * repeated: one gravity in the game means the drop reads as the
+             * same physics you have been living under all along, only applied
+             * to fifteen metres of animal.
+             */
+            drop += PLAYER.gravity * delta;
+            lift = Math.max(0, lift - drop * delta);
+          }
+          group.position.y = RIDE.low + lift;
+          box.top = group.position.y + crown;
+          box.bottom = group.position.y + keel;
+          box.rise = Math.max(0, group.position.y - before);
+          // Signed, so coming back down runs the same hand-over-hand backwards
+          // — a thing lowering itself, rather than a thing falling with its
+          // arms still climbing.
+          // Only while it is hauling. Falling is not a stroke, and running the
+          // phase backwards at fifty metres a second would spin the arms like a
+          // windmill on the one part of the cycle they are meant to be limp.
+          if (going > 0) climbPhase += ((group.position.y - before) / STROKE) * Math.PI * 2;
+          if (going !== 0 && (lift === span || lift === 0)) {
+            if (lift === 0 && drop > 0) {
+              // Fifteen metres of animal arriving on a concrete floor. The
+              // knockout thud is the heaviest thing in the audio and this is
+              // the heaviest thing in the building; the grind under it is the
+              // room taking it.
+              jolt = Math.min(1, drop / 40);
+              playKnockout();
+              playSpikeGrind(0.8);
+              // And it has something to say about the landing. Straight after
+              // the thud rather than under it, so it reads as the thing
+              // reacting to the floor rather than as part of hitting it.
+              gurgleIn = 0.35;
+            }
+            drop = 0;
+            // Under a script it arrives and stops. Left to itself it turns
+            // round, which is the difference between a cycle and a cue.
+            if (scripted) {
+              going = 0;
+            } else {
+              going = -going;
+              waiting = RIDE.pause;
+            }
+          }
+        }
+      }
 
       /**
        * Breathing, and only upward.
@@ -1013,8 +1606,74 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player }
        * the shape to do anyway, and it took being this big to notice.
        */
       const breath = Math.sin(t * 0.52);
-      body.scale.set(1, 1 + breath * 0.008, 1);
+      // And the heave: two surges per cycle, one per arm, on the same phase the
+      // hands are on. Without it the body is a lift car with limbs attached —
+      // the thing that sells a haul is that the mass moves *because* the arm
+      // pulled, so the swell peaks a little after the pull does.
+      const heave = climbing * 0.012 * Math.sin(climbPhase * 2 - 0.7);
+      // And the landing. It arrives, it flattens, and it comes back — one
+      // damped bounce and out, because a thing this size that wobbles is a
+      // balloon and a thing this size that stops dead is a brick.
+      if (jolt > 0) jolt = Math.max(0, jolt - delta * 1.15);
+      const squash = jolt > 0 ? -Math.sin(jolt * Math.PI * 2.4) * jolt * 0.075 : 0;
+      body.scale.set(1, 1 + breath * 0.008 + heave + squash, 1);
       body.position.y = HALF * (body.scale.y - 1);
+
+      // --------------------------------------------------------- the touch ---
+      /**
+       * Notice it, say so, and start moving — in that order and in one frame,
+       * so the lunge below is already on its first frame rather than a frame
+       * behind the thing that caused it.
+       *
+       * Three gates, and none of them is a timer. `scripted` is the greeting,
+       * which drops this animal in the doorway in front of you and would
+       * otherwise kill you on arrival; `isEnabled` is every other beat that
+       * takes the body away, the opening cutscene included; `isControlled` is
+       * the bucket, because the thing this kills is the body you are behind
+       * the eyes of, and a parked body brushing the meat sixty metres from
+       * where you are actually standing is not you touching anything.
+       */
+      if (seizedFor === null) {
+        const free = !scripted && player.isEnabled !== false && player.isControlled !== false;
+        if (free && reachToTheMeat() < PLAYER.radius + SEIZE.reach) {
+          seizedFor = 0;
+          onTouched?.();
+        }
+      } else {
+        seizedFor += delta;
+      }
+
+      /**
+       * Out of the front face, always, whichever side of it you were standing
+       * on.
+       *
+       * It used to work out the nearest face and come at you off that one,
+       * which was the honest answer while this was a shove you walked away
+       * from. It is not that any more: the shot cuts to the mouth, and the
+       * mouth is on the front. A lunge along any other axis is the animal
+       * moving one way while the camera watches it from another — and worse,
+       * the two faces that are not the front are pressed flat against the
+       * side walls, so a sideways throw is four metres of meat driven into
+       * concrete.
+       *
+       * Front is also the one direction that has somewhere to go. The room is
+       * sealed on three sides and open on the fourth, and the fourth is the
+       * hall you came down.
+       */
+      const thrown = lungeShape();
+      if (thrown !== 0) body.position.z = thrown * SEIZE.lunge;
+
+      // And the mouth, which opened before any of that and stays open.
+      const gape = gapeShape();
+      if (jaw) {
+        const k = 1 + gape * 0.42;
+        jaw.group.scale.y = k;
+        // Pivoted on the bottom lip. See where `jaw` is built: the mouth was
+        // anchored on the lip sitting on the floor and scaling about the
+        // group's own middle takes that anchor away again.
+        jaw.group.position.y = jaw.restV + jaw.lip * (1 - k);
+        jaw.group.position.z = jaw.restZ + gape * 0.5;
+      }
 
       // The eyes. All of them look at you, which is free — they are already
       // built as balls in sockets — and is the only thing this does that
@@ -1025,6 +1684,39 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player }
       // looking away are the same picture.
       toPlayer.copy(player.position);
       toPlayer.y += 1.68;
+
+      /**
+       * And the noise, pitched by how far away you are and how hard it is
+       * working.
+       *
+       * Distance is measured to the body rather than to the room, because this
+       * body moves sixty metres and a sound that does not follow it is a sound
+       * coming from a hole in the floor. Nothing is scheduled at all past
+       * `near` — the hall is long and there is no point filling the graph with
+       * nodes for something inaudible at the other end of it.
+       *
+       * `busy` shortens the gaps while it is climbing or falling. A thing
+       * hauling itself up a shaft has more to say about it than a thing sitting
+       * at the bottom, and it is also the only cue you get, from down the hall,
+       * that the room at the end has started moving.
+       */
+      gurgleIn -= delta;
+      if (gurgleIn <= 0) {
+        const away = Math.hypot(
+          toPlayer.x - group.position.x,
+          toPlayer.y - group.position.y,
+          toPlayer.z - group.position.z
+        );
+        if (away < GURGLE.near) {
+          // Full voice up close, down to a mutter at the edge of hearing.
+          playGurgle(Math.max(0.12, Math.min(1, 1.15 - away / GURGLE.near)));
+        }
+        const n = Math.sin(gurgleCount * 91.7 + 13.2) * 43758.5453;
+        const roll = ((n % 1) + 1) % 1;
+        const working = RIDE && (going !== 0 || drop > 0) && waiting <= 0;
+        gurgleIn = (GURGLE.quiet + roll * GURGLE.spread) * (working ? GURGLE.busy : 1);
+        gurgleCount++;
+      }
       for (const eye of eyes) {
         const socket = eye.ball.parent;
         socket.updateMatrixWorld(true);
@@ -1042,29 +1734,85 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player }
         eye.ball.lookAt(local);
       }
 
-      // And they blink, all at once, on a beat that is not regular.
+      // And they blink, all at once, on a beat that is not regular — except
+      // once it has you, when they are held open for good. A thing that blinks
+      // while it is eating is a thing on a schedule.
       blink -= delta;
-      if (blink <= 0) {
+      if (gape > 0.02) {
+        lid = 0;
+        blink = Math.max(blink, 0.6);
+      } else if (blink <= 0) {
         blink = 2.6 + rand(Math.floor(t), 21) * 5.5;
         lid = 1;
       }
       lid = Math.max(0, lid - delta * 5.5);
       const open = 1 - Math.sin(lid * Math.PI) * 0.94;
+      // And they bulge. The lids are separate meshes laid on the skin and do
+      // not move, so the ball growing through its own aperture is the whole of
+      // what an eye this size has to be wide with.
+      const bulge = 1 + gape * 0.3;
       // Through the eye's own width, not over it. Setting x to 1 here is what
       // quietly undid the lidded eyes' stretch every frame — they are built
       // wide to fill their slot and were being squared up again sixty times a
       // second, which no amount of looking at the builder would have shown.
-      for (const eye of eyes) eye.ball.scale.set(eye.wide, Math.max(0.04, open), 1);
+      for (const eye of eyes)
+        eye.ball.scale.set(eye.wide * bulge, Math.max(0.04, open) * bulge, bulge);
 
-      // The arms stir. Not a gesture and not aimed at anything — the drawing
-      // has them held up, and something holding its arms up is either about to
-      // do something or has been like that for a very long time.
+      /**
+       * The arms: stirring when it is still, hauling when it is not.
+       *
+       * The stir is the room as it was — the drawing has them held up, and
+       * something holding its arms up is either about to do something or has
+       * been like that for a very long time.
+       *
+       * The haul is that same pair of arms on a stroke, half a cycle apart, and
+       * it is built out of one angle: reach, plant, pull, release. The whole arm
+       * swings back on the reach and forward through the pull; the elbow folds
+       * only while the hand is loaded, because an elbow that folds on the reach
+       * is an arm doing a backstroke; and the fingers are shut through the pull
+       * and open through the reach, which is the part that reads at fifty
+       * metres when nothing else does.
+       *
+       * Both are computed every frame and crossfaded on `climbing`. Switching
+       * between two animations leaves the arms wherever the old one had them.
+       */
       arms.forEach((arm, i) => {
-        arm.elbow.rotation.z = Math.sin(t * 0.31 + i * 2.3) * 0.09;
-        arm.wrist.rotation.y = Math.sin(t * 0.24 + i * 1.7) * 0.16;
+        const idleElbowZ = Math.sin(t * 0.31 + i * 2.3) * 0.09;
+        const idleWristY = Math.sin(t * 0.24 + i * 1.7) * 0.16;
+
+        // Half a cycle apart: one hand is always loaded.
+        const phase = climbPhase + i * Math.PI;
+        const swing = Math.sin(phase);
+        // 1 through the pull, 0 through the reach.
+        const load = (1 - Math.cos(phase)) / 2;
+
+        // Dragged back on the fall: nothing is holding on, and the arms of a
+        // thing dropping sixty metres go where the air puts them.
+        arm.group.rotation.x =
+          ARM_BASE_X +
+          climbing * swing * 0.62 -
+          falling * (0.5 + 0.25 * Math.sin(t * 5 + i)) +
+          // Thrown forward when it has you, and added rather than blended in:
+          // whatever the arms were doing, this happens on top of it, which is
+          // the only version that is right both while it stands there and
+          // while it is halfway up the shaft.
+          gape * 1.05;
+        arm.group.rotation.z = climbing * Math.cos(phase) * 0.22 * (i ? -1 : 1);
+        arm.elbow.rotation.x = climbing * load * 0.95;
+        arm.elbow.rotation.z = (1 - climbing) * idleElbowZ;
+        arm.wrist.rotation.y = (1 - climbing) * idleWristY;
+        arm.wrist.rotation.x = climbing * (0.35 - load * 0.7);
+
         for (const [f, finger] of arm.fingers.entries()) {
-          const curl = 0.09 + 0.05 * Math.sin(t * 0.44 + f * 0.8 + i * 3.1);
-          for (const joint of finger.joints) joint.rotation.x = curl;
+          const idleCurl = 0.09 + 0.05 * Math.sin(t * 0.44 + f * 0.8 + i * 3.1);
+          // Shut hard on the pull, open on the reach, and not all at once —
+          // fingers close in a run, which is what makes a hand look like it is
+          // taking hold of something rather than closing a clamp.
+          const roll = Math.min(1, Math.max(0, load * 1.25 - f * 0.08));
+          const gripCurl = 0.06 + roll * 1.05;
+          const curl = (1 - climbing) * idleCurl + climbing * gripCurl;
+          // Splayed. Whatever the hand was doing, it opens.
+          for (const joint of finger.joints) joint.rotation.x = curl * (1 - gape);
         }
       });
     },

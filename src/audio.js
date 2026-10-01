@@ -1036,3 +1036,490 @@ export function playObjectiveBlip() {
   tone(start, 784, 0.085, 0.16);
   tone(start + 0.075, 1175, 0.17, 0.13);
 }
+
+/**
+ * The hoist, for as long as it is moving.
+ *
+ * Sustained rather than one-shot, which nothing else in here except the chase
+ * music is, and for the same reason: the sound is not an event, it is the
+ * length of the ride. Thirteen seconds of shaft with nothing in your ears is
+ * thirteen seconds of the game having stopped.
+ *
+ * Three voices and none of them a note. A sawtooth at 47Hz for the motor, a
+ * second one seven cents off it so the two beat slowly against each other, and
+ * band-passed noise for the cable running over the sheave. The beat is the part
+ * doing the work — a steady tone reads as a hum in the room, and two that drift
+ * in and out of phase read as something turning.
+ *
+ * `setLevel` is how far away it is, so stepping out of the bucket and watching
+ * the thing go up without you sounds like watching it rather than riding it.
+ */
+export function createLiftMotor() {
+  let voice = null;
+
+  return {
+    start(level = 1) {
+      if (voice || !ready()) return;
+      playedCount++;
+      const t = context.currentTime + 0.01;
+
+      const gain = context.createGain();
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(0.16, t + 0.55);
+      send(gain, 0.8);
+
+      const nodes = [];
+
+      // The motor. Detuned against itself, filtered well down — a sawtooth this
+      // low with its top left on is a buzzer, not a machine.
+      for (const [hz, detune] of [
+        [47, 0],
+        [47, 7],
+      ]) {
+        const osc = context.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.value = hz;
+        osc.detune.value = detune;
+        const body = context.createBiquadFilter();
+        body.type = 'lowpass';
+        body.frequency.value = 210;
+        body.Q.value = 1.4;
+        const trim = context.createGain();
+        trim.gain.value = 0.55;
+        osc.connect(body).connect(trim).connect(gain);
+        osc.start(t);
+        nodes.push(osc);
+      }
+
+      // The cable over the wheel: noise, narrow, and quiet enough that it is
+      // only obviously there when it stops.
+      const cable = context.createBufferSource();
+      cable.buffer = getNoise();
+      cable.loop = true;
+      const band = context.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.value = 1750;
+      band.Q.value = 2.6;
+      const hiss = context.createGain();
+      hiss.gain.value = 0.16;
+      cable.connect(band).connect(hiss).connect(gain);
+      cable.start(t, Math.random() * 1.5);
+      nodes.push(cable);
+
+      voice = { gain, nodes, level };
+      this.setLevel(level);
+    },
+
+    /** 1 riding it, 0 out of earshot. Smoothed, so it does not step. */
+    setLevel(level) {
+      if (!voice || !context) return;
+      voice.level = level;
+      voice.gain.gain.setTargetAtTime(0.16 * level, context.currentTime, 0.12);
+    },
+
+    stop() {
+      if (!voice || !context) return;
+      const { gain, nodes } = voice;
+      voice = null;
+      const t = context.currentTime;
+      // Cancel first: setTargetAtTime leaves an event on the schedule that
+      // would otherwise pull the gain straight back up after the ramp down.
+      gain.gain.cancelScheduledValues(t);
+      gain.gain.setValueAtTime(gain.gain.value, t);
+      gain.gain.linearRampToValueAtTime(0.0001, t + 0.28);
+      for (const node of nodes) {
+        try {
+          node.stop(t + 0.32);
+        } catch {
+          /* already stopped — the context was taken away mid-ride */
+        }
+      }
+    },
+  };
+}
+
+/**
+ * The gurgle: what fifteen metres of animal sounds like when it looks at you.
+ *
+ * Three layers, because one is a noise and three is a throat. A bed of noise
+ * through a bandpass that slides down and back is the wet part; a run of short
+ * falling sines on an irregular spacing is the bubbles, and irregular is the
+ * whole job — evenly spaced bubbles are a machine, and this is not a machine;
+ * and a detuned pair of low oscillators underneath give it a size, because
+ * nothing built out of noise alone sounds like it weighs anything.
+ *
+ * Long, at two and a bit seconds, and `level` is doing more work than it looks
+ * like. This is both the creature's ambient noise — every six to fifteen
+ * seconds, quieter the further off you are, see meatCube.js — and the line it
+ * delivers in the greeting, at full voice, with the thing holding still in
+ * front of you. Those are the same sound on purpose: what makes the scripted
+ * one land is that you have been hearing it through a wall for five minutes.
+ *
+ * Which is also why it is long. A short version reads as a creature clearing
+ * its throat; at two seconds it reads as a creature deciding.
+ */
+export function playGurgle(level = 1) {
+  if (!ready()) return;
+  playedCount++;
+  const t = context.currentTime + 0.005;
+  const DUR = 2.3;
+
+  const bed = context.createBufferSource();
+  bed.buffer = getNoise();
+  bed.loop = true;
+  const band = context.createBiquadFilter();
+  band.type = 'bandpass';
+  band.Q.value = 3.6;
+  band.frequency.setValueAtTime(210, t);
+  band.frequency.linearRampToValueAtTime(88, t + DUR * 0.55);
+  band.frequency.linearRampToValueAtTime(160, t + DUR);
+  const bedGain = context.createGain();
+  bedGain.gain.setValueAtTime(0.0001, t);
+  bedGain.gain.exponentialRampToValueAtTime(0.22 * level, t + 0.18);
+  bedGain.gain.setValueAtTime(0.22 * level, t + DUR * 0.7);
+  bedGain.gain.exponentialRampToValueAtTime(0.0001, t + DUR);
+  bed.connect(band).connect(bedGain);
+  send(bedGain, 0.62);
+  bed.start(t);
+  bed.stop(t + DUR + 0.05);
+
+  // Bubbles. The spacing is written out rather than generated: this plays once
+  // in the game and it should be the same shape every time it is heard.
+  for (const [i, at] of [0.05, 0.23, 0.34, 0.58, 0.71, 0.99, 1.16, 1.27, 1.55, 1.78, 1.94, 2.12].entries()) {
+    const blip = context.createOscillator();
+    blip.type = i % 3 === 0 ? 'triangle' : 'sine';
+    const top = 150 + ((i * 47) % 130);
+    blip.frequency.setValueAtTime(top, t + at);
+    blip.frequency.exponentialRampToValueAtTime(top * 0.38, t + at + 0.13);
+    const g = context.createGain();
+    g.gain.setValueAtTime(0.0001, t + at);
+    g.gain.exponentialRampToValueAtTime(0.13 * level, t + at + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + at + 0.16);
+    blip.connect(g);
+    send(g, 0.5);
+    blip.start(t + at);
+    blip.stop(t + at + 0.2);
+  }
+
+  // And the size of it: two low oscillators a few cents apart, which beat
+  // against each other slowly and never quite settle.
+  for (const [i, hz] of [31, 36.5].entries()) {
+    const low = context.createOscillator();
+    low.type = 'sawtooth';
+    low.frequency.setValueAtTime(hz, t);
+    low.frequency.linearRampToValueAtTime(hz * 0.82, t + DUR);
+    const soft = context.createBiquadFilter();
+    soft.type = 'lowpass';
+    soft.frequency.value = 220;
+    const g = context.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.2 * level, t + 0.3 + i * 0.1);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + DUR);
+    low.connect(soft).connect(g);
+    send(g, 0.45);
+    low.start(t);
+    low.stop(t + DUR + 0.05);
+  }
+}
+
+/**
+ * What the gurgle is when the thing has been touched.
+ *
+ * Deliberately built out of the gurgle's own three parts, at the wrong speed
+ * and the wrong direction. That is the whole argument for this sound: a scare
+ * cue bought in from somewhere else is a speaker going off, and the one thing
+ * this animal has going for it is that you have been listening to it breathe
+ * and gurgle through a wall for five minutes before you ever get close enough
+ * to put a hand on it. So the scream has to be recognisably the same throat.
+ *
+ *   the bed     the same bandpassed noise, swept *up* from 90 to 1400 in a
+ *               tenth of a second instead of sliding down over two seconds.
+ *               A wet noise falling is a thing settling; the same wet noise
+ *               rising is the same thing coming at you.
+ *   the bubbles the gurgle's twelve blips crushed from 2.3 seconds into 0.14,
+ *               which stops being a run of bubbles and becomes one tearing
+ *               sound, because that is what a sequence does when you take the
+ *               gaps out of it.
+ *   the size    the two detuned saws, up two octaves and still detuned, so it
+ *               keeps beating against itself while it screams.
+ *
+ * And a transient on the front of it, which the gurgle has not got and which
+ * is the entire difference between a loud sound and a sudden one. Four
+ * milliseconds of attack: any slower and the ear has time to file it as
+ * something starting rather than something already happening.
+ *
+ * Short — 1.1 seconds against the gurgle's 2.3. The gurgle is two seconds long
+ * because at two seconds it reads as a creature deciding. This one has already
+ * decided.
+ *
+ * The levels are set against the output and not against taste. `master` is a
+ * plain 0.9 gain straight into the destination with no limiter anywhere, so a
+ * sound that sums past one does not get louder, it gets clipped — and digital
+ * clipping on a scream does not read as a monster, it reads as a blown
+ * speaker. playKnockout, the heaviest thing in the game until this, sums to
+ * 0.84 at worst case. These five put this a little over that and no further,
+ * which is as loud as the loudest sound in a game is allowed to be.
+ */
+export function playMeatLunge(level = 1) {
+  if (!ready()) return;
+  playedCount++;
+  const t = context.currentTime + 0.004;
+  const DUR = 1.1;
+
+  // The transient. Broadband, four milliseconds up, gone in a fifth of a
+  // second — it is not heard as a sound, only as the moment the rest started.
+  const hit = context.createBufferSource();
+  hit.buffer = getNoise();
+  const shelf = context.createBiquadFilter();
+  shelf.type = 'highpass';
+  shelf.frequency.value = 400;
+  const hitGain = context.createGain();
+  hitGain.gain.setValueAtTime(0.0001, t);
+  hitGain.gain.exponentialRampToValueAtTime(0.42 * level, t + 0.004);
+  hitGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+  hit.connect(shelf).connect(hitGain);
+  send(hitGain, 0.5);
+  // A fixed offset into the noise, not a random one: this fires at a moment
+  // the player chose and it should be the same sound every time they choose
+  // it. playKnockout takes a random offset because it happens once.
+  hit.start(t, 0.37);
+  hit.stop(t + 0.3);
+
+  // The bed, going the other way.
+  const bed = context.createBufferSource();
+  bed.buffer = getNoise();
+  bed.loop = true;
+  const band = context.createBiquadFilter();
+  band.type = 'bandpass';
+  band.Q.value = 2.8;
+  band.frequency.setValueAtTime(90, t);
+  band.frequency.exponentialRampToValueAtTime(1400, t + 0.1);
+  band.frequency.exponentialRampToValueAtTime(240, t + DUR);
+  const bedGain = context.createGain();
+  bedGain.gain.setValueAtTime(0.0001, t);
+  bedGain.gain.exponentialRampToValueAtTime(0.3 * level, t + 0.05);
+  bedGain.gain.setValueAtTime(0.3 * level, t + 0.42);
+  bedGain.gain.exponentialRampToValueAtTime(0.0001, t + DUR);
+  bed.connect(band).connect(bedGain);
+  send(bedGain, 0.7);
+  bed.start(t, 0.8);
+  bed.stop(t + DUR + 0.05);
+
+  // The bubbles, with the gaps taken out. Same twelve, same relative spacing,
+  // scaled by a sixteenth — and the pitches swept up rather than down, which
+  // is the one thing changed about them beyond the clock.
+  for (const [i, at] of [0.05, 0.23, 0.34, 0.58, 0.71, 0.99, 1.16, 1.27, 1.55, 1.78, 1.94, 2.12].entries()) {
+    const when = t + at / 16;
+    const blip = context.createOscillator();
+    blip.type = i % 3 === 0 ? 'sawtooth' : 'triangle';
+    const bottom = 180 + ((i * 47) % 130);
+    blip.frequency.setValueAtTime(bottom, when);
+    blip.frequency.exponentialRampToValueAtTime(bottom * 3.1, when + 0.09);
+    const g = context.createGain();
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.exponentialRampToValueAtTime(0.1 * level, when + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + 0.12);
+    blip.connect(g);
+    send(g, 0.4);
+    blip.start(when);
+    blip.stop(when + 0.16);
+  }
+
+  // The size of it, two octaves up and still a few cents apart.
+  for (const [i, hz] of [124, 146].entries()) {
+    const voice = context.createOscillator();
+    voice.type = 'sawtooth';
+    voice.frequency.setValueAtTime(hz * 0.7, t);
+    voice.frequency.exponentialRampToValueAtTime(hz * 1.35, t + 0.08);
+    voice.frequency.exponentialRampToValueAtTime(hz * 0.5, t + DUR);
+    const throat = context.createBiquadFilter();
+    throat.type = 'lowpass';
+    throat.frequency.setValueAtTime(600, t);
+    throat.frequency.exponentialRampToValueAtTime(2400, t + 0.09);
+    throat.frequency.exponentialRampToValueAtTime(400, t + DUR);
+    throat.Q.value = 5;
+    const g = context.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.19 * level, t + 0.02 + i * 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + DUR);
+    voice.connect(throat).connect(g);
+    send(g, 0.55);
+    voice.start(t);
+    voice.stop(t + DUR + 0.05);
+  }
+
+  // And the mass underneath, which is the only part with no relative in the
+  // gurgle. Fifteen metres of animal moving half a metre is felt before it is
+  // heard, and there is no way to make a body that size out of the 31Hz pair —
+  // they are its voice, and this is the rest of it arriving.
+  const mass = context.createOscillator();
+  mass.type = 'sine';
+  mass.frequency.setValueAtTime(76, t);
+  mass.frequency.exponentialRampToValueAtTime(22, t + 0.6);
+  const massGain = context.createGain();
+  massGain.gain.setValueAtTime(0.0001, t);
+  massGain.gain.exponentialRampToValueAtTime(0.4 * level, t + 0.015);
+  massGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.8);
+  mass.connect(massGain);
+  send(massGain, 0.65);
+  mass.start(t);
+  mass.stop(t + 0.85);
+}
+
+/**
+ * The screech. What the thing does on its way across the gap at you.
+ *
+ * Deliberately not part of playMeatLunge, and the reason is timing rather
+ * than tidiness. The jumpscare is in two beats — the cut lands on a mouth
+ * already open and holds for a fifth of a second, and then the animal comes.
+ * playMeatLunge is the first beat: a transient, a wet hit and four hundred
+ * kilos of sub, all of it under 1.5kHz and all of it over inside a second.
+ * This is the second. A scare where both sounds arrive together is a scare
+ * with one moment in it, and the whole shape of this one is that there are
+ * two and you get to notice the first before the second happens to you.
+ *
+ * Splitting them also pays for itself in headroom. The master is a plain 0.9
+ * gain into the destination with no limiter, so everything that overlaps has
+ * to fit under one together. Two tenths of a second after the lunge cue the
+ * transient is long gone, the bubbles are done and the sub is down to almost
+ * nothing, so this gets the output more or less to itself and can be loud
+ * without anything else being trimmed to make room.
+ *
+ * How it is built, and why it is not a sawtooth with a filter on it:
+ *
+ *   partials  three oscillators at 1, 2.37 and 3.71 times the base — not
+ *             integer multiples. That single decision is most of the
+ *             difference between a screech and a note. Integer partials are
+ *             what a vibrating string does and the ear hears them as one
+ *             pitch; these do not resolve, and what will not resolve into a
+ *             pitch reads as a sound something is making rather than a sound
+ *             something is playing.
+ *   tremor    one 33Hz oscillator on all three frequencies at once, a few
+ *             percent deep. A held pitch is a siren. Strain is the thing
+ *             that makes it an animal, and strain in a voice is the pitch
+ *             failing to sit still.
+ *   rasp      bandpass noise sweeping 2.2k to 3.6k over the top, which is
+ *             the air in it. Without this the stack is clean and clean is
+ *             synthetic no matter how inharmonic it is.
+ *   the break the last fifth of a second, everything falls through a fifth
+ *             and the rasp opens up. It is what a scream does when it runs
+ *             out, and it is the part that stops the sound reading as a
+ *             sample that was cut off.
+ *
+ * `top` stays under the master's 5.2kHz output lowpass on its highest
+ * partial: 1300 × 3.71 is 4.8k, which arrives. Anything written above that
+ * line is arithmetic nobody hears.
+ *
+ * On the level. It sums to about 0.46 against playKnockout's 0.84 and it will
+ * still be far and away the loudest thing in the game, because these are two
+ * and a half thousand hertz and that is forty decibels of the ear behind
+ * them. The knockout is a 40Hz sine and needs every bit of its amplitude to
+ * register at all. Anybody who turns this up because the number is smaller
+ * will find out what clipping sounds like.
+ */
+export function playScreech(level = 1) {
+  if (!ready()) return;
+  playedCount++;
+  const t = context.currentTime + 0.004;
+  const DUR = 0.9;
+  /** Where the break starts: everything falls through a fifth from here. */
+  const BREAK = DUR - 0.2;
+
+  // The strain, shared by every partial so they waver together — three
+  // independent wavers is a chord of unwell oscillators, not one voice.
+  const tremor = context.createOscillator();
+  tremor.type = 'sine';
+  tremor.frequency.setValueAtTime(33, t);
+  // Slowing as it tires, which is the other half of the break.
+  tremor.frequency.linearRampToValueAtTime(21, t + DUR);
+  tremor.start(t);
+  tremor.stop(t + DUR + 0.05);
+
+  const BASE = { from: 380, peak: 1300, end: 1150 };
+  for (const [i, [ratio, gain, shape]] of [
+    [1, 0.16, 'sawtooth'],
+    [2.37, 0.1, 'sawtooth'],
+    [3.71, 0.06, 'triangle'],
+  ].entries()) {
+    const voice = context.createOscillator();
+    voice.type = shape;
+    voice.frequency.setValueAtTime(BASE.from * ratio, t);
+    // Up hard, and not instantly — 35ms is a throat opening, 0 is a click
+    // with a pitch after it.
+    voice.frequency.exponentialRampToValueAtTime(BASE.peak * ratio, t + 0.035);
+    voice.frequency.exponentialRampToValueAtTime(BASE.end * ratio, t + BREAK);
+    // The break: down a fifth and still falling.
+    voice.frequency.exponentialRampToValueAtTime(BASE.end * ratio * 0.62, t + DUR);
+
+    // The tremor, scaled to this partial so the whole stack bends by the same
+    // proportion rather than by the same number of hertz — a fixed depth on
+    // the top partial is a quarter of the wobble it is on the bottom one.
+    const depth = context.createGain();
+    depth.gain.value = BASE.peak * ratio * 0.035;
+    tremor.connect(depth).connect(voice.frequency);
+
+    const g = context.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain * level, t + 0.008 + i * 0.004);
+    g.gain.setValueAtTime(gain * level, t + BREAK);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + DUR);
+    voice.connect(g);
+    send(g, 0.45);
+    voice.start(t);
+    voice.stop(t + DUR + 0.05);
+  }
+
+  // The air in it.
+  const rasp = context.createBufferSource();
+  rasp.buffer = getNoise();
+  rasp.loop = true;
+  const band = context.createBiquadFilter();
+  band.type = 'bandpass';
+  band.Q.value = 1.4;
+  band.frequency.setValueAtTime(2200, t);
+  band.frequency.exponentialRampToValueAtTime(3600, t + BREAK);
+  // Opening out on the break rather than closing with it. A voice that goes
+  // dull as it dies is a fade; one that goes ragged is a voice giving out.
+  band.frequency.exponentialRampToValueAtTime(1500, t + DUR);
+  const raspGain = context.createGain();
+  raspGain.gain.setValueAtTime(0.0001, t);
+  raspGain.gain.exponentialRampToValueAtTime(0.14 * level, t + 0.02);
+  raspGain.gain.setValueAtTime(0.14 * level, t + BREAK);
+  raspGain.gain.exponentialRampToValueAtTime(0.2 * level, t + BREAK + 0.06);
+  raspGain.gain.exponentialRampToValueAtTime(0.0001, t + DUR);
+  rasp.connect(band).connect(raspGain);
+  send(raspGain, 0.6);
+  // A fixed offset into the noise, not a random one. This fires at a moment
+  // the player chose and it should be the same sound every time.
+  rasp.start(t, 1.21);
+  rasp.stop(t + DUR + 0.05);
+}
+
+/**
+ * A tap on the output, for measuring what the mix actually peaks at.
+ *
+ * Dev only, and it exists because the master is a bare 0.9 gain into the
+ * destination with no limiter on it: every sound in this file has to fit
+ * under one on its own, and "I added up the gains I wrote down" is not the
+ * same claim as "I measured the samples". Taps after the master's lowpass,
+ * so what it reads is what leaves.
+ */
+export function tapOutput() {
+  if (!context || !master) return null;
+  const analyser = context.createAnalyser();
+  analyser.fftSize = 2048;
+  // Master already runs through a lowpass on its way out; hang this off the
+  // same node it feeds so the reading includes it.
+  master.connect(analyser);
+  const frame = new Float32Array(analyser.fftSize);
+  return () => {
+    analyser.getFloatTimeDomainData(frame);
+    let peak = 0;
+    let sum = 0;
+    for (const sample of frame) {
+      peak = Math.max(peak, Math.abs(sample));
+      sum += sample * sample;
+    }
+    return { peak, rms: Math.sqrt(sum / frame.length) };
+  };
+}

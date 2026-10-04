@@ -294,9 +294,6 @@ const tallRoom = createTallRoom({
   scene,
   doorway: giantHall.wayOn,
   player,
-  // The shadow body, for the one scene that has to show you being taken
-  // rather than show where it happened. See seizure.js.
-  playerBody,
   port: giantHall.lift.port,
   // For the one scene in this building that takes the camera off you and does
   // not give it back.

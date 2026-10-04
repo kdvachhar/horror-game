@@ -483,16 +483,15 @@ function openBox(width, height, depth) {
   return geometry;
 }
 
-export function createTallRoom({ scene, doorway, player, playerBody, port, camera, death }) {
+export function createTallRoom({ scene, doorway, player, port, camera, death }) {
   /**
    * Being eaten, which this room triggers and does not stage.
    *
-   * `camera`, `playerBody` and `death` are taken only to hand straight to it.
-   * The shot is seizure.js, a peer of cutscene.js and wakeUp.js — see the note
-   * there on why a room has no business writing camera.rotation, and on why
-   * the shot needs a body of yours it can put in the frame.
+   * `camera` and `death` are taken only to hand straight to it. The shot is
+   * seizure.js, a peer of cutscene.js and wakeUp.js — see the note there on
+   * why a room has no business writing camera.rotation.
    */
-  const seizure = createSeizure({ camera, player, playerBody, death });
+  const seizure = createSeizure({ camera, player, death });
   const group = new THREE.Group();
   scene.add(group);
 

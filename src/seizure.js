@@ -20,86 +20,78 @@ import { playMeatLunge, playScreech } from './audio.js';
  * the room owns it and the room's reset rebuilds it; a reference kept here
  * would eventually be a shot aimed at a mouth that no longer exists.
  */
-export function createSeizure({ camera, player, playerBody, death }) {
+export function createSeizure({ camera, player, death }) {
   /** The animal doing it, for as long as it is doing it. */
   let meat = null;
 
   /**
-   * Being eaten, as a scene you are in rather than a close-up of the thing
-   * that did it.
+   * Being eaten, as a piece of footage of the mouth.
    *
-   * Two versions came before this one and both of them made the same mistake
-   * from opposite ends. The first flew the camera up to the mouth over two
-   * seconds — snatched off the floor and put in. The second cut instead, hard,
-   * to a point five metres off the front of the animal with its mouth open,
-   * and nailed the camera down there.
+   * Three versions came before this one and the useful thing is what each of
+   * them was wrong about.
    *
-   * The cut was better and it was still wrong, and what was wrong with it only
-   * shows up when you die somewhere other than directly in front of the thing.
-   * That camera was placed off the *mouth* — maw plus five metres along the
-   * face's own normal — so the shot it framed was the animal, at the animal's
-   * last position, with you nowhere in it. You died, and the game cut away
-   * from you to look at something else. Where it caught you up the shaft, the
-   * body it had just taken was below the frame entirely.
+   * The first flew the camera to the mouth over two seconds. Two seconds of
+   * being carried is two seconds in which the worst has already happened and
+   * you are watching the paperwork.
    *
-   * So the anchor moves from the animal to you. The camera stands on the floor
-   * you were standing on, back along the line between you and the mouth and a
-   * few metres to one side of it, and it looks at your body. That one change
-   * is the whole of the difference: the animal is no longer the subject, it is
-   * the fifteen metres of wall that arrives behind the subject and closes over
-   * it. You watch yourself get taken, which is a scene, rather than watching
-   * where it happened from, which is a photograph of a mouth.
+   * The second cut instead, which was right, and then nailed the camera down
+   * five metres off the face, which was nearly right. The frame was correct —
+   * the field of view is 75 degrees vertical, so at five metres the frame is
+   * 7.7m tall against a mouth that spans 0 to 15.4, which is mouth top to
+   * bottom with teeth down both sides and the hall's ceiling slab at 12 safely
+   * out of shot. What was wrong with it was that nothing in it moved except
+   * the animal. A camera that cannot move is not a camera, it is a window, and
+   * the eye reads it as one.
    *
-   * And it is square, which took a second go to get right.
+   * The third went and stood behind your own body instead, so the shot had a
+   * subject it could be about. That bought a scene and sold the mouth: you
+   * were six metres back watching a figure get taken, which is a thing that
+   * happened to somebody, and the whole force of this animal is the moment
+   * where it is a thing happening to you with nothing between.
    *
-   * The first version of this shot put the camera back along the line from
-   * your body to the mouth, and three metres off that line for a
-   * three-quarter view. Both of those are angles, and the room has no angles
-   * in it: it is a square shaft with four flat walls and an animal that is a
-   * cube, square to all of them, whose face is a flat plane. Die anywhere but
-   * dead centre and the body-to-mouth line runs diagonally across the plan,
-   * so the whole frame sits skew to every edge in it — a wall running out of
-   * one corner, a face that is not parallel to anything, and a horizon that
-   * reads as tilted even though it is level.
+   * So: the second one's frame, and a camera somebody is holding. It starts
+   * 6.2 off the face and ends on the old mark at 5.0 as the mouth arrives,
+   * so the push and the lunge close the same gap from both ends. Under that
+   * it floats — a slow, small, unending drift in the aim and the lens
+   * position, at three rates that do not divide into each other. None of it
+   * is big enough to notice as movement. All of it is what the eye uses to
+   * decide that something is footage of a place rather than a picture of one,
+   * and the difference between those two readings is the whole of why this
+   * shot did not land.
    *
-   * So the shot is squared to the one surface that matters. `maw.out` is the
-   * way out of the face, read off its own matrix, and the camera is placed
-   * straight back along it from wherever you were standing and pointed
-   * straight back down it. The face is then parallel to the film plane, the
-   * shaft's walls run square out of the frame's edges, and the body — which
-   * is on that axis because the camera was placed from it — is in the middle
-   * of the picture with the animal filling everything behind it.
-   *
-   *   SHOT.back   straight back along the face's normal, which is always
-   *               *away* from the animal and so is also what keeps the camera
-   *               out of it without knowing anything about its shape. The
-   *               cube plugs its shaft at 14.96 by 13.96 and the only open
-   *               space near you is the space you are standing in, on the
-   *               near side of the face that is about to lunge.
-   *   SHOT.push   and it creeps in, by just over a metre across the lunge,
-   *               along that same axis so the move cannot introduce an angle
-   *               either. A fixed frame is a photograph and this is a shot; a
-   *               metre is enough to be felt without being a camera that is
-   *               doing something while you can do nothing, which is the
-   *               failure the first version died of.
-   *
-   * What it does not do is track. There is one axis, fixed when the shot
-   * starts, and the camera only slides along it — so the animal grows in the
-   * frame rather than being followed, and the framing is still choreography
-   * nobody is performing.
+   * The float does not decay and the rattle does. They are different things:
+   * the rattle is the hit, and it is over in half a second; the float is the
+   * camera existing, and it has to still be there on the last frame or the
+   * shot dies back into a photograph just as the mouth closes on it.
    */
   const SHOT = {
-    /** Straight back from the body along the face's own normal, in metres. */
+    /** Where the cut lands, off the face along its own normal, in metres. */
     back: 6.2,
-    /** Lens height above the floor the body is standing on. */
-    high: 1.55,
-    /** How far it creeps in over the shot, and over how long. */
-    push: 1.25,
-    over: 1.2,
+    /** And where it finishes: 6.2 less 1.2 is the 5.0 the frame was tuned at. */
+    push: 1.2,
+    /** How long the push takes. The lunge is about this. */
+    over: 1.15,
+  };
+
+  /**
+   * The hand holding it. Three rates, none of them a multiple of another, so
+   * the drift never repeats inside the second the shot lasts.
+   *
+   * Radians and metres. The turn is a quarter of a degree and the sway is
+   * three centimetres at six metres — under the width of a pixel of travel
+   * for anything in the middle of the frame, and still enough that the edges
+   * of it are never twice in the same place.
+   */
+  const FLOAT = {
+    turn: 0.0045,
+    roll: 0.0062,
+    sway: 0.031,
+    rise: 0.019,
+    hz: [0.37, 0.53, 0.29, 0.44],
   };
 
   const END = {
-    /** Held after the animal has finished arriving, before the screen. */
+    /** Held on the black, once the animal has finished arriving. */
     dark: 0.32,
     /** What the death screen says. */
     said: 'You touched it',
@@ -124,21 +116,23 @@ export function createSeizure({ camera, player, playerBody, death }) {
   let trauma = 0;
 
   /**
-   * The shot, fixed at the moment it starts and then only crept along.
+   * The shot, fixed at the moment of the cut and then only pushed along.
    *
-   * `at` is where the lens begins, `in` is the one direction it is allowed to
-   * move and the direction it looks, and `yaw`/`pitch` are that direction as
-   * the angles the camera is actually written in. Held as angles rather than
-   * recomputed each frame because they do not change: the camera slides along
-   * its own view axis, which is a move that cannot turn it.
+   * Sampled once rather than followed. Everything in the frame is about to
+   * move — the mouth comes four metres and grows two and a half upward as it
+   * opens — and a camera that tracked any of that would be a camera being
+   * driven, which is a different thing from a camera being held.
    */
   let end = null;
-  const shot = { at: new THREE.Vector3(), in: new THREE.Vector3(), yaw: 0, pitch: 0 };
+  const shot = {
+    at: new THREE.Vector3(),
+    in: new THREE.Vector3(),
+    side: new THREE.Vector3(),
+    yaw: 0,
+    pitch: 0,
+  };
   /** Scratch, so a shot that runs for a second does not allocate for a second. */
   const lens = new THREE.Vector3();
-  const axis = new THREE.Vector3();
-  /** Whether the shadow body was already being drawn when the shot started. */
-  let wasShown = false;
 
   /**
    * It has you. Called once, by the cube, on the frame of contact.
@@ -152,8 +146,8 @@ export function createSeizure({ camera, player, playerBody, death }) {
    * other way to touch this thing is to be standing in the room when it comes
    * back down, which arrives as contact the instant its underside passes your
    * eye line. So the rule is the one meatCube.js draws — a climb is cut, a
-   * fall is allowed to finish — and the mouth the shot is framed against is
-   * sampled after that call rather than before it.
+   * fall is allowed to finish — and the mouth the shot is aimed at is sampled
+   * after that call rather than before it.
    */
   const start = (animal) => {
     if (end) return;
@@ -162,64 +156,31 @@ export function createSeizure({ camera, player, playerBody, death }) {
     meat.takeHold();
 
     /**
-     * And the body is shown, which is the thing that makes this a scene.
+     * Where the cut lands. Off the mouth's own live position and the way out
+     * of the face it is on, because none of that can be written down anywhere
+     * else — see `maw` in meatCube.js.
      *
-     * The same shadow body you leave standing when you step into the bucket —
-     * see possession.js, which is the only other thing that turns it on. It
-     * is already being driven every frame from `player.pose` in the main
-     * loop, so there is nothing to place: it is standing exactly where you
-     * were when you were touched, because it *is* where you were.
+     * Level with the mouth rather than with the floor, which is what makes
+     * this frame the frame: the animal can be fifty metres up its shaft when
+     * it takes you, and a camera at your height would be pointed at its belly
+     * with the mouth out of shot above.
      */
-    wasShown = playerBody.isVisible;
-    playerBody.setVisible(true, player.lookYaw);
-
     const maw = meat.maw;
-    const body = player.position;
+    shot.at.copy(maw.at).addScaledVector(maw.out, SHOT.back);
+    shot.at.y = maw.at.y;
 
-    /**
-     * The one axis the shot has: the face's own normal, flattened.
-     *
-     * Flattened because the camera stands on the floor you were standing on
-     * rather than flying to a vantage, and because a normal with any tilt in
-     * it would put a tilt in the horizon. The face is vertical, so this takes
-     * nothing off it — it is a guard against a face that is one day hung at
-     * an angle, not a correction to this one.
-     *
-     * `maw.out` is the way *out* of the face, so moving along it is moving
-     * away from the animal, and that is the whole of what keeps the camera
-     * from being placed inside fifteen metres of it.
-     */
-    axis.set(maw.out.x, 0, maw.out.z);
-    // Degenerate only if the front face is ever pointed at the floor, which
-    // it is not and which nothing in meatCube.js can make it. The fallback is
-    // the line from the mouth to you — not square, but in frame, which is the
-    // one of the two properties that cannot be given up.
-    if (axis.lengthSq() < 1e-4) axis.set(body.x - maw.at.x, 0, body.z - maw.at.z);
-    axis.normalize();
-
-    // Straight back along it from where you were standing. No lateral offset:
-    // anything off this axis is an angle, and the argument above is that this
-    // room has none in it.
-    shot.at
-      .set(body.x, body.y + SHOT.high, body.z)
-      .addScaledVector(axis, SHOT.back);
-    // And pointed straight back down the same axis, rather than at the body.
-    // Aiming at the body would re-introduce a yaw the moment the body is not
-    // exactly on the axis — which it is, by construction, but only until
-    // somebody changes how `at` is placed. One axis, used twice.
-    shot.in.copy(axis).multiplyScalar(-1);
-    shot.yaw = Math.atan2(-shot.in.x, -shot.in.z);
-    /**
-     * The only tilt in it, and it is a lens height rather than an angle.
-     *
-     * The camera is 1.55 off your floor and the mouth is wherever the animal
-     * is holding it — up the shaft that can be fifty metres over your head.
-     * Pitching to find it would point the frame at the ceiling and lose you
-     * out of the bottom of it, which is the fault this whole shot exists to
-     * fix. So it does not pitch: it stays level, you are at eye height in the
-     * middle of the picture, and what is above you stays above you.
-     */
-    shot.pitch = 0;
+    const dx = maw.at.x - shot.at.x;
+    const dz = maw.at.z - shot.at.z;
+    // Straight at it. Written as Euler angles in YXZ rather than through
+    // `camera.lookAt`, which writes a quaternion — everything else in this
+    // game, the player included, writes YXZ, and mixing the two bakes in a
+    // roll that survives the handover back.
+    shot.yaw = Math.atan2(-dx, -dz);
+    shot.pitch = Math.atan2(maw.at.y - shot.at.y, Math.hypot(dx, dz));
+    // The two axes the hand is allowed to move along: into the mouth, and
+    // across it. Both flat, so a sway can never put a tilt in the horizon.
+    shot.in.set(-maw.out.x, 0, -maw.out.z).normalize();
+    shot.side.set(-shot.in.z, 0, shot.in.x);
 
     end = { dark: 0, t: 0 };
     trauma = 1;
@@ -241,10 +202,11 @@ export function createSeizure({ camera, player, playerBody, death }) {
      * lunges — a copy here would be right until somebody retunes SEIZE.hold
      * and then silently a frame out forever.
      *
-     * The two sounds are deliberately apart. playMeatLunge is the start: a
+     * The two sounds are deliberately apart. playMeatLunge is the cut: a
      * transient, a wet hit, and the sub. This is what happens next. Together
      * they would be one loud moment; a fifth of a second apart they are a
-     * thing noticing you and then a thing coming at you.
+     * thing noticing you and then a thing coming at you, which is the same
+     * two beats the picture is cut on.
      */
     if (!end.screeched && meat.seized.out > 0) {
       end.screeched = true;
@@ -261,26 +223,30 @@ export function createSeizure({ camera, player, playerBody, death }) {
       }
     }
 
-    // The creep, eased out so it is moving at the cut and slowing by the end
-    // — the opposite shape to a camera being driven somewhere.
+    const now = performance.now() / 1000;
+    const hit = trauma * trauma;
+
+    // The push, eased out: moving at the cut and slowing into the mark, which
+    // is the opposite shape to a camera being driven somewhere.
     const through = Math.min(1, end.t / SHOT.over);
     const eased = 1 - (1 - through) * (1 - through);
-    lens.copy(shot.at).addScaledVector(shot.in, SHOT.push * eased);
+    lens
+      .copy(shot.at)
+      .addScaledVector(shot.in, SHOT.push * eased)
+      // And the hand under it, which never stops.
+      .addScaledVector(shot.side, Math.sin(now * FLOAT.hz[2] * 6.283) * FLOAT.sway);
+    lens.y += Math.sin(now * FLOAT.hz[3] * 6.283 + 1.7) * FLOAT.rise;
 
-    // Pointed where it was pointed when the shot started. The creep is along
-    // the view axis, so it cannot turn the camera, and nothing else in here
-    // is allowed to.
-    const hit = trauma * trauma;
-    const now = performance.now() / 1000;
     camera.position.copy(lens);
     camera.rotation.set(
-      // Written as Euler angles in YXZ rather than through `camera.lookAt`,
-      // which writes a quaternion — everything else in this game, the player
-      // included, writes YXZ, and mixing the two bakes in a roll that
-      // survives the handover back.
-      shot.pitch + hit * Math.sin(now * SHAKE.hz * 0.91 + 2.4) * SHAKE.turn,
-      shot.yaw + hit * Math.sin(now * SHAKE.hz * 1.13) * SHAKE.turn,
-      hit * Math.sin(now * SHAKE.hz * 0.77 + 0.6) * SHAKE.roll,
+      shot.pitch +
+        Math.sin(now * FLOAT.hz[0] * 6.283 + 0.8) * FLOAT.turn +
+        hit * Math.sin(now * SHAKE.hz * 0.91 + 2.4) * SHAKE.turn,
+      shot.yaw +
+        Math.sin(now * FLOAT.hz[1] * 6.283) * FLOAT.turn +
+        hit * Math.sin(now * SHAKE.hz * 1.13) * SHAKE.turn,
+      Math.sin(now * FLOAT.hz[0] * 6.283 + 2.9) * FLOAT.roll +
+        hit * Math.sin(now * SHAKE.hz * 0.77 + 0.6) * SHAKE.roll,
       'YXZ'
     );
   };
@@ -295,7 +261,7 @@ export function createSeizure({ camera, player, playerBody, death }) {
      * The animal first, then the shot.
      *
      * The order is the reason this takes the delta rather than letting the
-     * room drive both halves: the shot is framed against the animal, so the
+     * room drive both halves: the shot is looking at the animal, so the
      * animal has to have moved this frame before the camera is written, or
      * the frame is one behind the thing it is a frame of.
      */
@@ -306,28 +272,14 @@ export function createSeizure({ camera, player, playerBody, death }) {
     },
     /**
      * Put it all back. This is the only way out of a death — see `respawn` in
-     * main.js — so it returns the body, the shadow body and the class on
-     * <body> as well as clearing the shot.
+     * main.js — so it returns the body and the class on <body> as well as
+     * clearing the shot.
      */
     reset() {
       end = null;
       trauma = 0;
       meat = null;
       document.body.classList.remove('cutscene');
-      /**
-       * And the shadow body put back the way the shot found it, which is not
-       * the same as hidden.
-       *
-       * You can be eaten while you are inside the bucket — your own body is
-       * stood where you left it and the animal does not care that nobody is
-       * home — and the restart out of a death does not hand you back to
-       * yourself (see `onRestart` in main.js, which winds the room back and
-       * moves you, but leaves the possession alone). Hiding it flatly would
-       * make the body you are standing next to disappear at the exact moment
-       * you got it back.
-       */
-      if (!wasShown) playerBody.setVisible(false);
-      wasShown = false;
       player.setEnabled(true);
     },
   };

@@ -102,16 +102,6 @@ export function createPlayerBody(scene) {
   return {
     group,
 
-    /**
-     * Whether it is being drawn, so something that turns it on for a moment
-     * can put it back the way it found it. The death shot does: you can be
-     * eaten while you are in the bucket, and the restart out of that does not
-     * reset the possession — see seizure.js and `onRestart` in main.js.
-     */
-    get isVisible() {
-      return material.colorWrite;
-    },
-
     /** Show the body you left behind, facing the way you were when you left. */
     setVisible(on, yaw = null) {
       material.colorWrite = on;

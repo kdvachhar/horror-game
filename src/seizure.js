@@ -50,36 +50,49 @@ export function createSeizure({ camera, player, playerBody, death }) {
    * it. You watch yourself get taken, which is a scene, rather than watching
    * where it happened from, which is a photograph of a mouth.
    *
-   *   SHOT.back   behind the body, measured along the line to the mouth and
-   *               so always *away* from the animal — which is also what keeps
-   *               the camera out of it without knowing anything about its
-   *               shape. The cube plugs its shaft at 14.96 by 13.96 and the
-   *               only open space near you is the space you are standing in,
-   *               on the near side of the face that is about to lunge.
-   *   SHOT.side   and off that line, because a camera directly behind a body
-   *               is a camera looking at the back of a head. Three metres is
-   *               a three-quarter view: you see the body, and past it the
-   *               whole width of the face it is standing under.
-   *   SHOT.push   and it creeps in, by just over a metre across the lunge.
-   *               A fixed frame is a photograph and this is a shot; a metre
-   *               is enough to be felt without being a camera that is doing
-   *               something while you can do nothing, which is the failure
-   *               the first version died of.
+   * And it is square, which took a second go to get right.
    *
-   * What it does not do is track. The aim is recomputed each frame from where
-   * the lens has crept to, but the point it aims at is your body, which is not
-   * going anywhere — so the animal grows in the frame rather than being
-   * followed, and the framing is still choreography nobody is performing.
+   * The first version of this shot put the camera back along the line from
+   * your body to the mouth, and three metres off that line for a
+   * three-quarter view. Both of those are angles, and the room has no angles
+   * in it: it is a square shaft with four flat walls and an animal that is a
+   * cube, square to all of them, whose face is a flat plane. Die anywhere but
+   * dead centre and the body-to-mouth line runs diagonally across the plan,
+   * so the whole frame sits skew to every edge in it — a wall running out of
+   * one corner, a face that is not parallel to anything, and a horizon that
+   * reads as tilted even though it is level.
+   *
+   * So the shot is squared to the one surface that matters. `maw.out` is the
+   * way out of the face, read off its own matrix, and the camera is placed
+   * straight back along it from wherever you were standing and pointed
+   * straight back down it. The face is then parallel to the film plane, the
+   * shaft's walls run square out of the frame's edges, and the body — which
+   * is on that axis because the camera was placed from it — is in the middle
+   * of the picture with the animal filling everything behind it.
+   *
+   *   SHOT.back   straight back along the face's normal, which is always
+   *               *away* from the animal and so is also what keeps the camera
+   *               out of it without knowing anything about its shape. The
+   *               cube plugs its shaft at 14.96 by 13.96 and the only open
+   *               space near you is the space you are standing in, on the
+   *               near side of the face that is about to lunge.
+   *   SHOT.push   and it creeps in, by just over a metre across the lunge,
+   *               along that same axis so the move cannot introduce an angle
+   *               either. A fixed frame is a photograph and this is a shot; a
+   *               metre is enough to be felt without being a camera that is
+   *               doing something while you can do nothing, which is the
+   *               failure the first version died of.
+   *
+   * What it does not do is track. There is one axis, fixed when the shot
+   * starts, and the camera only slides along it — so the animal grows in the
+   * frame rather than being followed, and the framing is still choreography
+   * nobody is performing.
    */
   const SHOT = {
-    /** Behind the body, along the line to the mouth, in metres. */
-    back: 5.6,
-    /** And off that line, so it is a three-quarter view and not a nape. */
-    side: 3.0,
+    /** Straight back from the body along the face's own normal, in metres. */
+    back: 6.2,
     /** Lens height above the floor the body is standing on. */
-    high: 1.7,
-    /** What it aims at: this far up the body. */
-    aim: 1.15,
+    high: 1.55,
     /** How far it creeps in over the shot, and over how long. */
     push: 1.25,
     over: 1.2,
@@ -113,15 +126,17 @@ export function createSeizure({ camera, player, playerBody, death }) {
   /**
    * The shot, fixed at the moment it starts and then only crept along.
    *
-   * `at` is where the lens begins, `look` is the body it is pointed at, and
-   * `in` is the unit vector between them — the one direction the camera is
-   * allowed to move, and only by SHOT.push.
+   * `at` is where the lens begins, `in` is the one direction it is allowed to
+   * move and the direction it looks, and `yaw`/`pitch` are that direction as
+   * the angles the camera is actually written in. Held as angles rather than
+   * recomputed each frame because they do not change: the camera slides along
+   * its own view axis, which is a move that cannot turn it.
    */
   let end = null;
-  const shot = { at: new THREE.Vector3(), look: new THREE.Vector3(), in: new THREE.Vector3() };
+  const shot = { at: new THREE.Vector3(), in: new THREE.Vector3(), yaw: 0, pitch: 0 };
   /** Scratch, so a shot that runs for a second does not allocate for a second. */
   const lens = new THREE.Vector3();
-  const line = new THREE.Vector3();
+  const axis = new THREE.Vector3();
   /** Whether the shadow body was already being drawn when the shot started. */
   let wasShown = false;
 
@@ -162,29 +177,49 @@ export function createSeizure({ camera, player, playerBody, death }) {
     const body = player.position;
 
     /**
-     * The line from you to the mouth, flattened.
+     * The one axis the shot has: the face's own normal, flattened.
      *
-     * Flat because the camera stands on the floor you were standing on rather
-     * than flying to a vantage, and `maw.out` is the fallback for the one
-     * case where the line has no horizontal part to it at all: the animal
-     * coming straight down on top of you, where your feet and its mouth are
-     * at the same place on the plan. `out` is the way out of the face, so the
-     * way *to* the face is the other sign of it.
+     * Flattened because the camera stands on the floor you were standing on
+     * rather than flying to a vantage, and because a normal with any tilt in
+     * it would put a tilt in the horizon. The face is vertical, so this takes
+     * nothing off it — it is a guard against a face that is one day hung at
+     * an angle, not a correction to this one.
+     *
+     * `maw.out` is the way *out* of the face, so moving along it is moving
+     * away from the animal, and that is the whole of what keeps the camera
+     * from being placed inside fifteen metres of it.
      */
-    line.set(maw.at.x - body.x, 0, maw.at.z - body.z);
-    if (line.lengthSq() < 1) line.set(-maw.out.x, 0, -maw.out.z);
-    line.normalize();
+    axis.set(maw.out.x, 0, maw.out.z);
+    // Degenerate only if the front face is ever pointed at the floor, which
+    // it is not and which nothing in meatCube.js can make it. The fallback is
+    // the line from the mouth to you — not square, but in frame, which is the
+    // one of the two properties that cannot be given up.
+    if (axis.lengthSq() < 1e-4) axis.set(body.x - maw.at.x, 0, body.z - maw.at.z);
+    axis.normalize();
 
+    // Straight back along it from where you were standing. No lateral offset:
+    // anything off this axis is an angle, and the argument above is that this
+    // room has none in it.
     shot.at
       .set(body.x, body.y + SHOT.high, body.z)
-      .addScaledVector(line, -SHOT.back)
-      // Perpendicular to the line, on the plan. Which side is arbitrary and
-      // staying arbitrary: there is nothing in this room that makes one of
-      // them the better look, and picking by some property of the geometry
-      // would be a rule nobody could read off the screen.
-      .addScaledVector(new THREE.Vector3(-line.z, 0, line.x), SHOT.side);
-    shot.look.set(body.x, body.y + SHOT.aim, body.z);
-    shot.in.copy(shot.look).sub(shot.at).normalize();
+      .addScaledVector(axis, SHOT.back);
+    // And pointed straight back down the same axis, rather than at the body.
+    // Aiming at the body would re-introduce a yaw the moment the body is not
+    // exactly on the axis — which it is, by construction, but only until
+    // somebody changes how `at` is placed. One axis, used twice.
+    shot.in.copy(axis).multiplyScalar(-1);
+    shot.yaw = Math.atan2(-shot.in.x, -shot.in.z);
+    /**
+     * The only tilt in it, and it is a lens height rather than an angle.
+     *
+     * The camera is 1.55 off your floor and the mouth is wherever the animal
+     * is holding it — up the shaft that can be fifty metres over your head.
+     * Pitching to find it would point the frame at the ceiling and lose you
+     * out of the bottom of it, which is the fault this whole shot exists to
+     * fix. So it does not pitch: it stays level, you are at eye height in the
+     * middle of the picture, and what is above you stays above you.
+     */
+    shot.pitch = 0;
 
     end = { dark: 0, t: 0 };
     trauma = 1;
@@ -232,11 +267,9 @@ export function createSeizure({ camera, player, playerBody, death }) {
     const eased = 1 - (1 - through) * (1 - through);
     lens.copy(shot.at).addScaledVector(shot.in, SHOT.push * eased);
 
-    // Aimed from wherever the lens has got to, at the body, every frame. The
-    // body does not move, so this is the push-in keeping its subject rather
-    // than a camera tracking anything.
-    const dx = shot.look.x - lens.x;
-    const dz = shot.look.z - lens.z;
+    // Pointed where it was pointed when the shot started. The creep is along
+    // the view axis, so it cannot turn the camera, and nothing else in here
+    // is allowed to.
     const hit = trauma * trauma;
     const now = performance.now() / 1000;
     camera.position.copy(lens);
@@ -245,9 +278,8 @@ export function createSeizure({ camera, player, playerBody, death }) {
       // which writes a quaternion — everything else in this game, the player
       // included, writes YXZ, and mixing the two bakes in a roll that
       // survives the handover back.
-      Math.atan2(shot.look.y - lens.y, Math.hypot(dx, dz)) +
-        hit * Math.sin(now * SHAKE.hz * 0.91 + 2.4) * SHAKE.turn,
-      Math.atan2(-dx, -dz) + hit * Math.sin(now * SHAKE.hz * 1.13) * SHAKE.turn,
+      shot.pitch + hit * Math.sin(now * SHAKE.hz * 0.91 + 2.4) * SHAKE.turn,
+      shot.yaw + hit * Math.sin(now * SHAKE.hz * 1.13) * SHAKE.turn,
       hit * Math.sin(now * SHAKE.hz * 0.77 + 0.6) * SHAKE.roll,
       'YXZ'
     );

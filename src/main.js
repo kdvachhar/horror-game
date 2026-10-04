@@ -294,6 +294,9 @@ const tallRoom = createTallRoom({
   scene,
   doorway: giantHall.wayOn,
   player,
+  // The shadow body, for the one scene that has to show you being taken
+  // rather than show where it happened. See seizure.js.
+  playerBody,
   port: giantHall.lift.port,
   // For the one scene in this building that takes the camera off you and does
   // not give it back.
@@ -436,6 +439,11 @@ for (const target of controlRoom.interactions) interactions.add(target);
 // And one the player can never reach: the lever on the hoist behind the
 // rockfall, which is on the far side of a hole only the bucket fits through.
 for (const target of giantHall.interactions) interactions.add(target);
+// One handle in every refuge in the shaft, which is how the climb hands over
+// from one wall to the next without standing out in it. The treads at the top
+// of the hoist still work and are still what calls the first wall — see
+// tallRoom.js, which has the argument for both.
+for (const target of tallRoom.interactions) interactions.add(target);
 
 /**
  * What you think, turning round and finding the way you came in is shut.

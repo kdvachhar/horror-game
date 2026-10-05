@@ -51,17 +51,39 @@ try {
     process.exitCode = 1;
   });
 
-  process.stdout.write(`booting ${URL} … `);
-  await page.goto(URL, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => window.game?.__scenes, { timeout: 2_400_000, polling: 2000 });
-  await page.evaluate(() => {
-    const overlay = document.getElementById('overlay');
-    if (overlay) overlay.style.display = 'none';
-  });
-  await page.waitForFunction(
-    () => !window.game.wakeUp.isPlaying && !window.game.cutscene.isPlaying,
-    { timeout: 900_000, polling: 1000 }
-  );
+  /**
+   * Boot, and survive losing the page while doing it.
+   *
+   * Six minutes of software GL is long enough that something else gets a
+   * turn: vite re-optimising its deps, or a swiftshader renderer falling
+   * over, either of which detaches the frame and takes down whatever was
+   * waiting on it. That is a fact about running a 6000-mesh scene headless,
+   * not a fault in the game, and a harness that dies of it reports nothing
+   * after six minutes of work.
+   */
+  const boot = async () => {
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      try {
+        process.stdout.write(attempt === 1 ? `booting ${URL} … ` : `retrying (${attempt}) … `);
+        await page.goto(URL, { waitUntil: 'domcontentloaded' });
+        await page.waitForFunction(() => window.game?.__scenes, { timeout: 900_000, polling: 2000 });
+        await page.evaluate(() => {
+          const overlay = document.getElementById('overlay');
+          if (overlay) overlay.style.display = 'none';
+        });
+        await page.waitForFunction(
+          () => !window.game.wakeUp.isPlaying && !window.game.cutscene.isPlaying,
+          { timeout: 600_000, polling: 1000 }
+        );
+        return;
+      } catch (error) {
+        console.log(`\n  lost the page: ${error.message.split('\n')[0]}`);
+        errors.length = 0;
+      }
+    }
+    throw new Error('could not keep a page up long enough to boot');
+  };
+  await boot();
 
   const frames = (n) =>
     page.evaluate(

@@ -320,6 +320,41 @@ const ENTRY = 0.5;
  */
 const REFUGE = { wide: 2.0, high: 2.1, deep: HOLE.deep, back: 0.4, lip: 0.35, spare: 0.8 };
 
+/**
+ * And the shelter at a band boundary: a refuge you can reach from a landing.
+ *
+ * The landings are where the climb hands over — see the note on them — and
+ * for a long time they were also where you had to stand while it happened.
+ * That is the one part of this room that asked something unreasonable. The
+ * handover is not a moment, it is an errand: you leave your body, ride a
+ * bucket seventy metres up, walk it across a stage, press a tread, and come
+ * back. The plate you come back to hangs in the middle of a shaft that a
+ * fifteen metre animal rides, and it is the only surface up there that the
+ * animal passes straight through.
+ *
+ * Your body cannot be eaten while you are driving the bucket — see the touch
+ * in meatCube.js, which will not take a body nobody is behind the eyes of —
+ * so the errand itself is safe. The frame you come back on is not. Pressing
+ * F puts you in a body standing in the open at whatever height the animal
+ * has got to, and if that is your height you are dead before the view has
+ * settled.
+ *
+ * The wall pockets already solve this and could not be reached from a
+ * landing: the nearest is five metres of air away and a course too high. So
+ * each plate gets a walkway to the wall it is handing over to, and a pocket
+ * at the end of it. Which is 3.7m of permanent steel per boundary in a room
+ * whose rule is that everything retracts — paid deliberately, because the
+ * alternative is a puzzle that asks you to stand in the one place you have
+ * spent the whole climb learning not to stand in.
+ */
+const SHELTER = {
+  /** Concrete left under the next course's sockets, so the two do not merge. */
+  under: 0.1,
+  /** The walkway out to the plate. Wide enough not to be a beam. */
+  wide: 1.3,
+  thick: 0.16,
+};
+
 /*
  * There was a hash here — `isOpen` — that bricked up about a quarter of the
  * sockets at the bottom of the room and about half of them at the top, so that
@@ -617,9 +652,11 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
     opacity: 0.75,
   });
 
-  const holeCount = { open: 0, filled: 0, refuges: 0 };
+  const holeCount = { open: 0, filled: 0, refuges: 0, shelters: 0 };
   /** The handle in each refuge, filled in as the walls are built. */
   const levers = [];
+  /** The pocket at each band boundary, filled in the same pass. */
+  const shelters = [];
   /**
    * The person-sized openings, gathered per wall in that wall's own frame.
    *
@@ -864,6 +901,8 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
   };
   /** The wall the window is in, and so the one the gangway hangs off. */
   const GLAZED = 2;
+  /** The wall with the way in at the bottom and the giant hall behind it. */
+  const NEAR_WALL = 0;
   const runOf = (index, course) => {
     if (course !== TOP_COURSE || !hub) return toMiddle(index);
     /**
@@ -882,6 +921,113 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
     if (index === GLAZED) return stair.long * (stair.treads - 1) - 0.25 + PLATFORM.inset;
     return toHub(index);
   };
+
+  /**
+   * The far end of a flight, in world terms, from the wall it is on and the
+   * column it is in.
+   *
+   * The same four sign cases as `wallSlab` and the refuge spots, and written
+   * out for the third time rather than shared, because the other two are in
+   * a wall's own frame and this one is not — it wants a point out in the
+   * middle of the room, measured from a wall it is not attached to.
+   */
+  const flightTip = (index, col) => {
+    const u = COLUMNS[col];
+    const run = toMiddle(index);
+    if (index === 0) return { x: midX - u, z: maxZ - run };
+    if (index === 1) return { x: midX + u, z: minZ + run };
+    if (index === 2) return { x: maxX - run, z: midZ + u };
+    return { x: minX + run, z: midZ - u };
+  };
+
+  /**
+   * A point out in the room, back in a wall's own frame: how far along it is.
+   *
+   * The inverse of `spot`, and the fourth and last of the four sign cases.
+   * It is here because the shelters below have to be cut into a wall at the
+   * place a landing happens to be, and a landing is worked out in the room's
+   * coordinates.
+   */
+  const wallU = (index, x, z) =>
+    index === 0 ? midX - x : index === 1 ? x - midX : index === 2 ? z - midZ : midZ - z;
+
+  /**
+   * The band boundaries, worked out before anything is built.
+   *
+   * This used to live down in the landing loop, which was fine while a
+   * boundary was only ever a plate hanging in the air. It is not: each one
+   * now also puts a hole in a wall, and a hole in a wall has to be known
+   * before `buildWallSolid` cuts that wall, which happens several hundred
+   * lines before the plates go in. So the arithmetic is done once, up here,
+   * and both halves read it.
+   */
+  const BOUNDARIES = [];
+  for (let k = 0; k < ORDER.length - 1; k++) {
+    const below = ORDER[k];
+    const above = ORDER[k + 1];
+    const last = BANDS[below].to;
+    const first = BANDS[above].from;
+    // A band boundary that ever stops being consecutive should fail loudly
+    // rather than quietly leave a plate floating half a course off the route.
+    if (first !== last + 1) continue;
+
+    // Both tips are at the same height by construction — half a course above
+    // the lower band's top deck is half a course below the upper band's
+    // first. Taken off the lower one, and the upper one meets it.
+    const height = SILLS[last] + RAIL.high + PLATFORM.thick + FLIGHT.rise;
+    const a = flightTip(below, laneOut(below, last));
+    const b = flightTip(above, laneIn(above, first));
+    const cx = (a.x + b.x) / 2;
+    const cz = (a.z + b.z) / 2;
+    BOUNDARIES.push({
+      below,
+      above,
+      last,
+      first,
+      height,
+      cx,
+      cz,
+      gap: Math.hypot(a.x - b.x, a.z - b.z),
+      /**
+       * And the shelter's floor, which is one step down off the plate.
+       *
+       * It cannot be level with the plate. A pocket you can stand up in is
+       * REFUGE.high, the plate sits FLIGHT.rise above the course below it,
+       * and a pocket starting there would have its head 0.27 *through* the
+       * next course's sockets — one opening merged into another, with that
+       * course's deck sliding out of the back of the shelter.
+       *
+       * So it is hung off the course above instead: as high as it can go
+       * while still leaving `under` of concrete beneath the next sill. That
+       * works out a step below the plate — 0.37 at this pitch — which is
+       * well inside the 0.9 both bodies take for free, and which is also the
+       * right read. You step down into a hole. You do not stroll into it.
+       */
+      floor: SILLS[last] + COURSE.pitch - REFUGE.high - SHELTER.under,
+      /**
+       * And which wall it goes in, which is not always the one you are
+       * climbing onto.
+       *
+       * The incoming wall is the right answer and the near wall is why it
+       * cannot be the only one. That wall has the way in at the bottom of it
+       * and the giant hall on the other side, and the hall is twelve high
+       * with the building solid above it — a lid that starts at this room's
+       * face and so claims the whole 1.9 of the wall's thickness with it. A
+       * pocket cut into it anywhere above twelve is a pocket inside a slab:
+       * it is there, it is lit, the mouth is open, and you cannot walk into
+       * it. (That is also, for the record, what is wrong with the refuges on
+       * that wall, which has been true for longer than this has.)
+       *
+       * So a boundary that hands over onto the near wall puts its shelter in
+       * the wall it is leaving instead. The pocket does not care which: it is
+       * cut into concrete either way, it is permanent either way, and the
+       * walkway reaches it from the plate either way. All the incoming wall
+       * ever bought was that you were already facing it.
+       */
+      wall: above === NEAR_WALL ? below : above,
+      u: wallU(above === NEAR_WALL ? below : above, cx, cz),
+    });
+  }
 
   // [wall index, x, z, yaw, width along it, the doorway in it if any]
   const WALLS = [
@@ -1433,6 +1579,61 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
       });
     });
 
+    /**
+     * And the shelter, if a band hands over onto this wall.
+     *
+     * Built here rather than with the landings because a hole in a wall has
+     * to be cut before the wall is, and `buildWallSolid` runs a long way
+     * above the plates. The walkway out to the plate is the landings' half
+     * of it, and it is down there.
+     *
+     * Deliberately the same object as a refuge — same liner, same pan, same
+     * painted threshold, same strip glowing at the back. From the floor of
+     * the shaft it should be indistinguishable from the seventeen others,
+     * because it is the same promise: concrete between you and the animal.
+     * The only thing that makes it different is where it is, which is the
+     * one place in the climb you cannot reach any of the others from.
+     */
+    for (const boundary of BOUNDARIES) {
+      if (boundary.wall !== index) continue;
+      const u = boundary.u;
+      const v = boundary.floor;
+      const cut = { u, v, w: REFUGE.wide, h: REFUGE.high, towards: 0, deck: boundary.height };
+      holes.push({ u, v, w: cut.w, h: cut.h });
+      wallCuts[index].push(cut);
+      holeCount.shelters++;
+
+      const box = new THREE.Mesh(openBox(REFUGE.wide, REFUGE.high, REFUGE.deep), liner);
+      box.position.set(u, v + REFUGE.high / 2, -REFUGE.deep / 2 - 0.01);
+      wall.add(box);
+
+      const pan = new THREE.Mesh(
+        new THREE.BoxGeometry(REFUGE.wide - 0.06, 0.04, REFUGE.deep - 0.04),
+        deckMat
+      );
+      pan.position.set(u, v + 0.02, -REFUGE.deep / 2);
+      pan.receiveShadow = true;
+      wall.add(pan);
+
+      const paint = new THREE.Mesh(new THREE.PlaneGeometry(REFUGE.wide, REFUGE.lip), stripeMat);
+      paint.rotation.x = -Math.PI / 2;
+      paint.position.set(u, v + 0.005, REFUGE.lip / 2);
+      wall.add(paint);
+
+      const glow = new THREE.Mesh(
+        new THREE.PlaneGeometry(REFUGE.wide - 0.5, 0.07),
+        new THREE.MeshBasicMaterial({ color: '#2e4a3a', toneMapped: false })
+      );
+      glow.position.set(u, v + REFUGE.high - 0.3, -REFUGE.deep + 0.03);
+      wall.add(glow);
+
+      // Its floor is the wall's own — see `buildWallSolid`, where the slab
+      // under an opening is the one piece of arithmetic in this room that
+      // cannot drift. What it does need is the walkway, and that is built
+      // with the plate it walks to.
+      shelters.push({ wall: index + 1, u, v, at: boundary });
+    }
+
     buildHoledWall({ parent: wall, material, width: span, height: HEIGHT, holes });
 
     /**
@@ -1959,45 +2160,9 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
     thick: 0.18,
   };
 
-  /**
-   * The far end of a flight, in world terms, from the wall it is on and the
-   * column it is in.
-   *
-   * The same four sign cases as `wallSlab` and the refuge spots, and written
-   * out for the third time rather than shared, because the other two are in
-   * a wall's own frame and this one is not — it wants a point out in the
-   * middle of the room, measured from a wall it is not attached to.
-   */
-  const flightTip = (index, col) => {
-    const u = COLUMNS[col];
-    const run = toMiddle(index);
-    if (index === 0) return { x: midX - u, z: maxZ - run };
-    if (index === 1) return { x: midX + u, z: minZ + run };
-    if (index === 2) return { x: maxX - run, z: midZ + u };
-    return { x: minX + run, z: midZ - u };
-  };
-
   const landings = [];
-  for (let k = 0; k < ORDER.length - 1; k++) {
-    const below = ORDER[k];
-    const above = ORDER[k + 1];
-    const last = BANDS[below].to;
-    const first = BANDS[above].from;
-    if (first !== last + 1) continue;
-
-    // Both tips are at the same height by construction — half a course above
-    // the lower band's top deck is half a course below the upper band's
-    // first. Taken off the lower one, and the upper one is checked against
-    // it rather than assumed, because a band boundary that ever stops being
-    // consecutive should fail loudly here rather than quietly leave a plate
-    // floating half a course off the route.
-    const height = SILLS[last] + RAIL.high + PLATFORM.thick + FLIGHT.rise;
-    const a = flightTip(below, laneOut(below, last));
-    const b = flightTip(above, laneIn(above, first));
-    const cx = (a.x + b.x) / 2;
-    const cz = (a.z + b.z) / 2;
-
-    const gap = Math.hypot(a.x - b.x, a.z - b.z);
+  const walkways = [];
+  for (const { below, above, last, height, cx, cz, gap } of BOUNDARIES) {
     const size = Math.max(LANDING.least, gap + LANDING.over);
 
     const plate = new THREE.Mesh(new THREE.BoxGeometry(size, LANDING.thick, size), deckMat);
@@ -2030,6 +2195,56 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
       // whole thickness is a ceiling you are stopped dead by.
       bottom: height - 0.02,
     });
+
+    /**
+     * And the walkway from the plate to the shelter in the wall.
+     *
+     * At the shelter's level rather than the plate's, so the whole of the
+     * step is taken at the plate's edge — one kerb, where you can see it,
+     * instead of a lip at the mouth of a pocket you are walking into. The
+     * pocket is then 2.1 clear from the floor you are standing on, which is
+     * what stops the head clamp catching you on its lintel.
+     *
+     * Square to the wall, because the pocket was cut at the plate's own `u`:
+     * the run is straight in, and the two ends are the same two numbers.
+     */
+    const shelter = BOUNDARIES.find((b) => b.below === below && b.above === above);
+    if (shelter) {
+      const w = shelter.wall;
+      const face = w === 0 ? maxZ : w === 1 ? minZ : w === 2 ? maxX : minX;
+      const along = w < 2 ? 'z' : 'x';
+      const near = w === 0 || w === 2 ? -1 : 1;
+      // From the wall's inner face out to just past the plate's edge, so the
+      // two overlap rather than meet — a seam at forty metres is a gap you
+      // find with a foot.
+      const reach = Math.abs((along === 'z' ? cz : cx) - face) + size / 2 - LANDING.over / 2;
+      const midRun = face + near * (reach / 2);
+      const top = shelter.floor;
+      const deck = new THREE.Mesh(
+        along === 'z'
+          ? new THREE.BoxGeometry(SHELTER.wide, SHELTER.thick, reach)
+          : new THREE.BoxGeometry(reach, SHELTER.thick, SHELTER.wide),
+        deckMat
+      );
+      deck.position.set(
+        along === 'z' ? cx : midRun,
+        top - SHELTER.thick / 2,
+        along === 'z' ? midRun : cz
+      );
+      deck.castShadow = true;
+      deck.receiveShadow = true;
+      group.add(deck);
+
+      const half = SHELTER.wide / 2;
+      solid(
+        along === 'z' ? cx - half : Math.min(face, midRun * 2 - face),
+        along === 'z' ? cx + half : Math.max(face, midRun * 2 - face),
+        along === 'z' ? Math.min(face, midRun * 2 - face) : cz - half,
+        along === 'z' ? Math.max(face, midRun * 2 - face) : cz + half,
+        { top, bottom: top - 0.02 }
+      );
+      walkways.push({ wall: w + 1, top: +top.toFixed(2), reach: +reach.toFixed(2) });
+    }
 
     landings.push({
       between: [below + 1, above + 1],
@@ -2301,6 +2516,33 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
     gangway,
     /** The three transfer plates, for the harness and for whoever asks. */
     landings,
+    /**
+     * And the shelter at each of them: the pocket in the wall and the
+     * walkway to it. This is the thing that makes a handover something you
+     * can do from inside concrete rather than stood on a plate in the open.
+     */
+    get shelters() {
+      return shelters.map((sh) => {
+        const d = REFUGE.deep / 2;
+        const at =
+          sh.wall - 1 === 0
+            ? { x: midX - sh.u, z: maxZ + d }
+            : sh.wall - 1 === 1
+              ? { x: midX + sh.u, z: minZ - d }
+              : sh.wall - 1 === 2
+                ? { x: maxX + d, z: midZ + sh.u }
+                : { x: minX - d, z: midZ - sh.u };
+        return {
+          wall: sh.wall,
+          y: +sh.v.toFixed(2),
+          x: +at.x.toFixed(2),
+          z: +at.z.toFixed(2),
+          landing: { y: +sh.at.height.toFixed(2), x: +sh.at.cx.toFixed(2), z: +sh.at.cz.toFixed(2) },
+          step: +(sh.at.height - sh.v).toFixed(2),
+        };
+      });
+    },
+    walkways,
     /** Which wall carries which stretch of the climb, and in what order. */
     get bands() {
       return ORDER.map((wall, k) => ({

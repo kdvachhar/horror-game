@@ -67,7 +67,38 @@ const gap = (a, b) =>
     Math.max(a.minZ - b.maxZ, b.minZ - a.maxZ, 0)
   );
 
-/** Everything reachable from `seeds` by stepping up at most UP and across at most OVER. */
+/**
+ * Whether a surface is buried in the thickness of a wall rather than standing
+ * in the room.
+ *
+ * The shelters at the band boundaries put real floor inside the walls — a
+ * pocket is 1.5 into a 1.9 wall — so "outside the shaft" is no longer the
+ * same as "not somewhere a body goes". What it does still mean is that you
+ * cannot *jump* from there: see the rule below.
+ */
+const buried = (box) =>
+  box.maxX <= SHAFT.minX || box.minX >= SHAFT.maxX ||
+  box.maxZ <= SHAFT.minZ || box.minZ >= SHAFT.maxZ;
+
+/**
+ * Everything reachable from `seeds` by stepping up at most UP and across at
+ * most OVER.
+ *
+ * The flood knows about floors and nothing else — there is no wall in it, so
+ * a jump is allowed between any two surfaces inside OVER of each other. That
+ * was harmless while every standable thing in the room stood in the room's
+ * own air. It stopped being harmless when the shelters cut floor into the
+ * walls: from a pocket's floor the flood would happily clear 1.6m sideways
+ * to the top of the next refuge's back slab, through a metre and a half of
+ * concrete, and come out of the leg 0.16 higher than the landing it is
+ * supposed to end on.
+ *
+ * So one rule, and it is a true one rather than a patch: **you cannot jump
+ * while you are inside a wall.** Touching surfaces still connect, which is
+ * what a walkway running into a pocket is, so nothing real is lost — what
+ * goes is the ability to leap from one hole in the concrete to another
+ * without crossing the room between them.
+ */
 function flood(boxes, seeds) {
   const seen = new Set(seeds);
   const queue = [...seeds];
@@ -76,7 +107,9 @@ function flood(boxes, seeds) {
     for (let j = 0; j < boxes.length; j++) {
       if (seen.has(j)) continue;
       if (boxes[j].top - boxes[i].top > UP) continue;
-      if (gap(boxes[i], boxes[j]) > OVER) continue;
+      const across = gap(boxes[i], boxes[j]);
+      if (across > OVER) continue;
+      if (across > 0.01 && (buried(boxes[i]) || buried(boxes[j]))) continue;
       seen.add(j);
       queue.push(j);
     }
@@ -151,8 +184,56 @@ test('the four walls in order chain to the hub', () => {
       Math.abs(boxes[best].top - expected[leg]) < 0.01,
       `leg ${leg + 1} on wall ${wall} reached ${boxes[best].top}, expected ${expected[leg]}`
     );
+
+    /**
+     * And at every handover there has to be a hole you can be in.
+     *
+     * This is the rule the shelters exist for. The leg ends on a plate in the
+     * middle of a shaft that a fifteen metre animal rides, and what happens
+     * next is not a moment — you leave your body there, ride a bucket seventy
+     * metres, walk it across a stage, press a tread, and come back. The frame
+     * you come back on is the dangerous one: your body cannot be eaten while
+     * nobody is behind its eyes, but it certainly can be the instant you are.
+     *
+     * So: from where this leg finished, something standable, buried in a
+     * wall, within a step of the plate. `buried` is the test that it is
+     * actually inside concrete rather than another ledge hanging in the air —
+     * which is the only kind of cover this room has, because the animal fills
+     * the shaft to within two centimetres of all four walls.
+     */
+    if (leg < 3) {
+      const holes = reached.filter(
+        (i) => buried(boxes[i]) && boxes[best].top - boxes[i].top > 0 && boxes[best].top - boxes[i].top < 0.9
+      );
+      assert.ok(
+        holes.length,
+        `leg ${leg + 1} ends at ${boxes[best].top} with nowhere sheltered to wait for the bucket`
+      );
+    }
+
     standing = boxes[best];
   });
+});
+
+test('each shelter is deep enough that the animal cannot reach into it', () => {
+  // The cube fills the shaft to within 0.02 of every wall, and the touch
+  // counts at the body's radius plus 0.12 — so a body has to get 0.56 past
+  // the wall face to be out of it. A pocket must therefore be at least that
+  // plus a radius deep, or the only place you fit is the part it can reach.
+  const CLEAR = 0.42 + 0.12 + 0.02;
+  const boxes = rungs('rest');
+  for (const height of [17.8, 34.6, 51.4]) {
+    const pocket = boxes.find((b) => Math.abs(b.top - height) < 0.01 && buried(b));
+    assert.ok(pocket, `no shelter floor at ${height}`);
+    const depth = Math.max(
+      SHAFT.minX - pocket.minX, pocket.maxX - SHAFT.maxX,
+      SHAFT.minZ - pocket.minZ, pocket.maxZ - SHAFT.maxZ
+    );
+    assert.ok(
+      depth >= CLEAR + 0.42,
+      `the shelter at ${height} is only ${depth.toFixed(2)} deep; a body needs ${(CLEAR + 0.42).toFixed(2)}`
+    );
+  }
 });
 
 test('every ceiling leaves a body room to stand under it', () => {

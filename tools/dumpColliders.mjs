@@ -32,7 +32,7 @@
 import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import puppeteer from 'puppeteer';
+import { launchBrowser, preparePage, bootGame } from './browser.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, '../test/fixtures/colliders.json');
@@ -41,21 +41,10 @@ const URL = process.env.GAME_URL ?? 'http://localhost:5173/';
 /** Geometry rounded hard enough that float noise cannot show up as a diff. */
 const PLACES = 4;
 
-const browser = await puppeteer.launch({
-  headless: true,
-  protocolTimeout: 2_400_000,
-  args: [
-    '--use-gl=angle',
-    '--use-angle=swiftshader',
-    '--enable-unsafe-swiftshader',
-    '--autoplay-policy=no-user-gesture-required',
-  ],
-});
+const browser = await launchBrowser();
 
 try {
-  const page = await browser.newPage();
-  page.setDefaultNavigationTimeout(1_200_000);
-  await page.setViewport({ width: 64, height: 64 });
+  const page = await preparePage(browser);
 
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -112,15 +101,46 @@ try {
       ]);
   }, PLACES);
 
-  // Which boxes hold still. Two seconds is longer than any door takes to
-  // swing and long enough for the hoist and the cube to have moved.
-  const first = await page.evaluate(() => window.__snap());
-  await frames(120);
-  const second = await page.evaluate(() => window.__snap());
+  /**
+   * Which boxes hold still — watched over seconds, not frames.
+   *
+   * This used to take two samples 120 frames apart, on the reasoning that
+   * 120 frames is two seconds and two seconds is longer than any door takes
+   * to swing. The arithmetic was right and the assumption underneath it was
+   * a renderer running at sixty. These harnesses spent a long time on
+   * Chrome's software rasteriser at a handful of frames a second, where 120
+   * frames was minutes and everything in the building had moved by the end
+   * of it. The moment they were put back on the GPU, 120 frames became the
+   * two seconds it always claimed to be — and the flesh cube, which waits at
+   * the bottom of its shaft for longer than that, held perfectly still
+   * across both samples and was written into the fixture as a static floor.
+   *
+   * A fifteen by fourteen metre floor at 14.53, in a shaft whose whole
+   * subject is what you can and cannot reach. (The climb tests survived it
+   * only because `rungs` in world.test.js throws out anything over ten
+   * metres wide, which is a guard against exactly this and is the reason
+   * this was a wrong fixture rather than a wrong answer.)
+   *
+   * So: sampled on a clock, over a window longer than the longest pause any
+   * moving thing in this building takes, and a box has to be identical in
+   * every sample to count as still. The window is the number that matters
+   * and it is written down rather than derived, because what it has to clear
+   * is the cube's dwell, and that is a dramatic beat rather than a constant
+   * anybody can import.
+   */
+  const WATCH = { seconds: 14, samples: 8 };
 
-  if (first.length !== second.length) {
-    throw new Error(`the collider list changed length while idling: ${first.length} -> ${second.length}`);
+  const snaps = [await page.evaluate(() => window.__snap())];
+  for (let i = 1; i < WATCH.samples; i++) {
+    await new Promise((done) => setTimeout(done, (WATCH.seconds * 1000) / (WATCH.samples - 1)));
+    const snap = await page.evaluate(() => window.__snap());
+    if (snap.length !== snaps[0].length) {
+      throw new Error(`the collider list changed length while idling: ${snaps[0].length} -> ${snap.length}`);
+    }
+    snaps.push(snap);
   }
+  const first = snaps[0];
+  const second = snaps[snaps.length - 1];
 
   const key = (box) =>
     JSON.stringify([
@@ -130,7 +150,7 @@ try {
 
   const staticIndices = [];
   for (let i = 0; i < first.length; i++) {
-    if (key(first[i]) === key(second[i])) staticIndices.push(i);
+    if (snaps.every((snap) => key(snap[i]) === key(first[i]))) staticIndices.push(i);
   }
   const dynamic = first.length - staticIndices.length;
 

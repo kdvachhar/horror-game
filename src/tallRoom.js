@@ -14,7 +14,7 @@ import {
 import { createMeatCube } from './meatCube.js';
 import { showNote, setObjective } from './hud.js';
 import { playSpikeGrind, playGurgle, playMeatLunge, playScreech } from './audio.js';
-import { planClimb, refugeLane, nextInOrder } from './climbLanes.js';
+import { planClimb, refugeLane } from './climbLanes.js';
 import { createSeizure } from './seizure.js';
 import { buildTallRoomLights } from './tallRoomLights.js';
 
@@ -653,8 +653,6 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
   });
 
   const holeCount = { open: 0, filled: 0, refuges: 0, shelters: 0 };
-  /** The handle in each refuge, filled in as the walls are built. */
-  const levers = [];
   /** The pocket at each band boundary, filled in the same pass. */
   const shelters = [];
   /**
@@ -1249,60 +1247,6 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
         glow.position.set(refuge.u, refuge.v + REFUGE.high - 0.3, -REFUGE.deep + 0.03);
         wall.add(glow);
 
-        /**
-         * And the handle on the back wall of it, which is what this pocket is
-         * for now.
-         *
-         * The room's one mechanism was four steel treads seventy-two metres
-         * up, pressed by the bucket's own weight, and that is still the right
-         * machine for calling the room's first wall: you are on the floor, the
-         * walls are shut, and the thing that opens them is somewhere you
-         * cannot go. It is the wrong machine for every call after it. By then
-         * you are forty metres up a wall that is about to be taken away from
-         * you, and the handover asks you to leave your body standing on a deck
-         * in the open, walk a bucket across a stage, and come back — which is
-         * a minute spent exposed, in a shaft whose whole hazard is a fifteen
-         * metre animal that rides it.
-         *
-         * So the handover moves into the shelter. A refuge is already the one
-         * surface on a called wall that the next call cannot retract — it is
-         * cut into the concrete, and the slab under it is the wall's own, not
-         * a deck's. Standing in one you are off the route, out of the shaft,
-         * and behind a lip. That is exactly the place to be when seventeen
-         * catwalks fold into the wall behind you, and until now it was a place
-         * with nothing in it to do.
-         *
-         * One per refuge, so wherever the climb has got to there is a hole
-         * within a course of you that can make the switch. What it calls is
-         * the next wall in the climb order rather than a wall you choose:
-         * there is only ever one useful answer — see `nextWall`.
-         */
-        const handleAt = { u: refuge.u + 0.6, v: refuge.v + 1.0, d: -REFUGE.deep + 0.05 };
-        const back = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.36, 0.08), deckMat);
-        back.position.set(handleAt.u, handleAt.v, handleAt.d);
-        back.castShadow = true;
-        wall.add(back);
-        // Canted out of the plate rather than flush to it: a flush bar is a
-        // fitting, and a bar leaning out of a wall is a bar somebody pulls.
-        const handle = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.34, 0.06), deckMat);
-        handle.position.set(handleAt.u, handleAt.v, handleAt.d + 0.14);
-        handle.rotation.x = -0.35;
-        handle.castShadow = true;
-        wall.add(handle);
-        // The same unlit green the back strip uses, for the same reason: it
-        // has to be findable from the deck below without costing the room a
-        // sixty-third light.
-        const live = new THREE.Mesh(
-          new THREE.PlaneGeometry(0.3, 0.045),
-          new THREE.MeshBasicMaterial({ color: '#4c7f5e', toneMapped: false })
-        );
-        live.position.set(handleAt.u, handleAt.v + 0.13, handleAt.d + 0.05);
-        wall.add(live);
-        // Held as the mesh rather than as a point, because where it ends up in
-        // the world is the wall group's business — see the handover block
-        // below, which asks the scene graph instead of repeating the four sign
-        // cases `wallSlab` already has.
-        levers.push({ index, mesh: back });
       }
 
       COLUMNS.forEach((column, i) => {
@@ -1840,13 +1784,21 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
   buildWallSolid(3, wallCuts[3], undefined);
 
   /**
-   * Calling a wall, and who gets to.
+   * Calling a wall, and who gets to: the bucket, and nothing else.
    *
-   * Hoisted out of the returned object because there are two ends on this
-   * wire now — the treads at the top of the hoist, through main.js, and the
-   * handle in every refuge — and a method on the public surface that the
-   * module also calls internally is a thing you have to remember is two
-   * things. One function, two callers.
+   * There was briefly a handle in every refuge that did this too, so the
+   * climb could hand over without the errand. It worked and it was wrong.
+   * The one thing this room is about is stated in its own opening note — the
+   * thing that makes the tower climbable is not in the tower; it is four
+   * steel pads on a floor seventy-two metres up that only the bucket can
+   * reach. A lever within arm's reach of the climb does not make that
+   * cheaper, it makes it untrue. You do not solve this room; something else
+   * does, somewhere you cannot go.
+   *
+   * What the errand needed was not removing, it was somewhere safe to be
+   * served from, and that is what the shelters at the band boundaries are
+   * for. The handover still costs a journey. It just no longer costs you
+   * standing in the open while the animal rides past.
    */
   const showWall = (n) => {
     const index = Number(n) - 1;
@@ -1855,65 +1807,6 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
     playSpikeGrind(0.55);
   };
 
-  /**
-   * Which wall a handle calls: the next one in the climb order, always.
-   *
-   * Not a choice of four. The order is fixed — see ORDER — and at any height
-   * in this room exactly one wall carries the next stretch of the route, so a
-   * handle offering all four would be three wrong answers and a right one,
-   * and the three wrong ones all look the same from inside a pocket.
-   *
-   * Read off which wall is out rather than off a counter kept here, because
-   * the treads upstairs can call any wall at any time and a counter would
-   * disagree with the room the first time the bucket was used out of turn.
-   * With nothing out — which is the state the room boots in and resets to —
-   * it calls the first wall of the climb.
-   *
-   * And it wraps, which is the whole of the safety on it. A handle is in a
-   * refuge, a refuge is cut into its own wall directly above that wall's own
-   * flight, so calling your own wall back puts a deck under you 0.16 below
-   * the floor you are standing on. Press it enough times and you are always
-   * one press from the way you came up: there is no sequence of presses from
-   * inside a hole that can strand you in it.
-   */
-  const nextWall = () => {
-    const out = walls.findIndex((wall) => wall.want === 1);
-    return nextInOrder(ORDER, out < 0 ? null : out + 1);
-  };
-
-  /**
-   * And the handles, as things to press.
-   *
-   * Built here rather than in the wall loop because a target needs a world
-   * position and a wall group does not have one until it has been added and
-   * its matrix is up to date. Asking the scene graph is also the only way to
-   * get this right once: the alternative is the same four sign cases as
-   * `wallSlab` and `spot`, written a third time, to be got wrong a first.
-   */
-  group.updateMatrixWorld(true);
-  const interactions = levers.map(({ mesh }) => {
-    const at = mesh.getWorldPosition(new THREE.Vector3());
-    return {
-      position: at,
-      // An accessor, not a string: what the next press does changes as the
-      // climb goes up, and a label baked in at build time would be the first
-      // wall's answer for all seventeen courses. See interaction.js, which
-      // takes the target object as it is for exactly this reason.
-      get label() {
-        return `Call wall ${nextWall()}`;
-      },
-      // Short, and it does not care which way you are facing. You are inside
-      // a two metre pocket with the handle at arm's length — a prompt that
-      // needed you to look at it would be a prompt that came and went as you
-      // turned round to watch the wall you just called.
-      range: 2.2,
-      facing: -1,
-      once: false,
-      onInteract() {
-        showWall(nextWall());
-      },
-    };
-  });
 
   // ------------------------------------------------------------- the way on ---
 
@@ -2595,11 +2488,6 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
      * refuges are a second caller inside this module.
      */
     showWall,
-    /**
-     * The handle in each refuge, for main.js to register. One per refuge, so
-     * the count is `refuges` — see the getter of that name.
-     */
-    interactions,
 
     /** Which wall is out, and how far, for a harness and for whoever asks. */
     get wallState() {

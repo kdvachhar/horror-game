@@ -120,25 +120,3 @@ export function planClimb({ order, courseCount, columnCount }) {
 export function refugeLane(plan, wall, course) {
   return plan.laneIn(wall, course);
 }
-
-/**
- * The next wall in the climb, given which one is out.
- *
- * Here rather than in tallRoom.js for the same reason everything else in this
- * file is: it is arithmetic over `order`, it is the thing a handle in a refuge
- * decides when you pull it, and a wrong answer puts somebody forty metres up
- * with no way on. Testing it should not need a browser.
- *
- * `order` is wall indices in the order the climb uses them; `out` is the wall
- * *number* currently run out, or null for a room with nothing out. It wraps,
- * which is what makes a handle safe to pull from inside a pocket: a refuge is
- * cut into its own wall above its own flight, so cycling all the way round
- * always brings back a deck under the one you are standing in.
- */
-export function nextInOrder(order, out) {
-  const walls = order.map((index) => index + 1);
-  if (out === null || out === undefined) return walls[0];
-  const at = walls.indexOf(Number(out));
-  if (at < 0) return walls[0];
-  return walls[(at + 1) % walls.length];
-}

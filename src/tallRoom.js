@@ -321,6 +321,23 @@ const ENTRY = 0.5;
 const REFUGE = { wide: 2.0, high: 2.1, deep: HOLE.deep, back: 0.4, lip: 0.35, spare: 0.8 };
 
 /**
+ * How thick a wall is to the collision code, and it is now the refuge's
+ * business rather than a round number.
+ *
+ * It was a metre — enough to be a wall, thrown outward so it does not eat
+ * the room it encloses. A refuge is 1.5 deep, which is deeper than that, so
+ * a pocket cut into a one metre wall would have its back open onto nothing
+ * and the first thing you did inside it would be to walk out of the world.
+ * The wall is therefore as thick as a refuge plus something to stand the
+ * back of one in.
+ *
+ * Exported because the near wall is built standing inside the giant hall,
+ * and the hall has to know how much of its own footprint this room's wall
+ * is occupying before it puts a lid over it. See the lid in giantHall.js.
+ */
+export const WALL_T = REFUGE.deep + REFUGE.back;
+
+/**
  * And the shelter at a band boundary: a refuge you can reach from a landing.
  *
  * The landings are where the climb hands over — see the note on them — and
@@ -1006,21 +1023,19 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
        * And which wall it goes in, which is not always the one you are
        * climbing onto.
        *
-       * The incoming wall is the right answer and the near wall is why it
-       * cannot be the only one. That wall has the way in at the bottom of it
-       * and the giant hall on the other side, and the hall is twelve high
-       * with the building solid above it — a lid that starts at this room's
-       * face and so claims the whole 1.9 of the wall's thickness with it. A
-       * pocket cut into it anywhere above twelve is a pocket inside a slab:
-       * it is there, it is lit, the mouth is open, and you cannot walk into
-       * it. (That is also, for the record, what is wrong with the refuges on
-       * that wall, which has been true for longer than this has.)
+       * This dodges the near wall, and the reason it had to no longer
+       * exists. The giant hall's lid used to start at this room's face and
+       * run to the sky, which claimed the whole 1.9 of that wall's thickness
+       * and filled in every pocket cut into it above twelve — lit, modelled,
+       * mouth open, and solid to walk into. The lid now stops at the wall's
+       * face instead, so the near wall takes a pocket like any other.
        *
-       * So a boundary that hands over onto the near wall puts its shelter in
-       * the wall it is leaving instead. The pocket does not care which: it is
-       * cut into concrete either way, it is permanent either way, and the
-       * walkway reaches it from the plate either way. All the incoming wall
-       * ever bought was that you were already facing it.
+       * Left as it is because it is no longer a workaround but a placement,
+       * and this one is defensible on its own: the pocket is cut into
+       * concrete either way, it is permanent either way, and the walkway
+       * reaches it from the plate either way. Delete the condition and
+       * shelters go back to the incoming wall, which costs nothing now and
+       * buys you already facing it.
        */
       wall: above === NEAR_WALL ? below : above,
       u: wallU(above === NEAR_WALL ? below : above, cx, cz),
@@ -1668,19 +1683,6 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
   const outHigh = OUT.x + OUT.width / 2;
 
   /**
-   * How thick a wall is to the collision code, and it is now the refuge's
-   * business rather than a round number.
-   *
-   * It was a metre — enough to be a wall, thrown outward so it does not eat
-   * the room it encloses. A refuge is 1.5 deep, which is deeper than that, so
-   * a pocket cut into a one metre wall would have its back open onto nothing
-   * and the first thing you did inside it would be to walk out of the world.
-   * The wall is therefore as thick as a refuge plus something to stand the
-   * back of one in.
-   */
-  const WALL_T = REFUGE.deep + REFUGE.back;
-
-  /**
    * A slab of one wall's thickness, in that wall's own frame: `u` along it,
    * `d` in from the room-side face. Every sign this room could get wrong is
    * written once, here.
@@ -1837,9 +1839,23 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
     cap.position.set(OUT.x, OUT.height / 2, outEnd);
     group.add(cap);
 
-    solid(outLow - 0.6, outLow, outEnd, minZ, {});
-    solid(outHigh, outHigh + 0.6, outEnd, minZ, {});
-    solid(outLow - 0.6, outHigh + 0.6, outEnd - 0.6, outEnd, {});
+    /**
+     * The passage's own walls, and they stop at its roof.
+     *
+     * `{}` is solid from the floor to the sky, which is what a jamb wants to
+     * be right up until you notice where this one is standing. The passage
+     * runs out through the far wall, so its near 1.9 metres are *inside*
+     * that wall — and the wall has refuges cut in it on a grid that knows
+     * nothing about a doorway at the bottom. The left jamb lands on the
+     * column at -5.4 and filled the refuge sixty-six metres up: open, lit,
+     * and solid to walk into. Nothing is above this passage but unbuilt
+     * space, so a column of concrete going up forever was never buying
+     * anything.
+     */
+    const jamb = { top: OUT.height };
+    solid(outLow - 0.6, outLow, outEnd, minZ, jamb);
+    solid(outHigh, outHigh + 0.6, outEnd, minZ, jamb);
+    solid(outLow - 0.6, outHigh + 0.6, outEnd - 0.6, outEnd, jamb);
   }
 
   // --------------------------------------------------------------- gangway ---
@@ -2308,11 +2324,24 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
   let aimYaw = 0;
   let aimPitch = 0;
 
+  /**
+   * Standing in the opening, looking in — which is a place on the floor.
+   *
+   * The height bound is not decoration. The opening is the whole cross
+   * section of the hall, so the zone in plan is the hall's last nine metres,
+   * and the near wall's refuges are cut into the lintel directly over it.
+   * Without this you could climb to one, step into the hole twenty metres
+   * up, and have the room greet you as if you had just walked in: camera
+   * taken, body taken, the animal called down. Twelve is the hall's ceiling,
+   * which is the top of the doorway and so the top of anywhere you can be
+   * standing when you arrive.
+   */
   const nearTheMouth = () => {
     const p = player.position;
     return (
       p.z > maxZ &&
       p.z < maxZ + GREET.reach &&
+      p.y < doorway.height &&
       p.x > minX - 0.5 &&
       p.x < maxX + 0.5
     );

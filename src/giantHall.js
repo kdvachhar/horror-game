@@ -10,7 +10,7 @@ import {
 } from './textures.js';
 import { createRockfall, BREACH } from './rockfall.js';
 import { createLiftTower } from './liftTower.js';
-import { DEPTH as TALL_DEPTH, HEIGHT as TALL_HIGH } from './tallRoom.js';
+import { DEPTH as TALL_DEPTH, HEIGHT as TALL_HIGH, WALL_T as TALL_WALL } from './tallRoom.js';
 import { showNote, setObjective } from './hud.js';
 
 /**
@@ -186,11 +186,30 @@ export function createGiantHall({ scene, doorway, player, camera, bodies }) {
    * the `bottom` also keeps the slab out of the sideways collision, which
    * would otherwise treat a box with no `top` as solid at every height and
    * make the room impassable.
+   *
+   * It stops short of the foot by a wall's thickness, and that is the whole
+   * reason this comment is longer than the box.
+   *
+   * No lid has a top, so it is solid from its underside to the sky — that is
+   * what makes it a lid rather than a shelf. This one is twelve up and runs
+   * the full footprint, and the tall room's near wall stands *inside* that
+   * footprint: the shaft begins at `foot`, and its wall is thrown 1.9
+   * outward from there, back up the hall. So the two agree about the first
+   * 1.9 metres and disagree about everything above twelve, where the wall is
+   * a lintel with refuges cut into it and the lid is concrete to infinity.
+   * The lid won. Every pocket in that wall was a lit, modelled, open-mouthed
+   * hole that pushed you straight back out — all four of them, because that
+   * wall's whole band of refuges is above twelve.
+   *
+   * The hall's ceiling therefore ends where the tall room's wall begins,
+   * which is also just true: you cannot roof the inside of somebody else's
+   * wall. Nothing is left unlidded by it — that strip is the wall, and the
+   * wall's own slabs carry the same underside at twelve.
    */
   colliders.push({
     minX: (midX) - (WIDTH) / 2,
     maxX: (midX) + (WIDTH) / 2,
-    minZ: (midZ) - (LENGTH) / 2,
+    minZ: (midZ) - (LENGTH) / 2 + TALL_WALL,
     maxZ: (midZ) + (LENGTH) / 2,
     bottom: HEIGHT,
   });

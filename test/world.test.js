@@ -17,7 +17,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkCollider } from '../src/collision.js';
+import { checkCollider, pushOut, PLAYER } from '../src/collision.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const fixture = JSON.parse(readFileSync(resolve(HERE, 'fixtures/colliders.json'), 'utf8'));
@@ -233,6 +233,44 @@ test('each shelter is deep enough that the animal cannot reach into it', () => {
       depth >= CLEAR + 0.42,
       `the shelter at ${height} is only ${depth.toFixed(2)} deep; a body needs ${(CLEAR + 0.42).toFixed(2)}`
     );
+  }
+});
+
+test('every refuge is a hole you can actually get into', () => {
+  /**
+   * The one rule this room exists to keep, and the one it had quietly
+   * broken in two places.
+   *
+   * A refuge is a gap between slabs, so it is correct by construction as far
+   * as the wall it is cut into is concerned — and that is exactly the trap.
+   * Nothing stops a *different* building putting its own concrete through
+   * the same cubic metre, and two of them did: the giant hall roofed its
+   * whole footprint with a lid that ran to the sky, which filled all four
+   * refuges in the near wall, and the way-on passage's left jamb was solid
+   * to the sky too, which filled the one at 66.63 on the far wall. Both were
+   * lit, modelled, open-mouthed holes that shoved you straight back out.
+   *
+   * Asked of `pushOut` itself rather than by comparing boxes, because
+   * "something is in it" is not the question — the question is whether the
+   * collision code ejects a body that is standing there, and that is a
+   * function this file can simply call.
+   */
+  const spots = fixture.refuges;
+  assert.ok(spots?.length >= 20, `the fixture lists ${spots?.length ?? 0} refuges; regenerate it`);
+  const body = { kind: PLAYER, radius: 0.42, height: BODY, stepHeight: 0.9 };
+
+  for (const scenario of fixture.scenarioOrder) {
+    const boxes = live(scenario);
+    for (const r of spots) {
+      const at = { x: r.x, z: r.z, feetY: r.y + 0.05, grounded: true };
+      pushOut(boxes, body, at);
+      const shoved = Math.hypot(at.x - r.x, at.z - r.z);
+      assert.ok(
+        shoved < 0.01,
+        `with ${scenario}, the refuge on wall ${r.wall} at ${r.y} throws a body ` +
+          `${shoved.toFixed(2)} out of itself — something solid is in the hole`
+      );
+    }
   }
 });
 

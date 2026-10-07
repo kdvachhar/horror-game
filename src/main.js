@@ -1278,10 +1278,33 @@ renderer.setAnimationLoop((time) => {
     }
   }
 
-  // A bucket that cannot reach you normally means it is wedged and wants
-  // rescuing. In the red hall it means the room is working, so the rescue is
-  // switched off while it is in there.
-  friend.setRecallAllowed(!gauntlet.contains(friend.position.x, friend.position.z));
+  /**
+   * A bucket that cannot reach you normally means it is wedged and wants
+   * rescuing. In the red hall it means the room is working, so the rescue is
+   * switched off while it is in there.
+   *
+   * And in the room at the top of the hoist, where it means rather more than
+   * that. `setDriven` deliberately leaves `following` alone, so stepping out
+   * of the bucket sets it off after you again — which is right in every room
+   * where you are both standing on the same floor, and is how the pads got
+   * broken. You drive it up, stand it on a pad, press F, and it walks off the
+   * stage after a body seventy metres below: across every pad between it and
+   * the stairs, calling each of those walls in turn, and then over the edge.
+   * Four seconds later the stranded rescue teleports it to your feet at the
+   * bottom, where the only way back up is the hoist. One press and the room
+   * is over.
+   *
+   * So while it is up there and you are not, it waits — which is not a new
+   * rule, it is `followWanted` applied by the one piece of geometry that can
+   * see the drop. You are not in the room to tell it yourself; that is the
+   * entire premise of the room.
+   */
+  const bucketUpTop = giantHall.lift.holds(friend.position);
+  const aloneUpTop = bucketUpTop && !giantHall.lift.holds(camera.position);
+  friend.setRecallAllowed(
+    !gauntlet.contains(friend.position.x, friend.position.z) && !bucketUpTop
+  );
+  if (aloneUpTop && friend.isFollowing) friend.setFollowing(false);
   // In the red hall the bucket follows a point in its own lane rather than
   // following you, so it takes the left-hand hall on its own. It has to want to
   // get much closer to that point than it does to you: the two lanes are 2.8m

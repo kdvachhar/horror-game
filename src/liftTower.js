@@ -1065,6 +1065,34 @@ export function createLiftTower({ scene, parent = scene, colliders, chamber, cam
         bay: { z: port.z, width: PORT.bay, low: bayLow, high: bayHigh },
       };
     },
+    /**
+     * Whether a body is up in the room at the top, which is a question with
+     * consequences rather than a convenience.
+     *
+     * This is the other room in the game — the red hall is the first — that
+     * is built entirely out of the bucket not being able to reach you. The
+     * pads only work because the one body that can stand on them is the one
+     * body that cannot go into the room they drive, and the only way back
+     * down from here is a hoist or a seventy-two metre fall. So "is it up
+     * there" decides two things nothing else can decide for it: whether
+     * giving up and teleporting to you is a rescue or the puzzle undoing
+     * itself, and whether a bucket told to follow should set off after
+     * somebody who is at the bottom of a shaft.
+     *
+     * `y` matters as much as the plan: the chamber, the tower and the hall
+     * all stand under this footprint, and a bucket in any of them is not up
+     * here. Half the room's height is the slack — a body on the stage is
+     * 0.68 above the floor and one in the car at the landing is level with
+     * it, and both of those are in this room.
+     */
+    holds(at) {
+      return (
+        at.x > room.minX - 0.6 && at.x < room.maxX + 0.6 &&
+        at.z > room.minZ - 0.6 && at.z < room.maxZ + 0.6 &&
+        at.y > TOP - 1.0 && at.y < TOP + ROOM.high
+      );
+    },
+
     /** For the harness, and for the record: everything that can be asserted. */
     get state() {
       return { deckY, goal, moving: speed > 0, top: TOP, low: LOW, shaft, room, port };

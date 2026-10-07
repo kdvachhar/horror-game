@@ -1579,7 +1579,11 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
       if (boundary.wall !== index) continue;
       const u = boundary.u;
       const v = boundary.floor;
-      const cut = { u, v, w: REFUGE.wide, h: REFUGE.high, towards: 0, deck: boundary.height };
+      // `shelter` so the three of these are tellable from the seventeen
+      // refuges afterwards. Not derivable from the rest of the object: every
+      // cut carries a `deck`, because every one of them is stacked over the
+      // flight that serves it, and a shelter's happens to be a plate.
+      const cut = { u, v, w: REFUGE.wide, h: REFUGE.high, towards: 0, deck: boundary.height, shelter: true };
       holes.push({ u, v, w: cut.w, h: cut.h });
       wallCuts[index].push(cut);
       holeCount.shelters++;
@@ -2476,6 +2480,16 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
             : index === 2
               ? { x: maxX + d, z: midZ + u }
               : { x: minX - d, z: midZ - u };
+      /**
+       * And the way you face standing in one: out of the wall, into the room.
+       *
+       * Taken off the wall's own rotation rather than written as a fifth set
+       * of the four sign cases. A wall group is turned so its face looks into
+       * the room, and a body looking the same way is that rotation plus half
+       * a turn — this `yaw` is the player's convention, where nought is -z,
+       * and a wall's is a plane's, where nought is +z.
+       */
+      const facing = (index) => WALLS[index][3] + Math.PI;
       return wallCuts.flatMap((cuts, index) =>
         cuts.map((o) => {
           const inside = spot(index, o.u, stand);
@@ -2493,6 +2507,9 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
             y: +o.v.toFixed(2),
             x: +inside.x.toFixed(2),
             z: +inside.z.toFixed(2),
+            yaw: +facing(index).toFixed(4),
+            /** Which three of the twenty are the handovers. */
+            shelter: o.shelter === true,
             towards: +(o.towards ?? 0).toFixed(2),
             from: [+from.x.toFixed(2), +(o.deck ?? o.v).toFixed(2), +from.z.toFixed(2)],
             // How far along the wall the shelf reaches, for anything checking

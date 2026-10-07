@@ -734,6 +734,32 @@ function resetSequences() {
   player.setEnabled(true);
 }
 
+/**
+ * Everything that has to have happened before the tall room is a room you can
+ * be in, with nothing about *where* in it you end up.
+ *
+ * Pulled out of the thirteenth scene because the holes below are twenty more
+ * ways into the same room, and twenty copies of this list is twenty chances
+ * for one of them to drift.
+ */
+function reachTheTallRoom() {
+  resetSequences();
+  medical.openDoor();
+  medical.shutDown();
+  room.lightUpBackRoom();
+  gauntlet.powerUp();
+  exitRoom.powerUp();
+  possession.unlock();
+  orangeRoom.solve();
+  // The bucket waits in the hall. There is nothing in here it could help with
+  // and nothing in here it could reach, and a room whose whole effect is that
+  // you are the only thing in it standing on the floor is a room to be in on
+  // your own.
+  const hall = giantHall.entry;
+  friend.spawn(new THREE.Vector3(hall.position[0], 0, hall.position[2]));
+  friend.collect();
+}
+
 const SCENES = [
   {
     label: '1 · Hall',
@@ -982,25 +1008,9 @@ const SCENES = [
     label: '13 · The tall room',
     hint: 'Through the end of the long hall — the shaft with the holes in it',
     go() {
-      resetSequences();
-      medical.openDoor();
-      medical.shutDown();
-      room.lightUpBackRoom();
-      gauntlet.powerUp();
-      exitRoom.powerUp();
-      possession.unlock();
-      orangeRoom.solve();
-
+      reachTheTallRoom();
       const entry = tallRoom.entry;
       player.teleport({ position: entry.position, yaw: entry.yaw, pitch: 0 });
-      // The bucket waits in the hall. There is nothing in here it could help
-      // with and nothing in here it could reach, and a room whose whole effect
-      // is that you are the only thing in it standing on the floor is a room
-      // to be in on your own.
-      const hall = giantHall.entry;
-      friend.spawn(new THREE.Vector3(hall.position[0], 0, hall.position[2]));
-      friend.collect();
-
       setObjective('Find the way on');
     },
   },
@@ -1070,8 +1080,45 @@ const SCENES = [
   },
 ];
 
+/**
+ * And every hole in the tall room, which is a different kind of jump.
+ *
+ * The scenes above are beats — fifteen places the story is at, each one
+ * setting up a world state before it puts you anywhere. These are twenty
+ * places a body can be, all inside one of them, and they exist because of
+ * what the holes are: the only openings in that room you fit through, the
+ * only cover it has, and the three handovers the whole climb turns on. The
+ * question you most often want answered about one is whether you can get
+ * into it and what you can see from inside — and the honest way to ask that
+ * was a seventy metre climb with an animal in the shaft.
+ *
+ * Sorted up the room rather than by wall, because that is the order you meet
+ * them in and the order the climb is in. Marked `✦` where it is a handover:
+ * three of the twenty are the shelters, and those are the ones worth jumping
+ * to twice.
+ *
+ * Built once at startup. The geometry is cut when the room is built and never
+ * moves — what moves is the platforms, and none of these are platforms.
+ */
+const HOLES = tallRoom.refuges
+  .sort((a, b) => a.y - b.y || a.wall - b.wall)
+  .map((hole) => ({
+    label: `${hole.shelter ? '✦' : ''}${hole.wall}·${hole.y.toFixed(1)}`,
+    hint: hole.shelter
+      ? `Handover shelter, wall ${hole.wall} at ${hole.y} — the plate is out the front`
+      : `Refuge, wall ${hole.wall} at ${hole.y}`,
+    go() {
+      reachTheTallRoom();
+      // Standing in it facing out, which is the way you end up after backing
+      // into one — and the only way round that lets you see what is coming.
+      player.teleport({ position: [hole.x, hole.y, hole.z], yaw: hole.yaw, pitch: 0 });
+      setObjective('Find the way on');
+    },
+  }));
+
 const debugMenu = createDebugMenu({
   scenes: SCENES,
+  spots: HOLES,
   scene,
   camera,
   renderer,

@@ -52,7 +52,7 @@ const STYLE = `
 `;
 
 export function createDebugMenu(context) {
-  const { renderer, camera, room, player, scenes = [] } = context;
+  const { renderer, camera, room, player, scenes = [], spots = [] } = context;
 
   const style = document.createElement('style');
   style.textContent = STYLE;
@@ -73,6 +73,9 @@ export function createDebugMenu(context) {
 
     <div class="cap" data-scenes-cap>Jump to</div>
     <div class="bar" data-scenes></div>
+
+    <div class="cap" data-spots-cap>Holes</div>
+    <div class="bar" data-spots></div>
 
     <div class="cap">Layer</div>
     <div class="bar">
@@ -119,27 +122,44 @@ export function createDebugMenu(context) {
   `;
   document.body.appendChild(panel);
 
-  // ── scene jumps ───────────────────────────────────────────────────────────
-  // The panel knows nothing about the game's beats — it just renders whatever
-  // list it is handed, so the setup for each one lives next to the objects it
-  // has to touch rather than in here.
-  const sceneBar = panel.querySelector('[data-scenes]');
-  if (scenes.length === 0) {
-    panel.querySelector('[data-scenes-cap]').style.display = 'none';
-  }
-  for (const scene of scenes) {
-    const button = document.createElement('button');
-    button.textContent = scene.label;
-    button.title = scene.hint ?? '';
-    button.style.flex = '1 1 46%';
-    button.addEventListener('click', () => {
-      // Close first: several of these hand control to a sequence, and the menu
-      // holds the player disabled while it is up.
-      setOpen(false);
-      scene.go();
-    });
-    sceneBar.appendChild(button);
-  }
+  // ── jumps ─────────────────────────────────────────────────────────────────
+  /**
+   * One list of places, rendered as one bar of buttons.
+   *
+   * The panel knows nothing about the game's beats or its geometry — it just
+   * renders whatever lists it is handed, so the setup for each one lives next
+   * to the objects it has to touch rather than in here. Two lists rather than
+   * one because they are different things: the scenes are fifteen points in a
+   * story, and the holes are twenty places in a single room. Run together they
+   * would be a wall of thirty-five buttons where the twenty drown the fifteen.
+   *
+   * `width` is the flex basis, and the holes get a narrower one because their
+   * labels are a wall and a height and the scenes' are sentences.
+   */
+  const fillBar = (name, list, width) => {
+    const bar = panel.querySelector(`[data-${name}]`);
+    const cap = panel.querySelector(`[data-${name}-cap]`);
+    if (list.length === 0) {
+      cap.style.display = 'none';
+      bar.style.display = 'none';
+      return;
+    }
+    for (const place of list) {
+      const button = document.createElement('button');
+      button.textContent = place.label;
+      button.title = place.hint ?? '';
+      button.style.flex = `1 1 ${width}`;
+      button.addEventListener('click', () => {
+        // Close first: several of these hand control to a sequence, and the
+        // menu holds the player disabled while it is up.
+        setOpen(false);
+        place.go();
+      });
+      bar.appendChild(button);
+    }
+  };
+  fillBar('scenes', scenes, '46%');
+  fillBar('spots', spots, '30%');
 
   const editor = createMapEditor(context);
   const view = createEditorView({ editor, getPlayerPosition: () => camera.position });

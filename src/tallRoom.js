@@ -372,6 +372,18 @@ const SHELTER = {
   thick: 0.16,
 };
 
+/**
+ * And how a handover is marked, which is the one thing about it that is not
+ * a refuge.
+ *
+ * `glow` is amber where a refuge's is green — the same unlit plane doing the
+ * same job, in a colour that means something else. `mark` is the digit
+ * beside the mouth: 1.4 is legible from the far wall of a fifteen metre
+ * room without being a sign hung in a cathedral, and `clear` keeps it off
+ * the lip of the hole so the two read as a pair rather than a collision.
+ */
+const HANDOVER = { glow: '#8a6f22', mark: 1.4, clear: 0.3 };
+
 /*
  * There was a hash here — `isOpen` — that bricked up about a quarter of the
  * sockets at the bottom of the room and about half of them at the top, so that
@@ -916,8 +928,6 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
   };
   /** The wall the window is in, and so the one the gangway hangs off. */
   const GLAZED = 2;
-  /** The wall with the way in at the bottom and the giant hall behind it. */
-  const NEAR_WALL = 0;
   const runOf = (index, course) => {
     if (course !== TOP_COURSE || !hub) return toMiddle(index);
     /**
@@ -1020,25 +1030,19 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
        */
       floor: SILLS[last] + COURSE.pitch - REFUGE.high - SHELTER.under,
       /**
-       * And which wall it goes in, which is not always the one you are
-       * climbing onto.
+       * And which wall it goes in: always the one you are climbing onto.
        *
-       * This dodges the near wall, and the reason it had to no longer
-       * exists. The giant hall's lid used to start at this room's face and
-       * run to the sky, which claimed the whole 1.9 of that wall's thickness
-       * and filled in every pocket cut into it above twelve — lit, modelled,
-       * mouth open, and solid to walk into. The lid now stops at the wall's
-       * face instead, so the near wall takes a pocket like any other.
-       *
-       * Left as it is because it is no longer a workaround but a placement,
-       * and this one is defensible on its own: the pocket is cut into
-       * concrete either way, it is permanent either way, and the walkway
-       * reaches it from the plate either way. Delete the condition and
-       * shelters go back to the incoming wall, which costs nothing now and
-       * buys you already facing it.
+       * It used to dodge the near wall, because the giant hall's lid ran
+       * from this room's face to the sky and filled in every pocket cut
+       * into that wall above twelve. The lid stops at the wall's face now,
+       * so the dodge went with it — and good riddance, because the rule it
+       * broke is the one thing a handover has to teach. The shelter is in
+       * the wall you are about to climb. You are already facing it, the
+       * number painted beside it is the number to call, and that is true at
+       * all three of them rather than two.
        */
-      wall: above === NEAR_WALL ? below : above,
-      u: wallU(above === NEAR_WALL ? below : above, cx, cz),
+      wall: above,
+      u: wallU(above, cx, cz),
     });
   }
 
@@ -1546,12 +1550,30 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
      * above the plates. The walkway out to the plate is the landings' half
      * of it, and it is down there.
      *
-     * Deliberately the same object as a refuge — same liner, same pan, same
-     * painted threshold, same strip glowing at the back. From the floor of
-     * the shaft it should be indistinguishable from the seventeen others,
-     * because it is the same promise: concrete between you and the animal.
-     * The only thing that makes it different is where it is, which is the
-     * one place in the climb you cannot reach any of the others from.
+     * The same object as a refuge — same liner, same pan, same painted
+     * threshold — because it is the same promise: concrete between you and
+     * the animal. It used to be the same right down to the colour of the
+     * strip at the back, on the reasoning that the only thing which ought
+     * to make it different is where it is.
+     *
+     * That was wrong, and the room says so. The handover is the one move in
+     * this climb you have to work out rather than see, and the one place
+     * where being wrong costs you the whole band. The first of the three is
+     * findable, and only by accident: it sits 0.17 under the painted wall
+     * numerals and 0.97 from the only lamp near it, so you arrive into a
+     * lit corner with a number in front of you and the move is obvious. The
+     * second is 16.97 from the nearest numeral and three metres off a lamp,
+     * and it is one unlit hole in a wall of ninety identical unlit holes.
+     * You learn the handover at the one place the room explains it and then
+     * cannot find it again.
+     *
+     * So it is marked, and marked in the only currency this room has: an
+     * unlit plane that carries its own colour. The strip at the back goes
+     * amber instead of green, which is the whole difference from across the
+     * shaft, and the wall gets the number of the band it is about to hand
+     * you — beside the mouth, where you are looking when you climb towards
+     * it. The number is the thing to press and the hole is the place to
+     * wait, and they are now one mark.
      */
     for (const boundary of BOUNDARIES) {
       if (boundary.wall !== index) continue;
@@ -1581,10 +1603,39 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
 
       const glow = new THREE.Mesh(
         new THREE.PlaneGeometry(REFUGE.wide - 0.5, 0.07),
-        new THREE.MeshBasicMaterial({ color: '#2e4a3a', toneMapped: false })
+        new THREE.MeshBasicMaterial({ color: HANDOVER.glow, toneMapped: false })
       );
       glow.position.set(u, v + REFUGE.high - 0.3, -REFUGE.deep + 0.03);
       wall.add(glow);
+
+      /**
+       * And the number, beside the mouth rather than over or under it.
+       *
+       * Beside because the other two are taken. Under this one on the near
+       * wall is the big painted `1`, which already runs from 16.7 to 19.3
+       * and would be a second 1 printed over the first; over it is the
+       * first course of the band about to run out, 0.1 above the lintel at
+       * two of the three. To the side is blank concrete at all three, and
+       * blank concrete is what a sign wants.
+       *
+       * Self-lit for the same reason the strip behind you is. A painted
+       * stencil is a sign you can read once you have found the thing it is
+       * nailed to, which is the wrong way round here — the whole job is to
+       * be the thing that finds it. The stencil's own texture is reused, so
+       * it is the same worn mark as the ones at 18 and 63.7, lit from
+       * nowhere.
+       */
+      const callOut = new THREE.Mesh(
+        new THREE.PlaneGeometry(HANDOVER.mark, HANDOVER.mark),
+        new THREE.MeshBasicMaterial({
+          map: makeDigitTexture(String(index + 1), 'paint'),
+          color: HANDOVER.glow,
+          transparent: true,
+          toneMapped: false,
+        })
+      );
+      callOut.position.set(u + REFUGE.wide / 2 + HANDOVER.mark / 2 + HANDOVER.clear, v + REFUGE.high / 2, 0.02);
+      wall.add(callOut);
 
       // Its floor is the wall's own — see `buildWallSolid`, where the slab
       // under an opening is the one piece of arithmetic in this room that
@@ -1632,9 +1683,30 @@ export function createTallRoom({ scene, doorway, player, port, camera, death }) 
        * one height in this room that is both lit and reachable.
        */
       const low = 18.0;
+      /**
+       * And it steps aside for a hole, because a stencil is paint on a wall
+       * and there is no wall where the hole is.
+       *
+       * The plane sits 0.02 proud of the face and knows nothing about what
+       * has been cut out behind it, so a numeral over an opening is a
+       * number hanging in the mouth of it — which is what the low one on
+       * the near wall became the moment the handover shelters moved into
+       * the wall they hand you onto. That shelter is at 17.8 and this is
+       * 18.0, dead on top of each other.
+       *
+       * Moved along rather than up: the two heights are the two places a
+       * body in this room ever reads from, and 18 is the one that clears
+       * the animal's crown at 14.53. The wall is 18.8 across and the number
+       * is 2.6, so there is room to slide it and no room to raise it.
+       */
       for (const [v, size] of [[low, 2.6], [63.7, 3.4]]) {
+        const half = size / 2;
+        const clash = BOUNDARIES.find(
+          (b) => b.wall === index && b.floor < v + half && b.floor + REFUGE.high > v - half
+        );
+        const u = clash ? clash.u - REFUGE.wide / 2 - half - 0.2 : 0;
         const mark = new THREE.Mesh(new THREE.PlaneGeometry(size, size), numeral);
-        mark.position.set(0, v, 0.02);
+        mark.position.set(u, v, 0.02);
         wall.add(mark);
       }
     }

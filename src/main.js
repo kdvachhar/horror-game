@@ -281,9 +281,36 @@ const death = createDeathScreen({
      */
     const lift = giantHall.lift;
     lift.parkAtTop();
+    /**
+     * On the pad it was standing on, and that is the half of "back to its
+     * post" this was missing.
+     *
+     * It used to go to the floor of that room, which sounds like the same
+     * place and is not. The stage is 0.6 up and the bucket steps 0.25 for
+     * free, so the floor is the one spot up there with a wall between it and
+     * the pads — deliberately, that lip is the reason the pads are somewhere
+     * you have to get to rather than somewhere you are. Clearing it takes a
+     * jump, which the bucket can do; what it cannot do is tell you so.
+     *
+     * The effect was that the first death after a wall was called ended the
+     * room. You come back, climb, reach the handover, press F — and find the
+     * bucket on the floor walking into the side of a step it will not take.
+     * The wall that is out stays out, which makes it worse: nothing looks
+     * broken, the pads are right there lit, and the one thing between you
+     * and the rest of the climb is a verb nobody mentioned.
+     *
+     * So it comes back where it was. `sequence` is the right source rather
+     * than which pad is lit, because lit is a fact about this frame and the
+     * death may have taken a while: the last press is the wall that is
+     * standing out in the next room, and putting the bucket back on that pad
+     * is what keeps those two agreeing.
+     */
     const { room: top, top: floor } = lift.state;
+    const held = lift.board.padAt(lift.board.sequence.at(-1));
     friend.spawn(
-      new THREE.Vector3(top.minX + 4.2, floor + 0.05, (top.minZ + top.maxZ) / 2 + 1.4)
+      held
+        ? new THREE.Vector3(held.x, held.y, held.z)
+        : new THREE.Vector3(top.minX + 4.2, floor + 0.05, (top.minZ + top.maxZ) / 2 + 1.4)
     );
 
     setObjective('Find the way on');

@@ -311,7 +311,6 @@ export function createFriend(scene) {
    * would count itself as having arrived while still standing in your lane,
    * which is the one place the whole room needs it not to be.
    */
-  let followDistance = FOLLOW_DISTANCE;
   // Hops taken since it last covered any ground. Cleared by moving, not by
   // hopping, or it would never reach the cap.
   let hopsSinceProgress = 0;
@@ -465,7 +464,7 @@ export function createFriend(scene) {
     lastX = position.x;
     lastZ = position.z;
 
-    if (distance <= followDistance) {
+    if (distance <= FOLLOW_DISTANCE) {
       stuckTimer = 0;
       // Brake rather than coast, or it drifts past you and oscillates.
       if (grounded && speed > 0.05) {
@@ -478,7 +477,7 @@ export function createFriend(scene) {
 
     // Ease the target speed down as it closes, so it settles instead of
     // hunting back and forth around the stop radius.
-    const approach = Math.min(1, (distance - followDistance) / 1.5);
+    const approach = Math.min(1, (distance - FOLLOW_DISTANCE) / 1.5);
     const want = FOLLOW_SPEED * approach;
 
     let dvx = (dx / distance) * want - velocity.x;
@@ -733,11 +732,6 @@ export function createFriend(scene) {
       strandedTimer = 0;
       hopsSinceProgress = 0;
       wantsRecall = false;
-    },
-
-    /** Falsy restores the default. See followDistance. */
-    setFollowDistance(metres) {
-      followDistance = metres || FOLLOW_DISTANCE;
     },
 
     /** See recallAllowed. Set every frame from wherever it is standing. */

@@ -1279,40 +1279,43 @@ renderer.setAnimationLoop((time) => {
   }
 
   /**
-   * A bucket that cannot reach you normally means it is wedged and wants
-   * rescuing. In the red hall it means the room is working, so the rescue is
-   * switched off while it is in there.
+   * The two rooms where the bucket is a thing you drive and not a thing that
+   * trails you.
    *
-   * And in the room at the top of the hoist, where it means rather more than
-   * that. `setDriven` deliberately leaves `following` alone, so stepping out
-   * of the bucket sets it off after you again — which is right in every room
-   * where you are both standing on the same floor, and is how the pads got
-   * broken. You drive it up, stand it on a pad, press F, and it walks off the
-   * stage after a body seventy metres below: across every pad between it and
-   * the stairs, calling each of those walls in turn, and then over the edge.
-   * Four seconds later the stranded rescue teleports it to your feet at the
-   * bottom, where the only way back up is the hoist. One press and the room
-   * is over.
+   * Both of them are built out of it being somewhere you are not. The red
+   * hall is two lanes with a barred divider down the middle and each of you
+   * holding the key to the other's; the room at the top of the hoist is four
+   * pads over a seventy-two metre drop, driving a room the bucket cannot go
+   * into. In both, "walk towards the player" is not help — it is the room
+   * undoing itself, and the bucket does it through no decision you made.
    *
-   * So while it is up there and you are not, it waits — which is not a new
-   * rule, it is `followWanted` applied by the one piece of geometry that can
-   * see the drop. You are not in the room to tell it yourself; that is the
-   * entire premise of the room.
+   * Two things come off it in here, and they are the same rule twice.
+   *
+   * The rescue, first: a bucket that cannot reach you normally means it is
+   * wedged and wants teleporting to your feet, and in these two it means the
+   * room is working. On the pads it is worse than that — four seconds
+   * stranded and it is on the ground floor, where the only way back up is
+   * the hoist it came up on.
+   *
+   * And the following. `setDriven` leaves it alone on purpose, so stepping
+   * out of the bucket sets it off after you again, which is right wherever
+   * you are both standing on the same floor. In here it walked off the pads
+   * after a body seventy metres below — across every pad between it and the
+   * stairs, calling each of those walls on the way — and in the red hall it
+   * paced you down its own lane whether or not that was what you wanted of
+   * it. Now it stays where you put it in both, and getting it where it needs
+   * to be is the errand.
+   *
+   * Gated once, here, and read again further down where a bucket within
+   * arm's reach gets picked back up: without that the two would fight, one
+   * setting the flag each frame and the other clearing it.
    */
-  const bucketUpTop = giantHall.lift.holds(friend.position);
-  const aloneUpTop = bucketUpTop && !giantHall.lift.holds(camera.position);
-  friend.setRecallAllowed(
-    !gauntlet.contains(friend.position.x, friend.position.z) && !bucketUpTop
-  );
-  if (aloneUpTop && friend.isFollowing) friend.setFollowing(false);
-  // In the red hall the bucket follows a point in its own lane rather than
-  // following you, so it takes the left-hand hall on its own. It has to want to
-  // get much closer to that point than it does to you: the two lanes are 2.8m
-  // apart and its usual standoff is 2.6, so at the normal radius it would call
-  // itself arrived without ever leaving your side of the divider.
-  const leash = gauntlet.friendTarget(player.position, friend.position);
-  friend.setFollowDistance(leash ? 0.9 : 0);
-  friend.update(delta, camera, leash ?? camera.position, room.colliders);
+  const driveOnly =
+    gauntlet.contains(friend.position.x, friend.position.z) ||
+    giantHall.lift.holds(friend.position);
+  friend.setRecallAllowed(!driveOnly);
+  if (driveOnly && friend.isFollowing) friend.setFollowing(false);
+  friend.update(delta, camera, camera.position, room.colliders);
   // After the friend has moved, so the plates read where it is now, and given
   // the *body's* position rather than the camera's — while you are driving the
   // bucket the camera is in the other lane and the thing the spikes are walking
@@ -1378,7 +1381,7 @@ renderer.setAnimationLoop((time) => {
   // Making that decision is now G's job, and `followWanted` is what it sets.
   // Without it this would pick the bucket straight back up the moment you told
   // it to wait and then stood next to it.
-  if (friend.isActive && followWanted && !friend.isFollowing) {
+  if (friend.isActive && followWanted && !friend.isFollowing && !driveOnly) {
     if (friend.position.distanceTo(camera.position) < 2.6) {
       friend.collect();
       setObjective('Your friend is following you');

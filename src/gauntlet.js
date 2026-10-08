@@ -37,10 +37,16 @@ import {
  * and why the divider never opens. Both climbs get harder each time; see
  * STATION_CLIMBS.
  *
- * The bucket puts *itself* in the left-hand lane the moment you are both
- * through the red door, and paces you down it through the bars. See
- * friendTarget: getting it across by hand was the first thing the room used to
- * ask of you and the least interesting thing in it.
+ * Getting the bucket into its lane, and down it, is yours to do. The room
+ * used to peel it off into the left-hand hall by itself and pace you down
+ * through the bars on a leash in its own lane, on the grounds that doing it by
+ * hand was the least interesting thing in the room and was the first thing the
+ * room asked of you. That was taken out again by request: a bucket that walks
+ * itself is a bucket doing things you did not decide, and in a room where the
+ * whole currency is which of the two bodies is standing still, it was spending
+ * yours. The cost is real and is written down at ARM_X and in the time budget
+ * at SPIKE_SPEED — three legs of driving it forward that the clock did not
+ * used to be paying for. `git log` has the leash if it wants coming back.
  *
  * That it needs the bucket at all is a consequence of two facts already true
  * elsewhere in this game: the plates take weight and nothing else, and the
@@ -276,8 +282,10 @@ const SPIKE_HEIGHT = HEIGHT - 0.7;
  * shutter. Measured: the bucket got as far as -10.9 on its way back out and was
  * ground up there.
  *
- * That reason is gone — see friendTarget, the bucket takes its own lane now —
- * and this stays where it is for a better one. The first station is where the
+ * That reason is why this is where it is, and it is load-bearing again now
+ * that the bucket does not take its own lane for you: the crossing at the fork
+ * is back, and this is what keeps it off the clock. It stays for a second
+ * reason too. The first station is where the
  * room explains itself: a switch you cannot reach, a gantry to get up to it, a
  * gate that opens on the wrong side of the wall, and a plate only the bucket
  * can stand on. That is four things at once, and none of them are worth
@@ -1395,7 +1403,6 @@ export function createGauntlet({ scene, onCaught }) {
   let spikeX = SPIKE_HOME;
   let grindTimer = 0;
   // Mutated rather than replaced, so nothing downstream is holding a stale one.
-  const leash = new THREE.Vector3();
 
   /** So the first station's instruction is only given once per run. */
   let coached = false;
@@ -1580,45 +1587,6 @@ export function createGauntlet({ scene, onCaught }) {
       };
     },
 
-    /**
-     * Where the bucket should be walking, while you are both in here.
-     *
-     * Not at you. It is a point in *its* lane, level with you — so the moment
-     * you step through the red door it peels off into the left-hand hall and
-     * paces you down it through the bars, which is where the room needs it and
-     * where it would otherwise never go on its own.
-     *
-     * It used to just follow you, which meant it came through the door at your
-     * heels into your lane, and getting it across was a chore you had to do by
-     * hand at the fork before anything else could happen. That was the least
-     * interesting thing in the room and it was the first thing the room asked
-     * of you.
-     *
-     * Clamped short of any shutter of its own that is still down, because a
-     * leash that pulls it into steel it cannot pass just makes it stand there
-     * hopping — the stuck-hop reads "something is in the way" and tries to get
-     * over it, forever. Stopped a metre short instead, it waits.
-     *
-     * Returns null when this is none of our business, and the caller follows
-     * you the ordinary way.
-     */
-    friendTarget(bodyPosition, friendPosition) {
-      if (!powered) return null;
-      // Both of you, not just you. The doorway is 1.9m of a 5.2m wall, and a
-      // leash into the left-hand lane pulls anything still on the other side of
-      // it sideways into the wall *beside* the door — measured: the bucket got
-      // as far as x -7.6, level with its lane and a metre and a half from the
-      // opening, and stood there. Until it is through, it follows you through.
-      if (!inHall(bodyPosition.x, bodyPosition.z)) return null;
-      if (!inHall(friendPosition.x, friendPosition.z)) return null;
-      leash.set(bodyPosition.x, bodyPosition.y, LANE_WALK);
-      for (const station of stations) {
-        if (!station.shutters[FRIEND_SIDE].open && leash.x < station.x + 1.2) {
-          leash.x = station.x + 1.2;
-        }
-      }
-      return leash;
-    },
 
     /**
      * @param bodyPosition the player's own feet, which is not the camera while

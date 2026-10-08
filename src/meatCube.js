@@ -1089,13 +1089,27 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player, 
    * across the hoist's window, which is the one place in this building somebody
    * is standing to look at it.
    *
-   * Eight metres a second, which is no longer a lift at all.
+   * Six metres a second, which is no longer a lift at all.
    *
-   * It has been 1.6, then 4, and now this: sixty metres in seven and a half
-   * seconds. At 1.6 it was a process, at 4 an event, and at 8 it is something
-   * the building does to you — the whole travel is over inside the time it
-   * takes to cross the room it happens in, and from the floor the first thing
-   * you know about it is that the light has gone.
+   * It has been 1.6, then 4, then 8, and now back a step: 55.76 metres in
+   * 9.3 seconds. At 1.6 it was a process and at 4 an event; at 8 it was
+   * something the building did to you, over inside the time it takes to
+   * cross the room it happens in, and from the floor the first thing you
+   * knew about it was that the light had gone.
+   *
+   * Eight turned out to be past the point where the climb is a thing you
+   * watch. The room is seventy-six metres of waiting for this and then
+   * getting out of its way, and at eight the getting out of the way is the
+   * whole of it — there is no stretch where it is simply coming, which is
+   * the part that is worth being in a room with. Six buys 2.3 seconds of
+   * that back and costs nothing else: the cycle goes 17 seconds to 19.3,
+   * and every place the climb is survived from is concrete that does not
+   * care how fast it went past.
+   *
+   * Not five, and the reason is below rather than dramatic. At the clamped
+   * 0.05 step five is 0.25 of travel a frame, which is the bucket's free
+   * step exactly, and the note below is about how narrow exactly is. Six is
+   * 0.30 and stays the same side of it.
    *
    * The pause is four. There is no point holding the ends of a travel this
    * short for longer than the travel.
@@ -1110,19 +1124,20 @@ export function createMeatCube({ parent, colliders, x, z, yaw = 0, fit, player, 
    * This is past a line, and the line is worth naming rather than discovering.
    * A body standing on the crown is kept there by two separate rules: the free
    * step, which every grounded body gets, and `rise`, which this box publishes
-   * every frame and which both bodies read. At the clamped 0.05s step eight
-   * metres a second is 0.4 of travel per frame — over the bucket's free step of
-   * 0.25, and so from here on the bucket is carried by `rise` alone. It is the
-   * same mechanism the hoist proved and it holds, but it is now load bearing on
-   * its own, which is why the reach it grants is the movement *plus* the same
-   * hair of slack the rest of the collision code works to. Exactly equal was
-   * true and one rounding error wide.
+   * every frame and which both bodies read. At the clamped 0.05s step six
+   * metres a second is 0.30 of travel per frame — over the bucket's free step
+   * of 0.25, and so from here on the bucket is carried by `rise` alone. It is
+   * the same mechanism the hoist proved and it holds, but it is now load
+   * bearing on its own, which is why the reach it grants is the movement
+   * *plus* the same hair of slack the rest of the collision code works to.
+   * Exactly equal was true and one rounding error wide — and that is the
+   * margin, 0.30 against 0.25, that keeps the speed above off five.
    */
   const RIDE = travel
     ? {
         low: home,
         high: travel.ceiling - crown - (travel.clear ?? 0.1),
-        speed: travel.speed ?? 8.0,
+        speed: travel.speed ?? 6.0,
         pause: travel.pause ?? 4,
       }
     : null;

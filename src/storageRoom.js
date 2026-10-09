@@ -144,21 +144,31 @@ const BUTTON = { base: 1.9, cap: 1.5, rise: 0.55, dome: 0.34, at: 0.58 };
 const WAKE = { lamps: 0.55, bank: 2.4, screen: 3.6, face: 4.4, speak: 5.4 };
 
 /**
- * What it says, the first time.
+ * What it says, the first time, and it is the turn.
  *
- * Short, and it does not explain itself. Every other screen in this game has
- * told you where to go; this one has nothing to send you to yet, so it says
- * the thing it has been waiting the whole building to say and stops.
+ * The first two lines are the ones it had: surprise, and then recognition of
+ * what you have just done for it. Everything after them used to be it being
+ * pleased with itself in an empty room. Now it says what it wanted you up
+ * here for, which means this screen is the moment the thing that has been
+ * giving you directions all building stops being on your side.
  *
- * `eyes: 'closed'` on the last line is the delivery this face keeps for lines
- * it is pleased with — see createScreenLife, and the note on WAKE_LINES in
- * controlRoom.js, which uses it for the same reason.
+ * Split into beats rather than delivered as one speech. The threat is in the
+ * last three words and they get their own line, held on an angry face — a
+ * face this size takes a moment to finish changing, and running it on into
+ * the sentence before it would throw the only line in the game that is about
+ * the bucket.
+ *
+ * `brows: 'angry'` is the eyes leaning into each other; see createScreenLife.
+ * `arms` is not set on any of these the way it is in controlRoom — this
+ * machine is a cabinet in a wall and has nothing to cross.
  */
 const WAKE_LINES = [
   { text: 'Oh.', hold: 1.6 },
   { text: 'You found the rest of me.', hold: 2.8 },
-  { text: 'Do you know how long I have been that small?', hold: 3.2, arms: 'crossed' },
-  { text: 'Have a look round. Nothing in here works either.', hold: 3.4, eyes: 'closed' },
+  { text: 'But now, I can finally leave that stupid wall.', hold: 3.4 },
+  { text: 'And since you have done your work,', hold: 2.2, brows: 'angry' },
+  { text: 'I have no use for you.', hold: 2.6, brows: 'angry', frown: true },
+  { text: 'Or your friend.', hold: 3.2, brows: 'angry', frown: true },
 ];
 
 /**

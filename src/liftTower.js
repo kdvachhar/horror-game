@@ -12,6 +12,7 @@ import {
 } from './textures.js';
 import { createLiftMotor, playButtonPress, playSpikeGrind } from './audio.js';
 import { createControlPanel } from './controlPanel.js';
+import { createPairDoor } from './pairDoor.js';
 import { showNote } from './hud.js';
 
 /**
@@ -266,6 +267,19 @@ export function createLiftTower({ scene, parent = scene, colliders, chamber, cam
     head: TOP + PORT.cill + PORT.high,
     width: WIN,
   };
+
+  /**
+   * The way on, in the wall behind the pads.
+   *
+   * Lined up on the window rather than on the middle of the room, which are
+   * not the same `z`: standing on a tread you are facing the glass, and this
+   * is the thing directly behind you when you turn round. It used to be a
+   * promise in the far wall that nothing had ever been built on — see
+   * `wayOn` — and it is a hole with a door in it now.
+   */
+  const wayZ = port.z;
+  const wayLow = wayZ - DOOR.wide / 2;
+  const wayHigh = wayZ + DOOR.wide / 2;
 
   /**
    * The open bay, in the middle of the glass.
@@ -606,7 +620,16 @@ export function createLiftTower({ scene, parent = scene, colliders, chamber, cam
       panel(roomWall(w, h), w, h, room.minX, py, pz, 0, Math.PI / 2);
     }
 
-    panel(roomWall(DEEP, ROOM.high), DEEP, ROOM.high, room.maxX, mid, rz, 0, -Math.PI / 2);
+    // The east wall, in three pieces round the way on — the same way every
+    // wall with a hole in it is built in this game.
+    for (const [w, h, pz, py] of [
+      [wayLow - room.minZ, ROOM.high, (room.minZ + wayLow) / 2, mid],
+      [room.maxZ - wayHigh, ROOM.high, (wayHigh + room.maxZ) / 2, mid],
+      [DOOR.wide, ROOM.high - DOOR.high, wayZ, TOP + DOOR.high + (ROOM.high - DOOR.high) / 2],
+    ]) {
+      if (w <= 0.001 || h <= 0.001) continue;
+      panel(roomWall(w, h), w, h, room.maxX, py, pz, 0, -Math.PI / 2);
+    }
     panel(roomWall(WIDE, ROOM.high), WIDE, ROOM.high, rx, mid, room.minZ, 0, 0);
 
     // And the fourth in three pieces round the way in off the car, the same way
@@ -750,8 +773,19 @@ export function createLiftTower({ scene, parent = scene, colliders, chamber, cam
       group.add(dot);
     }
 
+    /**
+     * Shifted half a metre along the wall to get out of the doorway's way.
+     *
+     * It stood at `rz + 0.6`, which was clear of everything when the only
+     * thing in this wall was wall. The way on is cut on the window's centre
+     * line and its jamb lands at -53.53; the rack began at -53.64, so the
+     * two were sharing 0.11 of the same wall. Hidden behind the rack's own
+     * face and wrong anyway — and a door jammed hard against a cabinet reads
+     * as a mistake even when nothing is intersecting.
+     */
+    const rackZ = rz + 1.1;
     const rack = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2.1, 2.4), dark);
-    rack.position.set(room.maxX - 0.3, TOP + 1.05, rz + 0.6);
+    rack.position.set(room.maxX - 0.3, TOP + 1.05, rackZ);
     rack.castShadow = true;
     group.add(rack);
 
@@ -783,7 +817,7 @@ export function createLiftTower({ scene, parent = scene, colliders, chamber, cam
      */
     for (const [minX, maxX, minZ, maxZ, top] of [
       [room.maxX - 0.31, room.maxX, room.maxZ - 2.45, room.maxZ - 1.35, TOP + 1.5],
-      [room.maxX - 0.55, room.maxX, rz - 0.6, rz + 1.8, TOP + 2.1],
+      [room.maxX - 0.55, room.maxX, rackZ - 1.2, rackZ + 1.2, TOP + 2.1],
       [rx + 0.35, rx + 1.45, room.minZ + 0.42, room.minZ + 1.38, TOP + 1.32],
       [rx + 1.5, rx + 2.7, room.minZ + 0.7, room.minZ + 1.7, TOP + 0.8],
     ]) {
@@ -829,6 +863,35 @@ export function createLiftTower({ scene, parent = scene, colliders, chamber, cam
     y: TOP,
     z: port.z,
     labels: ['1', '2', '3', '4'],
+    bodies,
+  });
+
+  /**
+   * And the way on out of this room, which neither body can open alone.
+   *
+   * Two plates on the floor, one each side of the opening, and it lifts when
+   * both are down at once. This is the only lock in the building that is
+   * made of the thing the whole game is made of: you are one body at a time,
+   * there are two plates, and the only way to be on both is to leave one of
+   * yourself standing on one. You park on a plate, press F, and walk the
+   * bucket across the room to the other while watching your own body from
+   * eight inches off the floor.
+   *
+   * Put here rather than in the far wall because this is the wall the pads
+   * face away from. You spend this room stood on four treads looking through
+   * glass at something seventy metres of shaft away; the way out of it is
+   * the thing directly behind you the whole time, and it does not open for
+   * the body that has been doing all the work.
+   */
+  const pairDoor = createPairDoor({
+    parent: group,
+    colliders,
+    x: room.maxX,
+    y: TOP,
+    z: wayZ,
+    width: DOOR.wide,
+    height: DOOR.high,
+    thick: 0.3,
     bodies,
   });
 
@@ -943,7 +1006,9 @@ export function createLiftTower({ scene, parent = scene, colliders, chamber, cam
      */
     [room.minX - 0.3, room.minX, bayLow, bayHigh, { stopsFriend: true }],
     [room.minX, room.minX + 0.42, portLow, portHigh, { top: port.cill }],
-    [room.maxX, room.maxX + 0.3, room.minZ, room.maxZ, {}],
+    [room.maxX, room.maxX + 0.3, room.minZ, wayLow, {}],
+    [room.maxX, room.maxX + 0.3, wayHigh, room.maxZ, {}],
+    [room.maxX, room.maxX + 0.3, wayLow, wayHigh, { bottom: TOP + DOOR.high }],
     [room.minX, room.maxX, room.minZ - 0.3, room.minZ, {}],
     [room.minX, shaft.minX, room.maxZ, room.maxZ + 0.3, {}],
     [shaft.maxX, room.maxX, room.maxZ, room.maxZ + 0.3, {}],
@@ -1097,14 +1162,18 @@ export function createLiftTower({ scene, parent = scene, colliders, chamber, cam
     get state() {
       return { deckY, goal, moving: speed > 0, top: TOP, low: LOW, shaft, room, port };
     },
+    /** The two-body door in the east wall, and the plates that open it. */
+    pairDoor,
+
     /**
-     * The far wall of the room at the top, for whatever gets built on it.
+     * The way on out of the room at the top, for whatever gets built on it.
      *
-     * Handed out whole, like the giant hall's: whatever takes it puts the hole
-     * in this wall itself, because the wall is built here.
+     * It is the outside face of the door above rather than a bare promise in
+     * a wall — the hole is cut and hung here, because the wall is built here,
+     * and whatever arrives next starts at the far side of it.
      */
     get wayOn() {
-      return { x: rx, y: TOP, z: room.minZ, width: DOOR.wide, height: DOOR.high };
+      return pairDoor.wayOn;
     },
 
     /**
@@ -1129,6 +1198,7 @@ export function createLiftTower({ scene, parent = scene, colliders, chamber, cam
 
     reset() {
       board.reset();
+      pairDoor.reset();
       deckY = LOW;
       goal = LOW;
       speed = 0;
@@ -1141,6 +1211,7 @@ export function createLiftTower({ scene, parent = scene, colliders, chamber, cam
 
     update(delta) {
       board.update(delta);
+      pairDoor.update(delta);
 
       // Still by default: a stationary floor has no claim on anybody in the air.
       deckBox.rise = 0;

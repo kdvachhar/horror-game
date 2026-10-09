@@ -37,10 +37,27 @@ import { showNote, setObjective } from './hud.js';
  * press it.
  */
 
-/** The shed. Long in +x from the door, wide in z, and tall enough to store in. */
-const LENGTH = 28;
-const WIDTH = 20;
-const HEIGHT = 7;
+/**
+ * The shed. Long in +x from the door, wide in z, and tall enough to store in.
+ *
+ * It was 28 x 20 x 7 and it read as a corridor with shelves down it. The
+ * reason is that the only part of a room you can see from inside racking is
+ * the aisle: width you cannot see past is width you do not have, and at seven
+ * metres of head the shelving stopped well short of the roof, so nothing in
+ * here was taller than the thing looking at it.
+ *
+ * So bigger is mostly up and away. The lane is long enough that the far end
+ * is a smudge from the door, and the racking now goes most of the way to the
+ * roof, which is the one cue that lands in first person — you are walking at
+ * the bottom of it rather than past it.
+ *
+ * Everything in here is laid out from these three. Bays, lamps, cable trays
+ * and the machine's own proportions are all derived, so changing a number
+ * moves the room instead of leaving the furniture behind in the old one.
+ */
+const LENGTH = 46;
+const WIDTH = 26;
+const HEIGHT = 10;
 
 /**
  * The two ends of everything that lights up in here, as colours rather than
@@ -64,23 +81,51 @@ const WALL_TINT = '#43463f';
 const FLOOR_TINT = '#35372f';
 
 /**
+ * The television's glass, and how many of them across this one is.
+ *
+ * The set in the ward is a 3.8 x 1.9 casing with 3.3 x 1.46 of actual tube
+ * recessed in it, and the face is drawn 1.16 x 1.26 — so on the television it
+ * fills 35% of the width and 86% of the height, which is the framing you have
+ * been looking at this character in for the whole game.
+ *
+ * Both numbers below are multiplied by the same scalar, and so is the face.
+ * That is the only way the framing survives: a screen and a face scaled by
+ * different amounts is a different composition however carefully the two are
+ * chosen, and the first cut of this room got it wrong in the direction that
+ * does not show up until you are standing in front of it — the glass was
+ * authored to a flatter aspect than the tube, the face was scaled to fill its
+ * width, and the result was a face whose eyes were cut off by the top of the
+ * screen and whose mouth hung out of the bottom of it. From down the aisle it
+ * looked fine, which is why it shipped.
+ */
+const TV_GLASS = { wide: 3.3, high: 1.46 };
+const TUBE = 3.2;
+
+/**
  * The machine, across the far end.
  *
  * `bank` is how much of the wall it takes, `deep` how far it stands off it.
  * The screen is most of it: this is a face in a cabinet and not a cabinet with
  * a face on it, and the proportion is what says so.
  */
-const RIG = { bank: 13.5, high: 5.2, deep: 1.1, screen: { wide: 6.8, high: 3.9, at: 2.9 } };
+const RIG = {
+  bank: 18.0,
+  high: 7.4,
+  deep: 1.4,
+  screen: { wide: TV_GLASS.wide * TUBE, high: TV_GLASS.high * TUBE, at: 4.0 },
+};
 
 /**
- * How big to draw the face in it.
+ * How big to draw the face in it, which is not a free number.
  *
- * The face is built at about 1.12 across and the television shows it at that,
- * floating in 3.8 of screen. Three and a quarter puts the eyes 2.7 apart in a
- * 6.8 screen, which is the television's own ratio held exactly — so it reads
- * as the same set photographed closer rather than as a different machine.
+ * It is the tube's multiple and nothing else. The glass is the television's
+ * glass times TUBE and the face is the television's face times TUBE, so what
+ * is on this wall is the ward's set photographed closer — same framing, same
+ * margins, same character. Anything else here is a face that fits its screen
+ * differently from the one you have been talking to, which is the whole thing
+ * screenFace.js is written to prevent.
  */
-const FACE_SCALE = 3.25;
+const FACE_SCALE = TUBE;
 
 /** The button. Giant, because it is the only control in a room this size. */
 const BUTTON = { base: 1.9, cap: 1.5, rise: 0.55, dome: 0.34, at: 0.58 };
@@ -88,8 +133,8 @@ const BUTTON = { base: 1.9, cap: 1.5, rise: 0.55, dome: 0.34, at: 0.58 };
 /**
  * Waking up, in seconds from the press.
  *
- * It is a sequence and not a switch because the room is twenty-eight metres
- * long and the button is in the middle of it: whatever happens has to be
+ * It is a sequence and not a switch because the room is forty-six metres long
+ * and the button is down the far end of it: whatever happens has to be
  * legible from where you are standing when you press it, which is with your
  * back to half of it. So the racking lamps come up first and travel away from
  * you down the shed, then the cabinet lamps, then the screen — the light
@@ -170,8 +215,23 @@ export function createStorageRoom({ scene, doorway, player }) {
       metalness: 0,
     })
   );
+  /**
+   * Flat, and turned no further than that.
+   *
+   * There was a second rotation here, a quarter turn about z, and it is worth
+   * saying what it did because it did not look like a missing floor. The plane
+   * is authored LENGTH across by WIDTH deep; the quarter turn swapped those,
+   * so the slab lay 20 along the room's 28 of length and 28 across its 20 of
+   * width — four metres short at each end and four metres through each side
+   * wall. The ends it was short of are the two you stand in: the doorway you
+   * come through and the machine you walk up to. You could stand there,
+   * because the collider below is the full footprint, so it read as the floor
+   * failing to draw rather than as the floor being the wrong shape.
+   *
+   * Every other room in this project does `rotation.x` alone and authors the
+   * plane as (x-extent, z-extent). See giantHall, liftTower, controlRoom.
+   */
   floor.rotation.x = -Math.PI / 2;
-  floor.rotation.z = Math.PI / 2;
   floor.position.set(midX, floorY, midZ);
   floor.receiveShadow = true;
   group.add(floor);
@@ -184,8 +244,10 @@ export function createStorageRoom({ scene, doorway, player }) {
       metalness: 0,
     })
   );
+  // Same again, and it had the same quarter turn in it — so the ceiling was
+  // missing over the door and over the machine too, which nobody noticed
+  // because there is no light up there until the thing is on.
   ceiling.rotation.x = Math.PI / 2;
-  ceiling.rotation.z = Math.PI / 2;
   ceiling.position.set(midX, crown, midZ);
   group.add(ceiling);
 
@@ -250,13 +312,53 @@ export function createStorageRoom({ scene, doorway, player }) {
    * running straight at it. It also hides the far end until you are committed,
    * which is the only staging this room gets.
    */
-  const RACK = { high: 3.4, deep: 1.2, bays: 5, long: 4.0, aisle: 5.0, shelves: 3 };
+  const RACK = { high: 6.2, deep: 1.2, long: 5.6, aisle: 8.0, shelves: 4, gangway: 2.4 };
+
+  /**
+   * Where the bays go, worked out from the room rather than counted by hand.
+   *
+   * The run starts five metres in, so you are in the room before you are in
+   * the racking, and stops an apron short of the machine. The apron is the
+   * point of the length: you walk the lane between shelving taller than you,
+   * come out of it into nine metres of clear floor, and the thing is across
+   * the whole wall in front of you with one button on the ground. The button
+   * used to stand between the racking runs, which made it furniture.
+   *
+   * `bays` is however many whole ones fit, and n of them measure n*long plus
+   * the n-1 gaps between — not n*pitch, which is a gap too many and silently
+   * drops the last bay that would have fitted.
+   */
+  const APRON = 9.2;
+  const bayPitch = RACK.long + 0.6;
+  const runFrom = near + 5.0;
+  const runTo = far - RIG.deep - APRON;
+  const bays = Math.max(1, Math.floor((runTo - runFrom + 0.6) / bayPitch));
+
+  /**
+   * Two lanes a side, because the room got wider and one did not reach.
+   *
+   * At twenty across, a single run either side of the aisle very nearly met
+   * the walls. At twenty-six it leaves four metres of swept floor behind it,
+   * and racking with bare floor behind it reads as a set with the back
+   * missing. The second lane stands off the first by a cross-gangway, which is
+   * how a warehouse is actually laid out and, more to the point, is what makes
+   * the width legible: you can see past the near run into another one.
+   *
+   * The outer lane is stocked on its bottom shelves only. Nobody picks the
+   * back of a warehouse, and it is also four hundred boxes nobody will stand
+   * close enough to count.
+   */
+  const lanes = [
+    RACK.aisle / 2 + RACK.deep / 2,
+    RACK.aisle / 2 + RACK.deep + RACK.gangway + RACK.deep / 2,
+  ];
+
   const rackLamps = [];
   for (const side of [-1, 1]) {
-    const rz = midZ + side * (RACK.aisle / 2 + RACK.deep / 2);
-    for (let bay = 0; bay < RACK.bays; bay++) {
-      const bx = near + 5.0 + bay * (RACK.long + 0.6) + RACK.long / 2;
-      if (bx + RACK.long / 2 > far - RIG.deep - 2.5) continue;
+   for (const [lane, reach] of lanes.entries()) {
+    const rz = midZ + side * reach;
+    for (let bay = 0; bay < bays; bay++) {
+      const bx = runFrom + bay * bayPitch + RACK.long / 2;
 
       // Uprights, and shelves between them. Boxes rather than a solid block,
       // because a rack you can see through is the only way the aisle reads as
@@ -287,10 +389,10 @@ export function createStorageRoom({ scene, doorway, player }) {
         // What is on it. Deterministic from the bay and shelf, like everything
         // else in this project — a room that is a different room every boot is
         // a room nobody can report a bug in.
-        const n = 2 + ((bay * 7 + s * 3 + (side + 1)) % 3);
+        const n = lane > 0 && s > 1 ? 0 : 3 + ((bay * 7 + s * 3 + (side + 1) + lane * 5) % 3);
         for (let i = 0; i < n; i++) {
-          const h = 0.42 + (((bay + s + i) * 37) % 5) * 0.08;
-          const w = 0.5 + (((bay * 3 + i) * 29) % 4) * 0.13;
+          const h = 0.42 + (((bay + s + i + lane) * 37) % 5) * 0.08;
+          const w = 0.5 + (((bay * 3 + i + lane * 2) * 29) % 4) * 0.13;
           const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, RACK.deep - 0.3), crateMat);
           box.position.set(
             bx - RACK.long / 2 + 0.45 + i * (RACK.long - 0.9) / Math.max(1, n - 1),
@@ -323,17 +425,65 @@ export function createStorageRoom({ scene, doorway, player }) {
       tube.rotation.x = Math.PI / 2;
       tube.position.set(bx, floorY + RACK.high - 0.06, rz - side * (RACK.deep / 2 - 0.2));
       group.add(tube);
-      rackLamps.push({ tube, at: (bay + (side > 0 ? 0.5 : 0)) / RACK.bays, level: 0 });
+      rackLamps.push({
+        tube,
+        at: (bay + (side > 0 ? 0.5 : 0) + lane * 0.25) / bays,
+        level: 0,
+      });
+    }
+   }
+  }
+
+  /**
+   * And block-stacked pallets down the outside, filling the last of the width.
+   *
+   * Between the outer racking and the wall there is four metres, which is too
+   * much to leave swept and not enough for a third lane of shelving. Stacked
+   * crates are what is actually in that strip in a real shed — the stuff that
+   * does not need picking — and they cost three boxes each instead of a bay's
+   * twenty. Deterministic from the index, like everything else in here.
+   */
+  const stackZ = WIDTH / 2 - 1.05;
+  const stackPitch = 3.4;
+  const stacks = Math.max(1, Math.floor((runTo - runFrom) / stackPitch));
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < stacks; i++) {
+      const sx = runFrom + 0.6 + i * stackPitch + 1.2;
+      const sz = midZ + side * stackZ;
+      const tall = 2 + ((i * 11 + (side + 1)) % 2);
+      let up = 0;
+      for (let c = 0; c < tall; c++) {
+        const h = 0.7 + (((i + c) * 23) % 3) * 0.16;
+        const w = 1.9 - (((i * 5 + c) * 17) % 3) * 0.18;
+        const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, 2.0), crateMat);
+        box.position.set(sx + (((i + c) % 3) - 1) * 0.07, floorY + up + h / 2, sz);
+        box.rotation.y = (((i + c) % 5) - 2) * 0.02;
+        box.castShadow = true;
+        box.receiveShadow = true;
+        group.add(box);
+        up += h;
+      }
+      solid(sx - 1.0, sx + 1.0, sz - 1.0, sz + 1.0, { top: floorY + up, bottom: floorY });
     }
   }
 
-  // Pallets and crates in the aisle's edges, so the floor is not swept clean.
+  /**
+   * Pallets and crates down the edges of the lane, so the floor is not swept.
+   *
+   * Kept off the racking and off the apron. Both are easy to get wrong now
+   * that the lane is wider and the room is longer: this list was written for a
+   * five-metre aisle in a twenty-eight metre shed, and left as it was, two of
+   * these stood inside the new shelving and two stood on the clear floor in
+   * front of the machine, which is the one piece of floor in here that is
+   * meant to be clear.
+   */
   for (const [px, pz, w, h, d, ry] of [
-    [near + 3.2, midZ - 3.4, 1.3, 0.9, 1.1, 0.2],
-    [near + 3.6, midZ + 3.6, 1.0, 0.65, 0.95, -0.12],
-    [near + 2.6, midZ + 3.2, 0.8, 0.5, 0.8, 0.34],
-    [far - 6.0, midZ - 3.8, 1.4, 1.0, 1.2, -0.08],
-    [far - 5.2, midZ + 4.0, 1.1, 0.75, 1.0, 0.26],
+    [near + 3.2, midZ - 3.0, 1.3, 0.9, 1.1, 0.2],
+    [near + 3.6, midZ + 3.1, 1.0, 0.65, 0.95, -0.12],
+    [near + 2.6, midZ + 2.6, 0.8, 0.5, 0.8, 0.34],
+    [runFrom + 9.4, midZ - 2.9, 1.4, 1.0, 1.2, -0.08],
+    [runTo - 6.2, midZ + 3.0, 1.1, 0.75, 1.0, 0.26],
+    [runTo - 2.4, midZ - 3.1, 1.2, 0.85, 1.05, 0.14],
   ]) {
     const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), crateMat);
     box.position.set(px, floorY + h / 2, pz);
@@ -412,7 +562,7 @@ export function createStorageRoom({ scene, doorway, player }) {
   // that is not its face.
   const bankLamps = [];
   for (const side of [-1, 1]) {
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 9; i++) {
       const lamp = new THREE.Mesh(
         new THREE.PlaneGeometry(0.9, 0.12),
         new THREE.MeshBasicMaterial({ color: '#15110c', toneMapped: false })
@@ -420,37 +570,49 @@ export function createStorageRoom({ scene, doorway, player }) {
       lamp.rotation.y = -Math.PI / 2;
       lamp.position.set(
         far - RIG.deep - 0.02,
-        floorY + 0.9 + i * 0.52,
-        midZ + side * (RIG.screen.wide / 2 + 1.15)
+        floorY + 1.0 + i * ((RIG.high - 2.0) / 8),
+        midZ + side * (RIG.screen.wide / 2 + 1.3)
       );
       group.add(lamp);
-      bankLamps.push({ lamp, at: i / 6 });
+      bankLamps.push({ lamp, at: i / 8 });
     }
   }
 
   /**
-   * One real lamp over the aisle, and only one.
+   * Real lamps over the aisle, and as few as will actually reach.
    *
    * Every strip on the racking is an unlit plane, which is this building's
-   * answer to lighting things it cannot afford to light — but a plane lights
-   * nothing, and a twenty-eight metre shed whose only actual light source is
-   * the face at the far end is a shed you cannot see the middle of. This is
-   * the difference between a room that turns on and a room that merely stops
-   * being black at one end.
+   * answer to lighting what it cannot afford to light — but a plane lights
+   * nothing, and a shed whose only light source is the face at the far end is
+   * a shed you cannot see the middle of. This is the difference between a room
+   * that turns on and a room that merely stops being black at one end.
    *
-   * One, not a row. There are sixty-three forward-rendered lights in this
-   * scene and each of them shades every fragment of every surface; a row of
-   * six down an aisle would be the most expensive thing in the building, for
-   * a room you walk the length of once. It comes up with the strips so it
-   * reads as them rather than as itself.
+   * There was one, and one was right for twenty-eight metres under seven of
+   * head. Forty-six metres under ten is past what a single point light covers:
+   * the fall-off that lit the old floor from six and a half metres up arrives
+   * at ten with nothing left, and the ends of the lane stayed dark on a room
+   * that was supposed to have come on. Derived from LENGTH at one per sixteen
+   * metres — three, here — which is the fewest that reaches rather than a row.
+   *
+   * It is still the expensive decision in this file. Each of these shades
+   * every fragment of every surface in a forward renderer, and a lamp per bay
+   * would cost more than everything else in the building put together. They
+   * come up with the strips, travelling away from the button, so they read as
+   * the racking lighting rather than as themselves.
    */
-  const aisleLamp = new THREE.PointLight(0xd2d8c0, 0, 26, 1.5);
-  aisleLamp.position.set(near + LENGTH * 0.42, crown - 0.5, midZ);
-  group.add(aisleLamp);
+  const aisleLamps = [];
+  const lampCount = Math.max(1, Math.round(LENGTH / 16));
+  for (let i = 0; i < lampCount; i++) {
+    const at = (i + 0.5) / lampCount;
+    const lamp = new THREE.PointLight(0xd2d8c0, 0, 34, 1.5);
+    lamp.position.set(near + LENGTH * (0.1 + at * 0.8), crown - 0.6, midZ);
+    group.add(lamp);
+    aisleLamps.push({ lamp, at });
+  }
 
   // Cable trays out of the top of it and away across the ceiling, so it is
   // plugged into the building rather than standing in it.
-  for (const off of [-4.2, -1.4, 1.4, 4.2]) {
+  for (const off of [-6.0, -2.0, 2.0, 6.0]) {
     const tray = new THREE.Mesh(new THREE.BoxGeometry(LENGTH * 0.62, 0.12, 0.34), dark);
     tray.position.set(far - LENGTH * 0.31, crown - 0.22, midZ + off);
     group.add(tray);
@@ -594,7 +756,7 @@ export function createStorageRoom({ scene, doorway, player }) {
       motor.stop();
       faceGroup.visible = false;
       glow.intensity = 0;
-      aisleLamp.intensity = 0;
+      for (const { lamp } of aisleLamps) lamp.intensity = 0;
       screenMat.color.copy(DEAD_TUBE);
       cap.position.y = floorY + BUTTON.rise + 0.1;
       for (const { tube } of rackLamps) tube.material.color.copy(DEAD_STRIP);
@@ -633,8 +795,11 @@ export function createStorageRoom({ scene, doorway, player }) {
         const level = Math.max(0, Math.min(1, t));
         fitting.tube.material.color.copy(DEAD_STRIP).lerp(LIVE_STRIP, level);
       }
-      // The aisle with them, on the same ramp as the last strip to come up.
-      aisleLamp.intensity = 26 * Math.max(0, Math.min(1, (since - WAKE.lamps - 1.1) / 1.4));
+      // The aisle with them, each on its own place in the same run, so the
+      // lane lights along its length rather than all at once.
+      for (const { lamp, at } of aisleLamps) {
+        lamp.intensity = 34 * Math.max(0, Math.min(1, (since - WAKE.lamps - at * 1.3) / 1.4));
+      }
 
       for (const fitting of bankLamps) {
         const t = (since - WAKE.bank - fitting.at * 0.7) / 0.25;

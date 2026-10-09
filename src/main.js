@@ -14,6 +14,7 @@ import { createControlRoom } from './controlRoom.js';
 import { createGiantHall } from './giantHall.js';
 import { createTallRoom } from './tallRoom.js';
 import { createStorageRoom } from './storageRoom.js';
+import { createTransferHall } from './transferHall.js';
 import { createDeathScreen } from './death.js';
 import { createEmployeeDoor } from './employeeDoor.js';
 import { paintRoomStripes } from './wallStripes.js';
@@ -252,6 +253,32 @@ room.colliders.push(...giantHall.colliders);
  */
 const death = createDeathScreen({
   onRestart() {
+    /**
+     * There are two things in this building that kill you now, and they are
+     * seventy metres apart.
+     *
+     * The rule below — back to the tall room's threshold — was written when
+     * the meat cube was the only one. Sending somebody who has just been
+     * caught by the screen back down to the bottom of a climb they have
+     * already done is not a retry, it is the room being taken off them: the
+     * chase is thirty seconds long and the climb in front of it is several
+     * minutes. So a death during the chase puts you back at the top, in the
+     * shed, with the machine off and the racking standing, and you press the
+     * button again when you are ready.
+     *
+     * Asked of the room rather than remembered here, because "was the chase
+     * on" is a fact the room owns and a copy of it in this file is a copy
+     * that goes stale the first time the chase learns a new way to end.
+     */
+    if (storageRoom.isChasing) {
+      storageRoom.reset();
+      transferHall.reset();
+      const back = storageRoom.entry;
+      player.teleport({ position: back.position, yaw: back.yaw, pitch: 0 });
+      setObjective('Find the switch');
+      return;
+    }
+
     tallRoom.reset();
     const entry = tallRoom.entry;
     player.teleport({ position: entry.position, yaw: entry.yaw, pitch: 0 });
@@ -341,8 +368,37 @@ const storageRoom = createStorageRoom({
   scene,
   doorway: giantHall.lift.wayOn,
   player,
+  death,
+  /**
+   * The way back shuts when the thing comes out of the wall.
+   *
+   * Not because a locked door is frightening — because the room has two
+   * exits and only one of them is a chase. The door you came in by is nine
+   * metres behind you when that screen tears off, and a player who runs for
+   * it has solved the set piece by walking out of it. The two-body door is
+   * also the one door in this building you cannot open alone, so it shutting
+   * costs you nothing you could have used.
+   */
+  onChase: () => giantHall.lift.pairDoor.slam(),
+  onCalm: () => giantHall.lift.pairDoor.release(),
 });
 room.colliders.push(...storageRoom.colliders);
+
+/**
+ * And through the hole in the corner of it: the hall over the racking.
+ *
+ * Hung off `wayUp`, which is the transfer opening at the top of the crate
+ * stair — so the one is the other's near wall and neither owns where it is.
+ * The hall's shutter is what ends the chase, so it is the hall that tells the
+ * thing to stop.
+ */
+const transferHall = createTransferHall({
+  scene,
+  doorway: storageRoom.wayUp,
+  player,
+  onSeal: () => storageRoom.beast.stop(),
+});
+room.colliders.push(...transferHall.colliders);
 
 /**
  * Every room has now put its boxes in, so this is the one moment the world is
@@ -771,6 +827,7 @@ function resetSequences() {
   giantHall.reset();
   tallRoom.reset();
   storageRoom.reset();
+  transferHall.reset();
   handoverSaid = false;
   // The loop fires the cutscene the moment a door that has been open closes.
   // Clearing this stops a jump from immediately retriggering it underneath you.
@@ -1139,6 +1196,35 @@ const SCENES = [
       setObjective('Find the switch');
     },
   },
+  {
+    label: '17 · Out of the wall',
+    hint: 'The machine on, the last line said, and the thing coming down the shed',
+    go() {
+      reachTheTallRoom();
+      const lift = giantHall.lift;
+      lift.parkAtTop();
+      const stair = storageRoom.atTheStair;
+      player.teleport({ position: stair.position, yaw: stair.yaw, pitch: 0 });
+      const { room: top, top: floor } = lift.state;
+      friend.spawn(new THREE.Vector3(top.maxX - 2.0, floor + 0.05, (top.minZ + top.maxZ) / 2));
+      // Straight past the speech. This jump exists to look at the chase, and
+      // twenty seconds of dialogue before it can start is twenty seconds of
+      // nothing every time somebody wants to see the thing move.
+      storageRoom.skipToChase();
+      setObjective('Get to the crates');
+    },
+  },
+  {
+    label: '18 · The transfer hall',
+    hint: 'Through the hole over the racking, with the run still ahead of you',
+    go() {
+      reachTheTallRoom();
+      giantHall.lift.parkAtTop();
+      const entry = transferHall.entry;
+      player.teleport({ position: entry.position, yaw: entry.yaw, pitch: 0 });
+      setObjective('Keep going');
+    },
+  },
 ];
 
 /**
@@ -1420,6 +1506,10 @@ renderer.setAnimationLoop((time) => {
   giantHall.update(delta);
   tallRoom.update(delta);
   storageRoom.update(delta);
+  // After the room the chase starts in, because the shutter in here is what
+  // stops the thing that room let out and a frame's lag on that is a frame of
+  // it standing inside a closed shutter.
+  transferHall.update(delta);
   // After the room that raises it. The screen's own clock is only the beat it
   // waits before it will take a key — see death.js — and that beat starts on
   // the frame the room puts it up.
@@ -1471,7 +1561,7 @@ renderer.setAnimationLoop((time) => {
 
 // Dev-only handle for poking at the scene from the console.
 if (import.meta.env.DEV) {
-  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, corpseHall, controlRoom, giantHall, tallRoom, storageRoom, wakeUp, possession, painter, monologue, death };
+  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, corpseHall, controlRoom, giantHall, tallRoom, storageRoom, transferHall, wakeUp, possession, painter, monologue, death };
   window.game.__tvLines = TV_LINES;
   /**
    * The scene jumps, so a harness can walk all fifteen of them.

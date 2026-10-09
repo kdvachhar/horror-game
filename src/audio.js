@@ -658,7 +658,18 @@ const CHASE_LOOKAHEAD = 0.2;
 const CHASE_ROOT = 43.65; // F1
 const CHASE_FLAT2 = CHASE_ROOT * 1.0595; // the semitone above it
 
-export function createChaseMusic() {
+/**
+ * @param root  the bass note, in Hz. Two things are chased in this building
+ *              and they should not be chasing you in the same key — the wall
+ *              in the red hall is the default F1, and the thing in the roof
+ *              comes a minor third under it. Everything else about the cue is
+ *              shared on purpose: this is one building's idea of what being
+ *              pursued sounds like, and a second cue written from scratch
+ *              would read as a different game rather than a second monster.
+ * @param tempo [slowest, how much faster at full pressure] in BPM.
+ */
+export function createChaseMusic({ root: ROOT = CHASE_ROOT, tempo = [96, 56] } = {}) {
+  const FLAT2 = ROOT * 1.0595;
   let running = false;
   let bus = null;
   /** Everything between the bus and the master, so `stop` can take it apart. */
@@ -838,8 +849,8 @@ export function createChaseMusic() {
     const bar = Math.floor(index / 16);
     const beat = index % 16;
     const level = 0.1 + pressure * 0.16;
-    const root = bar % 2 ? CHASE_FLAT2 : CHASE_ROOT;
-    const other = bar % 2 ? CHASE_ROOT : CHASE_FLAT2;
+    const root = bar % 2 ? FLAT2 : ROOT;
+    const other = bar % 2 ? ROOT : FLAT2;
 
     // Eighths, always. This is the thing you hear first and last.
     if (beat % 2 === 0) pulse(t, root, 0.17, level);
@@ -930,7 +941,7 @@ export function createChaseMusic() {
     update() {
       if (!running || !ready() || !bus) return;
       // Tempo rides the pressure, so the room speeds up as it closes on you.
-      const sixteenth = 60 / ((96 + pressure * 56) * 4);
+      const sixteenth = 60 / ((tempo[0] + pressure * tempo[1]) * 4);
       const horizon = context.currentTime + CHASE_LOOKAHEAD;
       // Capped, so a tab that has been in the background for a minute schedules
       // a handful of notes and catches up rather than booking four thousand.

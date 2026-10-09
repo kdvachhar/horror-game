@@ -11,6 +11,7 @@ import {
   cloneSurface,
 } from './textures.js';
 import { buildScreenFace, createScreenLife, FACE } from './screenFace.js';
+import { createScreenBeast, BREAKOUT } from './screenBeast.js';
 import { playButtonPress, playSpikeGrind, createLiftMotor } from './audio.js';
 import { showNote, setObjective } from './hud.js';
 
@@ -127,6 +128,40 @@ const RIG = {
  */
 const FACE_SCALE = TUBE;
 
+/**
+ * The way out, which exists before you need it and is the point.
+ *
+ * A high-level transfer opening in the -z wall with a stair of pallets under
+ * it — how stock got onto the top of the racking, and the only hole in this
+ * room that is not the door you came in by. It is there from the moment you
+ * walk in, lit by nothing, eleven and a half metres of slightly darker dark
+ * up in the corner.
+ *
+ * That is deliberate. A chase whose exit appears when the chase starts is a
+ * chase you solve by looking around while something eats you; this one you
+ * have already seen, probably climbed, and dismissed. The objective in here
+ * is `Find the way on` and this *is* the way on — you are meant to find it,
+ * go and look, find nothing, and come back down to the button.
+ *
+ * `sill` is six steps of 0.6 and you step 0.9 for free, so it is a run rather
+ * than six jumps. Nothing about getting out of this room is meant to be a
+ * platforming test; the test is whether you went and looked.
+ */
+const WAY_UP = { wide: 11.5, high: 5.9, sill: 3.6, from: 1.0 };
+
+/**
+ * The pallets up to it. Six, because 6 x 0.6 is the sill and 0.6 is free.
+ *
+ * `from` is the *lowest* step and they climb from there toward the near
+ * corner, which is to say toward -x, which is to say the same way you are
+ * already running. That direction is the whole of it. Built the other way up
+ * — low in the corner, climbing back out into the room — the stair is a
+ * staircase you have to overshoot and then turn round and come back up,
+ * directly into the thing you are running from. Nobody would read that as a
+ * route, and anybody who did would be wrong to.
+ */
+const STAIR = { steps: 6, rise: 0.6, wide: 1.8, deep: 2.2, from: 13.0 };
+
 /** The button. Giant, because it is the only control in a room this size. */
 const BUTTON = { base: 1.9, cap: 1.5, rise: 0.55, dome: 0.34, at: 0.58 };
 
@@ -172,11 +207,29 @@ const WAKE_LINES = [
 ];
 
 /**
+ * What it says on the way down the room.
+ *
+ * Three lines in twenty seconds, which is as much as anybody reads while
+ * running backwards. They are all the same line really — it is telling you
+ * the route does not help — and they exist so the thing behind you is still
+ * the character you have been talking to rather than a shape. A monster that
+ * stops talking the moment it becomes a monster was never the character.
+ */
+const CHASE_LINES = [
+  { text: 'Stay there.', hold: 2.2, brows: 'angry', frown: true },
+  { text: 'There is nothing up there.', hold: 3.0, brows: 'angry' },
+  { text: 'I have been every screen in this building.', hold: 3.6, brows: 'angry', frown: true },
+];
+
+/**
  * @param scene   the world
  * @param doorway where the lift room hands over: the far face of its door
  * @param player  for knowing when you are in here
+ * @param death   the screen that goes up when the thing in the wall has you
+ * @param onChase called once, the frame it starts: the way back shuts
+ * @param onCalm  called by reset, to put the way back the way it was
  */
-export function createStorageRoom({ scene, doorway, player }) {
+export function createStorageRoom({ scene, doorway, player, death, onChase, onCalm }) {
   const group = new THREE.Group();
   scene.add(group);
 
@@ -287,8 +340,23 @@ export function createStorageRoom({ scene, doorway, player }) {
     panel(wallOf(w, h), w, h, near, py, pz, Math.PI / 2);
   }
   panel(wallOf(WIDTH, HEIGHT), WIDTH, HEIGHT, far, mid, midZ, -Math.PI / 2);
-  panel(wallOf(LENGTH, HEIGHT), LENGTH, HEIGHT, midX, mid, minZ, 0);
   panel(wallOf(LENGTH, HEIGHT), LENGTH, HEIGHT, midX, mid, maxZ, Math.PI);
+
+  // The -z wall, in four pieces round the transfer opening — the same way
+  // every wall with a hole in it is built in this game, with one more piece
+  // than usual because this hole has floor under it as well as wall over it.
+  const upLow = near + WAY_UP.from;
+  const upHigh = upLow + WAY_UP.wide;
+  const upTop = floorY + WAY_UP.sill + WAY_UP.high;
+  for (const [w, h, px, py] of [
+    [upLow - near, HEIGHT, (near + upLow) / 2, mid],
+    [far - upHigh, HEIGHT, (upHigh + far) / 2, mid],
+    [WAY_UP.wide, WAY_UP.sill, (upLow + upHigh) / 2, floorY + WAY_UP.sill / 2],
+    [WAY_UP.wide, crown - upTop, (upLow + upHigh) / 2, (upTop + crown) / 2],
+  ]) {
+    if (w <= 0.001 || h <= 0.001) continue;
+    panel(wallOf(w, h), w, h, px, py, minZ, 0);
+  }
 
   /**
    * And the walls as things you cannot walk through.
@@ -303,13 +371,27 @@ export function createStorageRoom({ scene, doorway, player }) {
     [near - 0.3, near, minZ, inLow],
     [near - 0.3, near, inHigh, maxZ],
     [far, far + 0.3, minZ, maxZ],
-    [near - 0.3, far + 0.3, minZ - 0.3, minZ],
+    [near - 0.3, upLow, minZ - 0.3, minZ],
+    [upHigh, far + 0.3, minZ - 0.3, minZ],
     [near - 0.3, far + 0.3, maxZ, maxZ + 0.3],
   ]) {
     solid(a, b, c, d, { bottom: floorY });
   }
   // The lintel over the way in, so you cannot climb the doorway's head.
   solid(near - 0.3, near, inLow, inHigh, { bottom: floorY + doorway.height });
+  /**
+   * And the transfer opening's own two: the wall under its sill, and the wall
+   * over its head.
+   *
+   * The one under the sill carries a `top` as well as a `bottom`, which looks
+   * like belt and braces on a piece of wall and is not. Without the `top` it
+   * is solid from the floor to the sky and the hole is not a hole; without
+   * the `bottom` it is solid downwards through four rooms. It is the only box
+   * in this building that genuinely needs both, because it is the only one
+   * with somewhere above it and somewhere below it that are both real.
+   */
+  solid(upLow, upHigh, minZ - 0.3, minZ, { top: floorY + WAY_UP.sill, bottom: floorY });
+  solid(upLow, upHigh, minZ - 0.3, minZ, { bottom: upTop });
 
   // --------------------------------------------------------------- storage ---
 
@@ -363,12 +445,45 @@ export function createStorageRoom({ scene, doorway, player }) {
     RACK.aisle / 2 + RACK.deep + RACK.gangway + RACK.deep / 2,
   ];
 
+  /**
+   * A cross-aisle through the -z side, which is the only way to the stair.
+   *
+   * Without it the stair is behind two lanes of racking and a run of block
+   * stacking, and the only approach is whatever gaps happen to fall between
+   * them. That is not a hard route, it is an absent one: a run at it ends
+   * with you held against a pallet at full speed while the thing closes, and
+   * the first measured run of this chase did exactly that for four seconds.
+   *
+   * So one bay is missing from both -z lanes and the stacking behind them
+   * stands clear of the same strip. The gap is lined up on the foot of the
+   * stair rather than on anything in the racking's own grid, because what it
+   * is for is being able to see the way out from the middle of the aisle.
+   */
+  const CROSS = { from: near + 10.6, to: near + 17.4 };
+  const crossed = (low, high) => high > CROSS.from && low < CROSS.to;
+
   const rackLamps = [];
+  /**
+   * Every bay, as something that can be put on the floor.
+   *
+   * Each one is its own group standing at its own base, so knocking it over
+   * is one rotation rather than twenty positions. That is the only reason the
+   * bays are grouped at all, and it is worth the indirection: the shelving
+   * going over is how you know how far back the thing is once you have
+   * stopped daring to turn round. See `wreck` and screenBeast.js.
+   */
+  const rackBays = [];
   for (const side of [-1, 1]) {
    for (const [lane, reach] of lanes.entries()) {
     const rz = midZ + side * reach;
     for (let bay = 0; bay < bays; bay++) {
       const bx = runFrom + bay * bayPitch + RACK.long / 2;
+      // The cross-aisle to the stair goes through this side.
+      if (side < 0 && crossed(bx - RACK.long / 2, bx + RACK.long / 2)) continue;
+      // Everything below is local to the foot of this bay.
+      const stand = new THREE.Group();
+      stand.position.set(bx, floorY, rz);
+      group.add(stand);
 
       // Uprights, and shelves between them. Boxes rather than a solid block,
       // because a rack you can see through is the only way the aisle reads as
@@ -377,24 +492,24 @@ export function createStorageRoom({ scene, doorway, player }) {
         for (const d of [-1, 1]) {
           const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, RACK.high, 0.1), dark);
           post.position.set(
-            bx + end * (RACK.long / 2 - 0.08),
-            floorY + RACK.high / 2,
-            rz + d * (RACK.deep / 2 - 0.08)
+            end * (RACK.long / 2 - 0.08),
+            RACK.high / 2,
+            d * (RACK.deep / 2 - 0.08)
           );
           post.castShadow = true;
-          group.add(post);
+          stand.add(post);
         }
       }
       for (let s = 0; s < RACK.shelves; s++) {
-        const sy = floorY + 0.5 + s * ((RACK.high - 0.7) / (RACK.shelves - 1));
+        const sy = 0.5 + s * ((RACK.high - 0.7) / (RACK.shelves - 1));
         const shelf = new THREE.Mesh(
           new THREE.BoxGeometry(RACK.long, 0.08, RACK.deep),
           steel
         );
-        shelf.position.set(bx, sy, rz);
+        shelf.position.set(0, sy, 0);
         shelf.castShadow = true;
         shelf.receiveShadow = true;
-        group.add(shelf);
+        stand.add(shelf);
 
         // What is on it. Deterministic from the bay and shelf, like everything
         // else in this project — a room that is a different room every boot is
@@ -405,23 +520,25 @@ export function createStorageRoom({ scene, doorway, player }) {
           const w = 0.5 + (((bay * 3 + i + lane * 2) * 29) % 4) * 0.13;
           const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, RACK.deep - 0.3), crateMat);
           box.position.set(
-            bx - RACK.long / 2 + 0.45 + i * (RACK.long - 0.9) / Math.max(1, n - 1),
+            -RACK.long / 2 + 0.45 + i * (RACK.long - 0.9) / Math.max(1, n - 1),
             sy + 0.04 + h / 2,
-            rz + (((i * 13) % 3) - 1) * 0.06
+            (((i * 13) % 3) - 1) * 0.06
           );
           box.rotation.y = (((bay + i) % 5) - 2) * 0.03;
           box.castShadow = true;
           box.receiveShadow = true;
-          group.add(box);
+          stand.add(box);
         }
       }
 
       // One box, floor to the top shelf. The rack is scenery and the point of
       // it is the aisle; a shelf-by-shelf collider is sixty boxes to let you
       // stand on something nobody can reach anyway.
+      const standing = { down: false };
       solid(bx - RACK.long / 2, bx + RACK.long / 2, rz - RACK.deep / 2, rz + RACK.deep / 2, {
         top: floorY + RACK.high,
         bottom: floorY,
+        enabled: () => !standing.down,
       });
 
       // A strip light under the top shelf of each bay, dead until the machine
@@ -433,16 +550,41 @@ export function createStorageRoom({ scene, doorway, player }) {
         new THREE.MeshBasicMaterial({ color: '#141611', toneMapped: false })
       );
       tube.rotation.x = Math.PI / 2;
-      tube.position.set(bx, floorY + RACK.high - 0.06, rz - side * (RACK.deep / 2 - 0.2));
-      group.add(tube);
+      tube.position.set(0, RACK.high - 0.06, -side * (RACK.deep / 2 - 0.2));
+      stand.add(tube);
       rackLamps.push({
         tube,
         at: (bay + (side > 0 ? 0.5 : 0) + lane * 0.25) / bays,
         level: 0,
       });
+      rackBays.push({ stand, standing, tube, x: bx, z: rz, side, tip: 0 });
     }
    }
   }
+
+  /**
+   * Knocking them over, which is the only damage model in this game.
+   *
+   * No physics and no debris: the bay leans away from the aisle on its own
+   * base and stops. Away rather than into, because a rack that fell into the
+   * lane would be a chase that blocks its own route, and the thing behind you
+   * is already quite enough of an obstacle.
+   *
+   * `wreck` is handed the position of whatever is doing the knocking. The box
+   * it tests is wide in z and narrow in x on purpose: the thing coming down
+   * this room is eleven and a half metres across and travelling lengthways,
+   * so it takes out everything beside it at once and nothing in front.
+   */
+  const RUIN = { reach: 2.4, across: 9.0, lean: 0.92, fall: 2.6 };
+  const wreck = (at) => {
+    for (const bay of rackBays) {
+      if (bay.standing.down) continue;
+      if (Math.abs(at.x - bay.x) > RUIN.reach) continue;
+      if (Math.abs(at.z - bay.z) > RUIN.across) continue;
+      bay.standing.down = true;
+      playSpikeGrind(0.5);
+    }
+  };
 
   /**
    * And block-stacked pallets down the outside, filling the last of the width.
@@ -460,6 +602,13 @@ export function createStorageRoom({ scene, doorway, player }) {
     for (let i = 0; i < stacks; i++) {
       const sx = runFrom + 0.6 + i * stackPitch + 1.2;
       const sz = midZ + side * stackZ;
+      // The -z wall carries the stair up to the transfer opening, and the
+      // cross-aisle runs down to the foot of it. Several of these stand in
+      // one or the other.
+      const stairLow = near;
+      const stairHigh = near + STAIR.from + STAIR.wide / 2;
+      if (side < 0 && sx + 1.0 > stairLow - 0.7 && sx - 1.0 < stairHigh + 0.7) continue;
+      if (side < 0 && crossed(sx - 1.0, sx + 1.0)) continue;
       const tall = 2 + ((i * 11 + (side + 1)) % 2);
       let up = 0;
       for (let c = 0; c < tall; c++) {
@@ -491,10 +640,25 @@ export function createStorageRoom({ scene, doorway, player }) {
     [near + 3.2, midZ - 3.0, 1.3, 0.9, 1.1, 0.2],
     [near + 3.6, midZ + 3.1, 1.0, 0.65, 0.95, -0.12],
     [near + 2.6, midZ + 2.6, 0.8, 0.5, 0.8, 0.34],
-    [runFrom + 9.4, midZ - 2.9, 1.4, 1.0, 1.2, -0.08],
+    [runFrom + 9.4, midZ + 2.9, 1.4, 1.0, 1.2, -0.08],
     [runTo - 6.2, midZ + 3.0, 1.1, 0.75, 1.0, 0.26],
     [runTo - 2.4, midZ - 3.1, 1.2, 0.85, 1.05, 0.14],
   ]) {
+    /**
+     * Nothing of this stands in the mouth of the cross-aisle.
+     *
+     * One of them did: a metre-high crate across the turning, which is four
+     * centimetres over the free step, so the only way past it was a jump. In
+     * a chase, at full speed, in the dark, with the turning being the thing
+     * you are trying to find. Three measured runs ended against it in exactly
+     * the same place.
+     *
+     * The one that was there has been moved to the other side of the aisle
+     * rather than deleted — the clutter is doing a job — and this guard
+     * stands behind that so the next thing added to the list cannot put it
+     * back.
+     */
+    if (pz < midZ && crossed(px - w / 2, px + w / 2)) continue;
     const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), crateMat);
     box.position.set(px, floorY + h / 2, pz);
     box.rotation.y = ry;
@@ -502,6 +666,130 @@ export function createStorageRoom({ scene, doorway, player }) {
     box.receiveShadow = true;
     group.add(box);
     solid(px - w / 2, px + w / 2, pz - d / 2, pz + d / 2, { top: floorY + h, bottom: floorY });
+  }
+
+  /**
+   * The stair of pallets up to the transfer opening.
+   *
+   * Six blocks against the -z wall, each one a step higher than the last, and
+   * each one drawn as a stack of crates rather than as a block because a
+   * solid ramp of wood is a ramp and these are supposed to look like
+   * somebody's answer to a problem rather than like architecture.
+   *
+   * Flush with the wall, so the top of the last one *is* the sill: you walk up
+   * and keep walking. A top step short of the opening would be a jump, and
+   * see WAY_UP for why nothing about leaving this room is a jump.
+   */
+  for (let i = 0; i < STAIR.steps; i++) {
+    const top = (i + 1) * STAIR.rise;
+    const sx = near + STAIR.from - i * STAIR.wide;
+    const sz = minZ + STAIR.deep / 2;
+    for (let c = 0; c <= i; c++) {
+      const crate = new THREE.Mesh(
+        new THREE.BoxGeometry(STAIR.wide - 0.08, STAIR.rise, STAIR.deep - 0.1),
+        crateMat
+      );
+      crate.position.set(
+        sx + (((i + c) % 3) - 1) * 0.05,
+        floorY + c * STAIR.rise + STAIR.rise / 2,
+        sz + (((i * 3 + c) % 3) - 1) * 0.06
+      );
+      crate.rotation.y = (((i + c) % 5) - 2) * 0.012;
+      crate.castShadow = true;
+      crate.receiveShadow = true;
+      group.add(crate);
+    }
+    solid(sx - STAIR.wide / 2, sx + STAIR.wide / 2, minZ, minZ + STAIR.deep, {
+      top: floorY + top,
+      bottom: floorY,
+    });
+  }
+
+  /**
+   * And a landing at the top of it, filling the corner.
+   *
+   * The top step is 1.8 long and you run at 5.6, which is one and a half
+   * steps' worth of stopping distance past the end of it — so the first run
+   * of this chase went up the stair, off the far end of the top step, three
+   * and a half metres back down to the floor, and into the corner with the
+   * thing arriving. A stair whose top is a ledge you overshoot is a stair
+   * that kills you for running up it, which is the one thing you are supposed
+   * to do.
+   *
+   * So the last tread runs to the end wall. Overshooting now walks you into
+   * the corner at sill height with the opening beside you, which is a mistake
+   * you can turn round out of rather than fall off.
+   */
+  const landTo = near + STAIR.from - (STAIR.steps - 1) * STAIR.wide - STAIR.wide / 2;
+  const landTop = STAIR.steps * STAIR.rise;
+  for (let c = 0; c < STAIR.steps; c++) {
+    for (const half of [0, 1]) {
+      const wide = (landTo - near) / 2;
+      const crate = new THREE.Mesh(
+        new THREE.BoxGeometry(wide - 0.08, STAIR.rise, STAIR.deep - 0.1),
+        crateMat
+      );
+      crate.position.set(
+        near + wide / 2 + half * wide,
+        floorY + c * STAIR.rise + STAIR.rise / 2,
+        minZ + STAIR.deep / 2 + (((c + half) % 3) - 1) * 0.05
+      );
+      crate.castShadow = true;
+      crate.receiveShadow = true;
+      group.add(crate);
+    }
+  }
+  solid(near, landTo, minZ, minZ + STAIR.deep, { top: floorY + landTop, bottom: floorY });
+
+  /**
+   * And the cross-aisle painted on the floor, running to the foot of it.
+   *
+   * The stair is lit by nothing and so is the lane to it, and both of them
+   * have to be findable from the middle of the room by somebody who is
+   * running. This is the tall room's answer again — an unlit plane carries
+   * its own colour and costs no light — and it is the same amber, because
+   * by now that colour means "this is the way through" in three rooms.
+   */
+  const laneX = (CROSS.from + CROSS.to) / 2;
+  const laneFrom = midZ - RACK.aisle / 2;
+  const laneTo = minZ + STAIR.deep;
+  const lane = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.3, laneFrom - laneTo),
+    new THREE.MeshBasicMaterial({ color: '#8a6f22', toneMapped: false })
+  );
+  lane.rotation.x = -Math.PI / 2;
+  lane.position.set(laneX, floorY + 0.006, (laneFrom + laneTo) / 2);
+  group.add(lane);
+  // And a bar across the top of it, square in the aisle, so it reads as a
+  // turning rather than as a scuff running under the shelving.
+  const head = new THREE.Mesh(
+    new THREE.PlaneGeometry(CROSS.to - CROSS.from - 1.4, 0.3),
+    new THREE.MeshBasicMaterial({ color: '#8a6f22', toneMapped: false })
+  );
+  head.rotation.x = -Math.PI / 2;
+  head.position.set(laneX, floorY + 0.006, laneFrom);
+  group.add(head);
+
+  /**
+   * And a strip of paint up the steps, because in the dark they are crates.
+   *
+   * The same unlit-plane trick the refuges in the tall room use, and for the
+   * same reason: this is the one feature in a room full of stacked boxes that
+   * has to be legible as a route before anybody is looking for a route. It is
+   * on from the moment you walk in.
+   */
+  for (let i = 0; i < STAIR.steps; i++) {
+    const mark = new THREE.Mesh(
+      new THREE.PlaneGeometry(STAIR.wide - 0.5, 0.16),
+      new THREE.MeshBasicMaterial({ color: '#8a6f22', toneMapped: false })
+    );
+    mark.rotation.x = -Math.PI / 2;
+    mark.position.set(
+      near + STAIR.from - i * STAIR.wide,
+      floorY + (i + 1) * STAIR.rise + 0.006,
+      minZ + STAIR.deep - 0.4
+    );
+    group.add(mark);
   }
 
   // ------------------------------------------------------------ the machine ---
@@ -561,6 +849,39 @@ export function createStorageRoom({ scene, doorway, player }) {
   faceGroup.position.set(far - RIG.deep - 0.24, floorY + RIG.screen.at, midZ);
   faceGroup.visible = false;
   group.add(faceGroup);
+
+  /**
+   * And the hole it leaves, which is only ever seen from behind.
+   *
+   * Hidden until the screen tears out. It is not much — a black plane set
+   * back inside the cabinet with the broken fixings round it — but without it
+   * the far wall after the breakout is a cabinet with nothing wrong with it,
+   * which contradicts the thing that is currently chasing you.
+   */
+  const wound = new THREE.Group();
+  wound.visible = false;
+  group.add(wound);
+  const cavity = new THREE.Mesh(
+    new THREE.PlaneGeometry(RIG.screen.wide + 0.4, RIG.screen.high + 0.4),
+    new THREE.MeshBasicMaterial({ color: '#05060a', toneMapped: false })
+  );
+  cavity.position.set(far - RIG.deep + 0.1, floorY + RIG.screen.at, midZ);
+  cavity.rotation.y = -Math.PI / 2;
+  wound.add(cavity);
+  for (let i = 0; i < 14; i++) {
+    const stub = new THREE.Mesh(
+      new THREE.BoxGeometry(0.3, 0.26 + ((i * 19) % 4) * 0.2, 0.34),
+      dark
+    );
+    const along = (i / 13 - 0.5) * (RIG.screen.wide + 0.3);
+    stub.position.set(
+      far - RIG.deep - 0.05,
+      floorY + RIG.screen.at + (i % 2 ? 1 : -1) * (RIG.screen.high / 2 + 0.1),
+      midZ + along
+    );
+    stub.rotation.x = (((i * 11) % 5) - 2) * 0.16;
+    wound.add(stub);
+  }
 
   // Its own glow thrown back down the shed. One light, off until it wakes.
   const glow = new THREE.PointLight(FACE, 0, 16, 1.8);
@@ -703,8 +1024,63 @@ export function createStorageRoom({ scene, doorway, player }) {
   let said = false;
   let entered = false;
   let pressed = 0;
+  let chasing = false;
+  let chaseSince = 0;
 
   const inside = (x, z) => x > near && x < far && z > minZ && z < maxZ;
+
+  /** The hole it has to fit through, which is also the hall's own front door. */
+  const wayUp = {
+    x: (upLow + upHigh) / 2,
+    y: floorY + WAY_UP.sill,
+    z: minZ,
+    width: WAY_UP.wide,
+    height: WAY_UP.high,
+  };
+
+  const beast = createScreenBeast({
+    scene,
+    player,
+    death,
+    screen: RIG.screen,
+    faceScale: FACE_SCALE,
+    at: { x: far - RIG.deep - 0.2, y: floorY + RIG.screen.at, z: midZ },
+    gate: { x: wayUp.x, y: wayUp.y + WAY_UP.high / 2, z: minZ },
+    wreck,
+    onCatch() {
+      death.kill('It had been the wall the whole time.');
+    },
+  });
+
+  /**
+   * The breakout, which is one thing happening in two places.
+   *
+   * The screen on the wall and the screen chasing you are different objects —
+   * see screenBeast.js — so the handover has to be staged from both ends and
+   * on the same clock. BREAKOUT is that clock, exported from the beast so
+   * there is only one of it: the cabinet shakes for `shake` seconds with
+   * everything still on it, and on the frame that ends the wall's screen
+   * goes out, the hole appears, and the beast is already coming forward
+   * through the space it used to be in.
+   */
+  const startChase = () => {
+    if (chasing) return;
+    chasing = true;
+    chaseSince = 0;
+    beast.start(CHASE_LINES);
+    onChase?.();
+    /**
+     * And the one instruction, because this is the first thing in the game
+     * that is faster than a walk.
+     *
+     * Everything else that comes after you in this building can be strolled
+     * away from. Somebody who has got this far has had no reason to find the
+     * run key, and a chase that kills you for not knowing a control is not a
+     * chase, it is a quiz. So it says the word.
+     */
+    showNote('Run.', 2.4);
+    setObjective('Run');
+  };
 
   const wake = () => {
     if (awake) return;
@@ -715,8 +1091,23 @@ export function createStorageRoom({ scene, doorway, player }) {
     motor.start(0.8);
   };
 
-  const interactions = [
-    {
+  /**
+   * The press, and it has to be re-armable.
+   *
+   * `once` is the registry's default and it is right: this is a button you
+   * press one time. But `spent` is set on the target object and nothing in
+   * the game ever clears it, which was fine for as long as a room's `reset`
+   * only ever ran from the debug menu. It is not fine here. A death during
+   * the chase puts you back in this room with everything wound back and the
+   * one control in it permanently dead — you respawn into a shed you cannot
+   * do anything in, which is the game over the death screen was supposed not
+   * to be.
+   *
+   * So the target is held and un-spent by `reset` below. Every other room in
+   * the project has the same latent fault and none of them has been bitten by
+   * it yet, because none of them is somewhere you can die.
+   */
+  const pressTheButton = {
       position: new THREE.Vector3(buttonX, floorY + BUTTON.rise + 0.3, midZ),
       label: 'Turn it on',
       // Wide, because the thing is 1.9 across and you are standing against it
@@ -730,8 +1121,8 @@ export function createStorageRoom({ scene, doorway, player }) {
         pressed = 1;
         wake();
       },
-    },
-  ];
+  };
+  const interactions = [pressTheButton];
 
   return {
     group,
@@ -756,12 +1147,70 @@ export function createStorageRoom({ scene, doorway, player }) {
       return { x: buttonX, y: floorY, z: midZ };
     },
 
+    /** The transfer opening, for whatever is built on the other side of it. */
+    get wayUp() {
+      return { ...wayUp };
+    },
+
+    /** The thing out of the wall, for the hall that has to stop it. */
+    beast,
+
+    /** Whether the chase is on, so a death knows which room it happened in. */
+    get isChasing() {
+      return chasing;
+    },
+
+    /** Standing at the foot of the stair, for a scene jump. */
+    get atTheStair() {
+      return {
+        position: [near + STAIR.from + 2.4, floorY, minZ + STAIR.deep + 1.4],
+        // Looking back down the shed at what is coming, which is the only
+        // direction anybody standing here is looking.
+        yaw: -Math.PI / 2,
+      };
+    },
+
+    /**
+     * Straight to the chase, with the machine counted as already said.
+     *
+     * For the scene jump and for a harness. It winds the wake sequence to
+     * finished rather than skipping it, so the room the chase happens in is
+     * the lit room with the face on the wall, which is the room the chase is
+     * written for.
+     */
+    skipToChase() {
+      if (chasing) return;
+      wake();
+      since = WAKE.speak + 0.01;
+      said = true;
+      startChase();
+    },
+
+    /** How many bays are on the floor, for a harness. */
+    get ruined() {
+      return rackBays.filter((bay) => bay.standing.down).length;
+    },
+
     reset() {
       awake = false;
       since = -1;
       said = false;
       entered = false;
       pressed = 0;
+      chasing = false;
+      chaseSince = 0;
+      pressTheButton.spent = false;
+      beast.reset();
+      onCalm?.();
+      wound.visible = false;
+      bezel.visible = true;
+      screen.visible = true;
+      for (const part of [cabinet, bezel, screen, faceGroup]) part.position.z = midZ;
+      for (const bay of rackBays) {
+        bay.standing.down = false;
+        bay.tip = 0;
+        bay.stand.rotation.x = 0;
+      }
       life.stop();
       motor.stop();
       faceGroup.visible = false;
@@ -787,6 +1236,43 @@ export function createStorageRoom({ scene, doorway, player }) {
         pressed = Math.max(0, pressed - delta * 2.2);
         cap.position.y = floorY + BUTTON.rise + 0.1 - 0.13 * Math.sin(pressed * Math.PI);
       }
+
+      /**
+       * The chase, on its own clock from the last word spoken.
+       *
+       * Two screens, one handover. The cabinet shakes with everything still
+       * bolted to it for BREAKOUT.shake seconds, and on the frame that ends
+       * the wall's screen goes out and the hole appears — which is the same
+       * frame the beast starts coming forward through the space it was in.
+       * One clock, exported from screenBeast.js, because two would drift and
+       * the drift would be a second screen hanging in front of a first one.
+       */
+      if (chasing) {
+        chaseSince += delta;
+        if (chaseSince < BREAKOUT.shake) {
+          // Growing, so the first half second is a noise and the last is
+          // unmistakable.
+          const q = Math.sin(chaseSince * 41) * 0.05 * (chaseSince / BREAKOUT.shake);
+          for (const part of [cabinet, bezel, screen, faceGroup]) part.position.z = midZ + q;
+        } else if (!wound.visible) {
+          for (const part of [cabinet, bezel, screen, faceGroup]) part.position.z = midZ;
+          bezel.visible = false;
+          screen.visible = false;
+          faceGroup.visible = false;
+          wound.visible = true;
+          glow.intensity = 0;
+          life.stop();
+        }
+        // The shelving going over, which is the only thing in this room that
+        // reports how far back it is without you turning round.
+        for (const bay of rackBays) {
+          if (!bay.standing.down || bay.tip >= 1) continue;
+          bay.tip = Math.min(1, bay.tip + delta / RUIN.fall);
+          bay.stand.rotation.x = bay.side * RUIN.lean * bay.tip * bay.tip;
+          bay.tube.material.color.copy(DEAD_STRIP);
+        }
+      }
+      beast.update(delta);
 
       if (!awake) return;
       since += delta;
@@ -822,9 +1308,12 @@ export function createStorageRoom({ scene, doorway, player }) {
       screenMat.color.copy(DEAD_TUBE).lerp(LIVE_TUBE, warm);
       if (since >= WAKE.face) faceGroup.visible = true;
 
+      // And when it has finished saying it, it comes out of the wall. The
+      // last line is the cue and nothing else is: a timer here would start
+      // the chase over the top of the sentence that justifies it.
       if (!said && since >= WAKE.speak) {
         said = true;
-        life.speak(WAKE_LINES, () => setObjective('Find the way on'));
+        life.speak(WAKE_LINES, startChase);
       }
 
       // `lit` is the fade the screen is behind — full once the tube is warm,

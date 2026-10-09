@@ -240,6 +240,17 @@ export function createPairDoor({
 
   let latched = false;
   let lift = 0;
+  /**
+   * Shut and held shut, over the top of the latch.
+   *
+   * The latch exists so the door cannot be closed by stepping off a plate —
+   * see the note at the top of this file. `jammed` is the one thing allowed
+   * to overrule it, and it is not a puzzle state: it is for the moment the
+   * building decides you are not going back that way. It leaves `latched`
+   * alone, so releasing it puts the door back up without asking the two of
+   * you to stand on the plates again.
+   */
+  let jammed = false;
 
   return {
     group,
@@ -264,9 +275,34 @@ export function createPairDoor({
       return { x: x + thick, y, z, width, height };
     },
 
+    /** Whether it has been shut over the top of its own latch. */
+    get isJammed() {
+      return jammed;
+    },
+
+    /** Down, now, and it stays down until something releases it. */
+    slam() {
+      if (jammed) return;
+      jammed = true;
+      lift = 0;
+      leaf.position.z = 0;
+      playWardDoor();
+    },
+
+    /** And back to wherever the latch had left it. */
+    release() {
+      if (!jammed) return;
+      jammed = false;
+      if (latched) {
+        lift = 1;
+        leaf.position.z = -(width + LEAF.over);
+      }
+    },
+
     reset() {
       latched = false;
       lift = 0;
+      jammed = false;
       leaf.position.z = 0;
       for (const plate of plates) {
         plate.on = false;
@@ -292,7 +328,7 @@ export function createPairDoor({
         onOpen?.();
       }
 
-      if (latched && lift < 1) {
+      if (latched && !jammed && lift < 1) {
         lift = Math.min(1, lift + delta * LEAF.speed);
         leaf.position.z = -lift * (width + LEAF.over);
       }

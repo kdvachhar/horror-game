@@ -131,8 +131,13 @@ const WIRE_COLOURS = ['#b23b2e', '#2f4b9c', '#8a9440'];
  * One loose wire: a wavy tube. The drawing has them sprouting untidily from the
  * casing in different colours and lengths, which is most of what makes the
  * thing look torn out of something rather than installed.
+ *
+ * Exported because the thing that tears the third screen off the wall needs
+ * the same untidiness hanging out of the back of it, and a second
+ * implementation of "wire" would drift from this one the first time either
+ * was touched. See screenBeast.js.
  */
-function buildWire(origin, direction, length, colour) {
+export function buildWire(origin, direction, length, colour) {
   const points = [];
   const segments = 6;
   for (let i = 0; i <= segments; i++) {

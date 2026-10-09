@@ -13,6 +13,7 @@ import { createCorpseHall } from './corpseHall.js';
 import { createControlRoom } from './controlRoom.js';
 import { createGiantHall } from './giantHall.js';
 import { createTallRoom } from './tallRoom.js';
+import { createStorageRoom } from './storageRoom.js';
 import { createDeathScreen } from './death.js';
 import { createEmployeeDoor } from './employeeDoor.js';
 import { paintRoomStripes } from './wallStripes.js';
@@ -330,6 +331,20 @@ const tallRoom = createTallRoom({
 room.colliders.push(...tallRoom.colliders);
 
 /**
+ * And behind the two-body door at the top of the hoist: the storage room, and
+ * the thing that has been watching you from inside televisions.
+ *
+ * Hung off the lift room's way on, which is the outside face of that door —
+ * so the one is the other's near wall and neither of them owns where it is.
+ */
+const storageRoom = createStorageRoom({
+  scene,
+  doorway: giantHall.lift.wayOn,
+  player,
+});
+room.colliders.push(...storageRoom.colliders);
+
+/**
  * Every room has now put its boxes in, so this is the one moment the world is
  * complete and nothing has moved yet.
  *
@@ -463,6 +478,7 @@ for (const target of controlRoom.interactions) interactions.add(target);
 // And one the player can never reach: the lever on the hoist behind the
 // rockfall, which is on the far side of a hole only the bucket fits through.
 for (const target of giantHall.interactions) interactions.add(target);
+for (const target of storageRoom.interactions) interactions.add(target);
 
 /**
  * What you think, turning round and finding the way you came in is shut.
@@ -754,6 +770,7 @@ function resetSequences() {
   controlRoom.reset();
   giantHall.reset();
   tallRoom.reset();
+  storageRoom.reset();
   handoverSaid = false;
   // The loop fires the cutscene the moment a door that has been open closes.
   // Clearing this stops a jump from immediately retriggering it underneath you.
@@ -1105,6 +1122,23 @@ const SCENES = [
       setObjective('Look out of the window');
     },
   },
+  {
+    label: '16 · Storage',
+    hint: 'Behind the two-body door at the top: racking, and the thing on the screens',
+    go() {
+      reachTheTallRoom();
+      // Both of you through, because the door that gets you in here needs the
+      // two of you and a jump that put you behind it on your own would be a
+      // jump into a room you could not have reached.
+      const lift = giantHall.lift;
+      lift.parkAtTop();
+      const entry = storageRoom.entry;
+      player.teleport({ position: entry.position, yaw: entry.yaw, pitch: 0 });
+      const { room: top, top: floor } = lift.state;
+      friend.spawn(new THREE.Vector3(top.maxX - 2.0, floor + 0.05, (top.minZ + top.maxZ) / 2));
+      setObjective('Find the switch');
+    },
+  },
 ];
 
 /**
@@ -1385,6 +1419,7 @@ renderer.setAnimationLoop((time) => {
   controlRoom.update(delta);
   giantHall.update(delta);
   tallRoom.update(delta);
+  storageRoom.update(delta);
   // After the room that raises it. The screen's own clock is only the beat it
   // waits before it will take a key — see death.js — and that beat starts on
   // the frame the room puts it up.
@@ -1436,7 +1471,7 @@ renderer.setAnimationLoop((time) => {
 
 // Dev-only handle for poking at the scene from the console.
 if (import.meta.env.DEV) {
-  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, corpseHall, controlRoom, giantHall, tallRoom, wakeUp, possession, painter, monologue, death };
+  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, corpseHall, controlRoom, giantHall, tallRoom, storageRoom, wakeUp, possession, painter, monologue, death };
   window.game.__tvLines = TV_LINES;
   /**
    * The scene jumps, so a harness can walk all fifteen of them.

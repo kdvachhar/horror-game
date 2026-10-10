@@ -175,13 +175,260 @@ export function createScreenBeast({
   backing.position.z = -0.1;
   group.add(backing);
 
+  /**
+   * The meat, which everything that is not the television is made of.
+   *
+   * makeMeatSurface is what the thing in the shaft is covered in, and the two
+   * of them being obviously the same substance is the most useful thing this
+   * body does: there was something in the basement made of this and there is
+   * something in the roof made of this.
+   */
+  const meatSurface = makeMeatSurface(2, 2);
+  const flesh = new THREE.MeshStandardMaterial({
+    ...cloneSurface(meatSurface, 3, 2),
+    roughness: 1,
+    metalness: 0,
+  });
+  const gristle = new THREE.MeshStandardMaterial({ color: '#2a0f0d', roughness: 0.6, metalness: 0.03 });
+
+  /** One lump, so the body, the face and the shoulders are made the same way. */
+  const lumpInto = (parent, x, y, z, rx, ry, rz, turn, tumble = true) => {
+    const lump = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 9), flesh);
+    lump.position.set(x, y, z);
+    lump.scale.set(rx, ry, rz);
+    /**
+     * Tumbled in the body, rolled in the face.
+     *
+     * The body wants all three axes: it is a sack, there is no up in it, and
+     * turning every lump is most of what stops nineteen spheres reading as
+     * nineteen spheres. A face is the opposite — it has an up, and the same
+     * turn applied to it was catastrophic in a way that only showed on
+     * screen: a brow is a two and a half metre bar a third of a metre thick,
+     * and a bar like that rolled sixty degrees is a sausage. Nine of them
+     * made a heap of offal hanging over a television.
+     */
+    if (tumble) lump.rotation.set(turn * 1.7, turn * 2.3, turn * 0.9);
+    else lump.rotation.z = turn;
+    /**
+     * It casts nothing and receives nothing, and neither is laziness.
+     *
+     * The body lives behind a lit screen in a room with seventy point lights
+     * in it. Nobody is ever on the side of it where its shadow would land,
+     * and the shadow it would receive is one the screen in front of it is
+     * drowning anyway. Switched on, the body put six milliseconds a frame on
+     * the chase — a quarter again on the scene it happens in — for an effect
+     * that is by construction invisible. The limbs and the tail keep theirs:
+     * those are the parts that are seen against the room.
+     */
+    parent.add(lump);
+    return lump;
+  };
+
+  /** A deterministic wobble, -1 to 1, from an index and a salt. */
+  const wob = (i, salt) => (((i * 37 + salt * 17) % 13) / 6) - 1;
+
+  /**
+   * Where the glass stops being glass.
+   *
+   * The middle of the screen is gone. Everything the face does — the eyes,
+   * the maw, the flesh pressing out — happens inside this, and the four
+   * plates below are what is left round the outside of it.
+   */
+  const GAP = { x: screen.wide * 0.232, y: screen.high * 0.44 };
+
+  /**
+   * The face, and it is not on the screen any more. It is behind it.
+   *
+   * This is the thing the broken glass is broken to show: a head's worth of
+   * the same meat the body is, filling the back of the set, bulging forward
+   * through the hole where the picture used to be. The brow, the two swollen
+   * rings the eyes sit in, the cheeks either side of the mouth, the jaw under
+   * it.
+   *
+   * **The eyes stay.** They are the only part of the character that survives
+   * into this, and they are the whole reason it is frightening rather than
+   * merely unpleasant: the thing in the meat is still the thing that has been
+   * giving you directions since the ward. Everything round them changed; what
+   * is looking out of them did not.
+   *
+   * Hidden until the glass goes. Up on the wall this is a television.
+   */
+  const visage = new THREE.Group();
+  visage.visible = false;
+  group.add(visage);
+
+  // The backing of meat, so the hole in the glass has something in it rather
+  // than the black back of the set.
+  const mask = new THREE.Mesh(new THREE.PlaneGeometry(screen.wide, screen.high), flesh);
+  visage.add(mask);
+
+  /**
+   * The lumps it is made of, written as the depth of their own front face.
+   *
+   * **The z in the table is where the front of the lump is, not where its
+   * middle is**, and the difference is the whole of why the first cut of
+   * this was a heap of sausages laid over a television. A sphere's scale is
+   * its radius: a lump half a metre thick sitting at z 0.12 has its front at
+   * 0.62, which is four tenths of a metre in front of glass that lives at
+   * 0.18. Every one of them was outside the set, so instead of a face behind
+   * a broken screen there was a pile of meat in front of an intact one.
+   *
+   * Written this way the rule is readable instead of arithmetic: anything
+   * under 0.18 is behind the glass, and anything over it is a part of the
+   * face pressing out through the hole — which is allowed, and only for the
+   * lumps that sit inside GAP.
+   *
+   * And they are flat. A face is relief on a surface, not a bag of
+   * ellipsoids: the mask behind them is already a wall of meat, and these
+   * are the three or four swellings that make it a head.
+   *
+   * [across, up, where its front face is, and its three radii]
+   */
+  /**
+   * Nothing over the eyes comes forward of them.
+   *
+   * The eyes are drawn at z 0.22 and the brow is the one piece of the face
+   * that reaches across them, so a brow proud of the glass is a brow with
+   * the top of both eyes behind it. Everything on the top half of this is
+   * held at 0.19 — still relief, still lit from the side, and never in front
+   * of the only part of this that is the character. The cheeks and the jaw
+   * are nowhere near them and are free to press out through the break.
+   */
+  for (const [x, y, front, rx, ry, rz, roll] of [
+    [0, 2.0, 0.19, 2.6, 0.3, 0.3, 0], // the brow, over both eyes
+    [-1.35, 2.06, 0.19, 1.0, 0.26, 0.28, 0.1], // heavier above each one
+    [1.35, 2.06, 0.19, 1.0, 0.26, 0.28, -0.1],
+    [0, 0.8, 0.2, 0.36, 0.8, 0.26, 0], // the bridge between them
+    [-2.15, -0.45, 0.25, 1.25, 1.05, 0.32, 0.22], // cheeks, either side of the mouth
+    [2.15, -0.45, 0.25, 1.25, 1.05, 0.32, -0.22],
+    [0, -1.9, 0.21, 2.2, 0.46, 0.28, 0], // the jaw, under it
+  ]) {
+    lumpInto(visage, x, y, front - rz, rx, ry, rz, roll, false);
+  }
+
+  /**
+   * The sockets: a ring of swollen meat round each eye, with a pit behind it.
+   *
+   * A ring and not a lid, because a lump over the eye is a lump in front of
+   * the eye — a sphere thick enough to read sticks out past the glass and
+   * puts meat between you and the one part of this that is still the
+   * character. The torus leaves the middle of itself empty, which is where
+   * the eye goes, and the unlit disc behind it means the eye is glowing in a
+   * hole rather than glowing on a surface.
+   */
+  const eyeAt = { x: 0.42 * faceScale, y: 0.28 * faceScale };
+  for (const side of [-1, 1]) {
+    const socket = new THREE.Mesh(new THREE.TorusGeometry(0.82, 0.24, 8, 14), flesh);
+    socket.position.set(side * eyeAt.x, eyeAt.y, 0.06);
+    socket.scale.set(1, 1.12, 0.8);
+    visage.add(socket);
+    const pit = new THREE.Mesh(
+      new THREE.CircleGeometry(0.84, 18),
+      new THREE.MeshBasicMaterial({ color: '#06070a', toneMapped: false })
+    );
+    pit.position.set(side * eyeAt.x, eyeAt.y, 0.1);
+    visage.add(pit);
+  }
+
+  /**
+   * Sinew across the break.
+   *
+   * Five strands of gristle strung over the hole, which is the one detail in
+   * here that says the glass broke from the inside: nothing falls out of a
+   * television and leaves threads behind it.
+   */
+  for (let i = 0; i < 5; i++) {
+    const x = GAP.x * (-0.86 + (i / 4) * 1.72) * 0.92;
+    const long = GAP.y * (1.1 + wob(i, 4) * 0.25);
+    const strand = new THREE.Mesh(new THREE.BoxGeometry(0.055, long, 0.055), gristle);
+    strand.position.set(x, GAP.y * 0.1 * wob(i, 2), 0.24);
+    strand.rotation.z = wob(i, 6) * 0.42;
+    visage.add(strand);
+  }
+
   // The glass, and the face in it. A second `createScreenLife`, because this
   // is a second screen — the one on the wall is still there with a hole where
   // this came out of it, and they are not the same object.
   const glassMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#101d16'), toneMapped: false });
-  const glass = new THREE.Mesh(new THREE.PlaneGeometry(screen.wide, screen.high), glassMat);
-  glass.position.z = 0.18;
-  group.add(glass);
+
+  /** The screen while it is still a screen: on the wall, whole, showing a face. */
+  const glassWhole = new THREE.Mesh(new THREE.PlaneGeometry(screen.wide, screen.high), glassMat);
+  glassWhole.position.z = 0.18;
+  group.add(glassWhole);
+
+  /**
+   * And the screen after it comes out of the wall, which is four plates.
+   *
+   * **Four plates and not one pane with a hole in it.** A rectangle with a
+   * ragged hole punched through it is one THREE.Shape and it would have been
+   * less code, but it is also the wrong picture and a worse shape: the hole
+   * has to clear the eyes at the top and the teeth at the bottom, which on a
+   * pane this flat leaves the opening within a few centimetres of the pane's
+   * own edge, and a hole whose rim touches the outline triangulates into
+   * nonsense. Glass does not break into a doughnut anyway. It breaks into
+   * pieces still gripped by the frame, with nothing in the middle — so that
+   * is what this is: a plate up each side and a sliver along the top and the
+   * bottom, each with a jagged edge facing the hole, each a hair off its
+   * neighbour's depth so two coplanar pieces cannot fight over a pixel.
+   */
+  const broken = new THREE.Group();
+  broken.visible = false;
+  group.add(broken);
+  const hw = screen.wide / 2;
+  const hh = screen.high / 2;
+  const plate = (pts, z) => {
+    const shape = new THREE.Shape();
+    pts.forEach(([x, y], i) => (i === 0 ? shape.moveTo(x, y) : shape.lineTo(x, y)));
+    const mesh = new THREE.Mesh(new THREE.ShapeGeometry(shape), glassMat);
+    mesh.position.z = z;
+    broken.add(mesh);
+  };
+  // The two sides. The jagged edge is always at or outside GAP.x, so the hole
+  // is never narrower than the face that has to come through it.
+  for (const side of [-1, 1]) {
+    const pts = [[side * hw, -hh], [side * hw, hh]];
+    for (let i = 0; i <= 7; i++) {
+      pts.push([side * (GAP.x + 0.5 * (0.5 + wob(i, side + 3) * 0.5)), hh - (i / 7) * hh * 2]);
+    }
+    plate(side < 0 ? pts : pts.reverse(), side < 0 ? 0.178 : 0.18);
+  }
+  // The top and bottom slivers, between the two plates.
+  for (const row of [1, -1]) {
+    const pts = [[-GAP.x - 0.5, row * hh], [GAP.x + 0.5, row * hh]];
+    for (let i = 0; i <= 6; i++) {
+      pts.push([GAP.x + 0.5 - (i / 6) * (GAP.x * 2 + 1), row * (GAP.y + 0.24 * (0.5 + wob(i, row + 5) * 0.5))]);
+    }
+    plate(row > 0 ? pts : pts.reverse(), row > 0 ? 0.182 : 0.184);
+  }
+  /**
+   * And the shards still hanging off the rim, turned out of the plane.
+   *
+   * Flat in the pane they would be invisible — more glass, the same colour,
+   * at the same depth. Turned, they catch the room, which is the only thing
+   * in here that reads as *glass* rather than as a dark shape. Double sided,
+   * because a turned piece is seen from its back about half the time.
+   */
+  const shardMat = new THREE.MeshBasicMaterial({
+    color: '#16241d',
+    toneMapped: false,
+    side: THREE.DoubleSide,
+  });
+  // Small. At a metre and a half they were the biggest shapes on the front
+  // of the animal — pale triangles across the brow and over one eye, reading
+  // as paper rather than as glass, in a face that has four things to say and
+  // no room for a fifth.
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2 + wob(i, 5) * 0.3;
+    const long = 0.26 + ((i * 13) % 4) * 0.11;
+    const piece = new THREE.Shape();
+    piece.moveTo(0, 0);
+    piece.lineTo(long * (0.5 + wob(i, 2) * 0.22), long * 0.85);
+    piece.lineTo(long * 1.15, 0);
+    const mesh = new THREE.Mesh(new THREE.ShapeGeometry(piece), shardMat);
+    mesh.position.set(Math.cos(a) * GAP.x * 1.02, Math.sin(a) * GAP.y * 1.02, 0.188);
+    mesh.rotation.set(wob(i, 3) * 0.5, wob(i, 7) * 0.6, a + Math.PI / 2);
+    broken.add(mesh);
+  }
 
   const { group: faceGroup, eyes, mouth, faceParts } = buildScreenFace();
   faceGroup.scale.setScalar(faceScale);
@@ -211,87 +458,86 @@ export function createScreenBeast({
    *
    * The television is set into the front of a mass of flesh — the screen is
    * the only part of this that is a machine, and everything carrying it is
-   * the same stuff the thing in the shaft is made of. That is not a new
-   * material: makeMeatSurface is what the meat cube is covered in, and the
-   * two of them being obviously the same substance is the most useful thing
-   * this body does. There was a thing in the basement made of this and there
-   * is a thing in the roof made of this.
+   * the same stuff the thing in the shaft is made of.
    *
-   * Lumps, not a shape. Eleven spheres squashed and overlapped on a
+   * Lumps, not a shape. Nineteen spheres squashed, turned and overlapped on a
    * deterministic hash, which is all a body like this is — there is nothing
    * to read on it, it is only ever seen in silhouette behind a lit screen,
    * and the one thing it has to do is not look manufactured.
    *
-   * **It stays inside the casing's own outline.** The hole at the top of the
-   * crate stair is cut to the television, so a body that bulged past it is a
-   * body that does not get through its own door. It goes backwards instead:
-   * three and a half metres of it behind the glass, which is where it reads
-   * from anyway, because you only ever see it from the front with the screen
-   * between you.
+   * **It is bigger than the hole it has to get through, and it goes through
+   * anyway.** This used to be bounded inside the casing's own outline, which
+   * kept the door arithmetic trivial and made the animal a television with a
+   * cushion behind it: the mass could never be the biggest thing about it,
+   * because the biggest thing about it had to be 11.5 by 5.9. The bound is
+   * gone. The body is a metre and a half wider than the set on each side and
+   * a metre taller, and the way it gets through the hole is the way the limbs
+   * do — it gives. See the squash in the update, which is the same `tuck`
+   * ramp the fold runs on: the meat narrows and lengthens as it comes up on
+   * the wall and swells again on the far side. A thing that has to deform to
+   * follow you through a gap is worth more than any amount of mass that
+   * happens to fit.
    */
-  const meatSurface = makeMeatSurface(2, 2);
-  /** One lump, so the body and the shoulders are made the same way. */
-  const lumpInto = (parent, x, y, z, rx, ry, rz, turn) => {
-    const lump = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 9), flesh);
-    lump.position.set(x, y, z);
-    lump.scale.set(rx, ry, rz);
-    lump.rotation.set(turn * 1.7, turn * 2.3, turn * 0.9);
-    /**
-     * It casts nothing and receives nothing, and neither is laziness.
-     *
-     * The body lives behind a lit screen in a room with seventy point
-     * lights in it. Nobody is ever on the side of it where its shadow would
-     * land, and the shadow it would receive is one the screen in front of it
-     * is drowning anyway. Switched on, the body put six milliseconds a frame
-     * on the chase — a quarter again on the scene it happens in — for an
-     * effect that is by construction invisible. The limbs and the tail keep
-     * theirs: those are the parts that are seen against the room.
-     */
-    parent.add(lump);
-    return lump;
-  };
-  const flesh = new THREE.MeshStandardMaterial({
-    ...cloneSurface(meatSurface, 3, 2),
-    roughness: 1,
-    metalness: 0,
-  });
-  const gristle = new THREE.MeshStandardMaterial({ color: '#2a0f0d', roughness: 0.6, metalness: 0.03 });
-
   /**
-   * The lumps, and every number in here is bounded rather than chosen.
+   * How far it goes, and it is no longer bounded by the casing.
    *
-   * A sphere's scale is its radius, so a lump sitting four metres out with a
-   * radius of two and a half reaches six and a half — the first pass at this
-   * put the body three metres outside the casing on both axes and the animal
-   * stopped fitting through its own door the moment it grew one.
-   *
-   * And the bound is the *longest* axis, not the one being bounded. These
-   * are turned as well as squashed, and a tumbled ellipsoid can present any
-   * of its three radii in any direction, so a lump two and a half long and
-   * one high reaches two and a half upwards the moment it is rolled over.
-   * The second cut of this bounded height by the height and came out seven
-   * and three-quarters tall inside a five and a half metre casing.
-   *
-   * So: offset plus the largest radius, inside the casing's half-extent, on
-   * both axes. Checked rather than trusted — see `span`.
+   * `wide` and `high` are half-extents of the mass, `deep` is how far back it
+   * runs. Each lump is still placed so its own longest radius lands inside
+   * these — the bound is the *longest* axis, not the one being bounded,
+   * because these are turned as well as squashed and a tumbled ellipsoid can
+   * present any of its three radii in any direction. Bounding height by the
+   * height is what made an earlier cut of this seven and three-quarter metres
+   * tall inside a five and a half metre casing.
    */
-  // Half a metre in from the casing on the vertical, because the hole has
-  // nothing to spare there and a lump is only ever seen in silhouette
-  // behind a lit screen anyway — nobody can tell how far up it goes.
-  const CARCASS = { wide: screen.wide / 2 - 0.1, high: (screen.high + edge * 2) / 2 - 0.55 };
+  const CARCASS = { wide: screen.wide / 2 + 1.5, high: (screen.high + edge * 2) / 2 + 1.1, deep: 5.4 };
   const body = new THREE.Group();
   body.position.z = -1.8;
   group.add(body);
-  for (let i = 0; i < 11; i++) {
-    const t = i / 10;
-    const rx = 1.55 + ((i * 17) % 4) * 0.26;
-    const ry = 1.1 + ((i * 13) % 4) * 0.2;
-    const rz = 1.1 + ((i * 7) % 3) * 0.34;
+  /**
+   * Thirteen of them, and what that did and did not buy.
+   *
+   * This body costs about eight milliseconds a frame on its own, measured by
+   * switching it off mid-chase with the thing square on at nine metres,
+   * which is the worst case and also the shot the room is built around. None
+   * of it is geometry — thirteen ellipsoids is three thousand triangles. It
+   * is fill: a mass thirteen metres across, every pixel of it shaded against
+   * a room with seventy point lights in it.
+   *
+   * **Going from nineteen to thirteen did not change that by a millisecond,
+   * and that is the useful finding.** Opaque meshes are drawn front to back,
+   * so a fragment behind a lump already drawn is rejected before it is
+   * shaded; the cost is the area the mass covers, which is set by CARCASS
+   * and is the same either way. The only thing that would make this cheaper
+   * is making it smaller, which is the one thing it is not allowed to be.
+   *
+   * Thirteen stays because it is the same silhouette for six fewer draw
+   * calls, not because it was the fix. A cheaper material is the other lever
+   * and it was measured too: Lambert instead of Standard is worth about two
+   * milliseconds, which is not enough to make this body out of different
+   * meat from the thing in the shaft.
+   */
+  for (let i = 0; i < 13; i++) {
+    const t = i / 12;
+    const rx = 2.0 + ((i * 17) % 4) * 0.36;
+    const ry = 1.5 + ((i * 13) % 4) * 0.3;
+    const rz = 1.5 + ((i * 7) % 3) * 0.44;
     const reach = Math.max(rx, ry, rz);
     const across = ((((i * 37) % 11) / 10) * 2 - 1) * Math.max(0, CARCASS.wide - reach);
     const up = ((((i * 23) % 7) / 6) * 2 - 1) * Math.max(0, CARCASS.high - reach);
-    lumpInto(body, across, up, -0.4 - ((i * 29) % 5) * 0.34, rx, ry, rz, t);
+    lumpInto(body, across, up, -0.4 - ((i * 29) % 7) * (CARCASS.deep / 7), rx, ry, rz, t);
   }
+
+  /**
+   * How much it gives to get through.
+   *
+   * `by` is how far the mass is squeezed in at full tuck and `out` is how far
+   * it stretches backwards to make up for it. The numbers are not taste: the
+   * mass is 6.78 out from the middle and the hole is 5.75, so a quarter off
+   * the width is the least that will do it, and 3.9 tall against 2.95 is
+   * where the 0.3 on the vertical comes from. Both are checked rather than
+   * trusted — see `span`.
+   */
+  const SQUASH = { wide: 0.26, high: 0.3, out: 0.5 };
 
   const band = new THREE.MeshStandardMaterial({ color: '#23251e', roughness: 0.92, metalness: 0.1 });
 
@@ -308,7 +554,7 @@ export function createScreenBeast({
    * that is what is drawn and because a fifth at this size is a rounding
    * error on a shape nobody gets to look at for more than a second.
    */
-  const buildLimb = (length, thick) => {
+  const buildLimb = (length, thick, { rings = 3, digits = 4, shadow = true } = {}) => {
     const root = new THREE.Group();
     const joints = [root];
     const parts = 3;
@@ -320,15 +566,18 @@ export function createScreenBeast({
       const t = thick * (1 - i * 0.16);
       const bone = new THREE.Mesh(new THREE.BoxGeometry(t, length / parts, t * 0.78), flesh);
       bone.position.y = -(length / parts) / 2;
-      bone.castShadow = true;
+      bone.castShadow = shadow;
       seg.add(bone);
-      // The rings. Three to a segment, proud enough to catch the light.
-      for (let r = 1; r <= 3; r++) {
+      // The rings. Three to a segment on the four that are seen against the
+      // room, one on the arms off the back of the mass — they are behind the
+      // body from every angle you ever have on this thing, and a ring you
+      // cannot see is a draw call in a room with seventy lights in it.
+      for (let r = 1; r <= rings; r++) {
         const ring = new THREE.Mesh(
           new THREE.BoxGeometry(t * 1.1, length / parts * 0.07, t * 0.88),
           band
         );
-        ring.position.y = -(length / parts) * (r / 4);
+        ring.position.y = -(length / parts) * (r / (rings + 1));
         seg.add(ring);
       }
       joints.push(seg);
@@ -344,10 +593,10 @@ export function createScreenBeast({
     );
     palm.position.y = -thick * 0.3;
     paw.add(palm);
-    for (let d = 0; d < 4; d++) {
+    for (let d = 0; d < digits; d++) {
       const digit = new THREE.Group();
       digit.position.y = -thick * 0.6;
-      digit.rotation.z = (d - 1.5) * 0.34;
+      digit.rotation.z = (d - (digits - 1) / 2) * 0.34;
       paw.add(digit);
       const finger = new THREE.Mesh(
         new THREE.BoxGeometry(thick * 0.17, thick * 0.78, thick * 0.17),
@@ -387,7 +636,6 @@ export function createScreenBeast({
   const TUCK = { from: 7.0, tight: 2.0 };
 
   const limbs = [];
-  const thickOf = () => 0.95;
   for (const [side, up] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) {
     const reach = up > 0 ? screen.high * 0.86 : screen.high * 0.78;
     // Thick. At 0.62 against an eleven-metre body they read as sticks; the
@@ -409,7 +657,7 @@ export function createScreenBeast({
      */
     limb.root.position.set(side * screen.wide * 0.29, (up * screen.high) / 2 - up * 0.6, -1.2);
 
-    const socket = new THREE.Mesh(new THREE.SphereGeometry(thickOf(up) * 0.95, 12, 9), flesh);
+    const socket = new THREE.Mesh(new THREE.SphereGeometry(0.9, 12, 9), flesh);
     socket.position.copy(limb.root.position);
     socket.scale.set(1.15, 1.15, 1.3);
     group.add(socket);
@@ -427,6 +675,57 @@ export function createScreenBeast({
       straight: up > 0 ? Math.PI : 0,
     });
   }
+
+  /**
+   * And the rest of the arms, which come out of the meat rather than the set.
+   *
+   * Four was the drawing and four was a lizard. The mass behind the screen is
+   * bigger than the screen now, and a body that size with one limb at each
+   * corner reads as a creature carrying a television; six more of them coming
+   * out of the flanks and the back of it reads as the body being the animal
+   * and the television being the part of it that talks. They are shorter,
+   * thinner and set deeper, in no pattern — paired limbs are a skeleton and
+   * this does not have one.
+   *
+   * **Rooted inside the casing's own width even though the body is not.** The
+   * fold takes the lean out and swings the limb back along the body, so a
+   * folded arm is exactly as wide as the point it is rooted at: these sit
+   * between 1.8 and 3.3 out, which is inside the hole with room to spare, and
+   * the mass they emerge from is what gives instead. Their rings and their
+   * shadows are off — behind a body this size they are never seen against
+   * anything.
+   *
+   * [side, height, how far back, length as a share of the screen, thickness]
+   */
+  const EXTRA = [
+    [-1, 1.9, -2.6, 0.72, 0.78],
+    [1, 1.3, -3.2, 0.66, 0.72],
+    [-1, -1.4, -3.6, 0.62, 0.7],
+    [1, -2.0, -2.9, 0.7, 0.76],
+    [-1, 0.2, -4.6, 0.58, 0.66],
+    [1, -0.4, -4.9, 0.54, 0.64],
+  ];
+  EXTRA.forEach(([side, y, z, reach, thick], i) => {
+    const limb = buildLimb(screen.high * reach, thick, { rings: 1, digits: 3, shadow: false });
+    limb.root.position.set(side * screen.wide * (0.17 + ((i * 7) % 3) * 0.07), y, z);
+    const down = y < 0;
+    limb.root.rotation.z = down
+      ? side * (0.7 + (i % 3) * 0.14)
+      : Math.PI - side * (0.8 + (i % 3) * 0.12);
+    group.add(limb.root);
+    const socket = new THREE.Mesh(new THREE.SphereGeometry(thick, 10, 8), flesh);
+    socket.position.copy(limb.root.position);
+    socket.scale.set(1.2, 1.2, 1.4);
+    group.add(socket);
+    limbs.push({
+      ...limb,
+      side,
+      up: down ? -1 : 1,
+      phase: 0.4 + i * 1.27,
+      lean: limb.root.rotation.z,
+      straight: down ? 0 : Math.PI,
+    });
+  });
 
   /**
    * The tail, which is the same chain again and longer.
@@ -468,9 +767,9 @@ export function createScreenBeast({
   /**
    * The screen, broken.
    *
-   * Cracks from one point low and left of centre, each a polyline of three
-   * or four segments drawn as thin unlit strips, with the shorter splinters
-   * hanging off them. Deterministic from an index like everything else in
+   * Cracks out of the rim of the hole, each a polyline of three or four
+   * segments drawn as thin unlit strips, with the shorter splinters hanging
+   * off them. Deterministic from an index like everything else in
    * this project — a creature that is cracked differently every boot is a
    * creature nobody can report a bug in.
    *
@@ -482,8 +781,8 @@ export function createScreenBeast({
   const crackMat = new THREE.MeshBasicMaterial({ color: '#05070a', toneMapped: false });
   const cracks = new THREE.Group();
   cracks.position.z = 0.19;
+  cracks.visible = false;
   group.add(cracks);
-  const hit = { x: -screen.wide * 0.09, y: -screen.high * 0.1 };
   /**
    * One length of crack, clipped to the glass.
    *
@@ -496,7 +795,21 @@ export function createScreenBeast({
    * does.
    */
   const pane = { x: screen.wide / 2 - 0.06, y: screen.high / 2 - 0.06 };
-  const onGlass = (x, y) => Math.abs(x) <= pane.x && Math.abs(y) <= pane.y;
+  /**
+   * There is glass here, which now has two halves to it.
+   *
+   * Inside the pane, as before — and outside the hole, which is new and is
+   * the whole reason the cracks had to be reseeded. They used to spider out
+   * of a point low and left of the middle of the screen; the middle of the
+   * screen is not there any more, so every one of them would have started in
+   * mid-air and crossed four metres of nothing before reaching anything it
+   * could be a crack in. They start at the rim of the break and run outwards
+   * instead, which is also the right physics: the break is where it gave.
+   */
+  const onGlass = (x, y) =>
+    Math.abs(x) <= pane.x &&
+    Math.abs(y) <= pane.y &&
+    (x / GAP.x) ** 2 + (y / GAP.y) ** 2 >= 1;
   const strut = (ax, ay, bx, by, wide) => {
     // Walk back along the segment until the far end is on the glass. Cheap,
     // exact enough at this length, and it leaves the crack ending at the
@@ -516,8 +829,10 @@ export function createScreenBeast({
   };
   for (let i = 0; i < 13; i++) {
     let a = (i / 13) * Math.PI * 2 + ((i * 29) % 7) * 0.06;
-    let x = hit.x;
-    let y = hit.y;
+    // Out of the rim of the hole, a hair outside it so the first segment has
+    // glass under its own start.
+    let x = Math.cos(a) * GAP.x * 1.06;
+    let y = Math.sin(a) * GAP.y * 1.06;
     let run = screen.high * (0.2 + ((i * 17) % 5) * 0.11);
     for (let seg = 0; seg < 3 + (i % 2); seg++) {
       const step = run * (0.55 - seg * 0.1);
@@ -556,7 +871,7 @@ export function createScreenBeast({
   const maw = new THREE.Group();
   // Low enough to leave the eyes. The burst is the widest thing on the
   // screen and sat level with them it swallowed both.
-  maw.position.set(0, -screen.high * 0.2, 0.2);
+  maw.position.set(0, -screen.high * 0.15, 0.2);
   maw.scale.set(1.3, 1, 1);
   maw.visible = false;
   group.add(maw);
@@ -619,6 +934,27 @@ export function createScreenBeast({
    * talks to you is worth more than any amount of detail in a mouth that
    * does not.
    */
+  /**
+   * And the teeth are bone, which they were not.
+   *
+   * They used to be drawn in the face's own green and pushed into its parts
+   * list, so they breathed and flickered with the eyes — right while this was
+   * a shape on a screen, wrong the moment there is a face of meat behind the
+   * glass with the teeth standing in it. A green tooth is part of the
+   * picture. This is part of the animal.
+   *
+   * Lit rather than unlit, and that is the point: the only strong light on it
+   * is the screen's own glow, which is FACE-coloured and sitting a metre and
+   * a half in front of the mouth, so the bone comes back green anyway —
+   * green *because the screen is shining on it*, which is a thing in a room
+   * rather than a thing on a tube.
+   */
+  const ivory = new THREE.MeshStandardMaterial({
+    color: '#9e9377',
+    roughness: 0.5,
+    metalness: 0.04,
+    side: THREE.DoubleSide,
+  });
   const jaws = [];
   for (const row of [1, -1]) {
     const jaw = new THREE.Group();
@@ -628,17 +964,19 @@ export function createScreenBeast({
       const across = (i / 8 - 0.5) * SHARD.inner * 1.72;
       const lip =
         row * Math.sqrt(Math.max(0, 1 - (across / (SHARD.inner * 1.0)) ** 2)) * SHARD.inner * 0.74;
-      const long = SHARD.inner * (0.4 + ((i * 13 + (row + 1) * 5) % 5) * 0.17);
+      // Shorter than they were. At 1.3 metres the two longest in the bottom
+      // row hung below the bezel, and a tooth outside the casing is not a
+      // tooth in a mouth, it is a shape next to a television.
+      const long = SHARD.inner * (0.34 + ((i * 13 + (row + 1) * 5) % 5) * 0.12);
       const wide = SHARD.inner * (0.13 + ((i * 7) % 3) * 0.05);
       const tooth = new THREE.Shape();
       tooth.moveTo(-wide, 0);
       tooth.lineTo(wide, 0);
       tooth.lineTo(((((i * 17) % 5) - 2) / 2) * wide, -long);
-      const mesh = new THREE.Mesh(new THREE.ShapeGeometry(tooth), lit());
+      const mesh = new THREE.Mesh(new THREE.ShapeGeometry(tooth), ivory);
       mesh.position.set(across, lip, 0.01);
       mesh.rotation.z = (row > 0 ? 0 : Math.PI) + ((((i * 11) % 5) - 2) / 2) * 0.16;
       jaw.add(mesh);
-      mawParts.push(mesh);
     }
   }
 
@@ -664,9 +1002,24 @@ export function createScreenBeast({
    * for the cabinet. The normal mouth goes away while this is up — one face
    * has one mouth, and two would be two characters.
    */
+  /**
+   * Showing the teeth, which now also breaks the screen.
+   *
+   * One switch, because they are one moment: the glass goes, the meat behind
+   * it is there to be seen, and the mouth it has instead of a drawn one opens
+   * in the hole. Before this it is a television with a face on it — whole
+   * pane, no cracks, no flesh, the same character that has been talking to
+   * you all game. That is worth keeping for the second and a half it has: the
+   * break reads as something that happens rather than as how the thing always
+   * looked, and the only frame that can sell it is the one before.
+   */
   const bare = (on) => {
     maw.visible = on;
     mouth.visible = !on;
+    glassWhole.visible = !on;
+    broken.visible = on;
+    visage.visible = on;
+    cracks.visible = on;
   };
 
   /**
@@ -786,7 +1139,22 @@ export function createScreenBeast({
       group.rotation.y = 0;
       group.updateMatrixWorld(true);
       const size = new THREE.Vector3();
-      new THREE.Box3().setFromObject(group).getSize(size);
+      /**
+       * From the vertices, which is the second thing this had to learn.
+       *
+       * Box3.setFromObject takes each child's *geometry* bounding box — a
+       * cube, for a sphere — and expands it by the child's matrix, so a lump
+       * that is a squashed turned sphere is measured as the AABB of a turned
+       * cube. The error is up to root three, and once the body was nineteen
+       * big lumps it was reading 15.7 across and 7.1 tall for a mass whose
+       * furthest actual vertex is 10.1 by 5.5. That is not a rounding
+       * difference, it is the difference between a door this fits through and
+       * one it does not — and the number is used to decide exactly that.
+       *
+       * `precise` walks the positions instead. It costs a traversal of about
+       * nine hundred vertices on a getter nothing calls in a frame.
+       */
+      new THREE.Box3().setFromObject(group, true).getSize(size);
       group.rotation.y = was;
       group.updateMatrixWorld(true);
       return { wide: +size.x.toFixed(2), high: +size.y.toFixed(2), deep: +size.z.toFixed(2) };
@@ -1031,16 +1399,54 @@ export function createScreenBeast({
       // Folded by the time it is two metres off the wall rather than at the
       // wall itself, so it is already the right shape when it arrives
       // instead of still becoming it while it is halfway through.
-      const tuck =
+      const near =
         phase === 'hunt'
           ? Math.max(
               0,
               Math.min(1, (TUCK.from - Math.abs(here.z - gate.z)) / (TUCK.from - TUCK.tight))
             )
           : 0;
+      /**
+       * And it stays folded once it is through, which it did not.
+       *
+       * The fold was keyed on how near the wall is, in both directions, so
+       * seven metres past the hole the animal opened out to its full fifteen
+       * across — inside a hall that is thirteen wide and was built to the
+       * width of the television on purpose. It spent the last stretch of the
+       * chase with its arms in the walls.
+       *
+       * Beyond the wall it keeps most of the tuck, because beyond the wall it
+       * is in a corridor the size of itself. Not all of it: a tenth of the
+       * spread back is enough for the limbs to be visibly working without
+       * putting them through the brick, and the squash easing off is the one
+       * thing that shows the mass is still bigger than the gap it just came
+       * through.
+       */
+      const tuck = phase === 'hunt' && sideOf(here.z) > 0 ? Math.max(near, 0.88) : near;
+      /**
+       * The meat giving, on the same ramp the limbs fold on.
+       *
+       * This is the only deformation in the game and it earns its place: the
+       * body is wider and taller than the hole, so either it squeezes or it
+       * passes through solid wall. Nonuniform scale on a group of turned
+       * lumps shears them, which on anything built would be a bug and on a
+       * sack of meat being pushed through a letterbox is the effect.
+       */
+      body.scale.set(1 - tuck * SQUASH.wide, 1 - tuck * SQUASH.high, 1 + tuck * SQUASH.out);
       for (const limb of limbs) {
         const beat = Math.sin(since * 2.6 + limb.phase) * (1 - tuck);
-        limb.root.rotation.x = tuck * (Math.PI / 2);
+        /**
+         * Back, and the sign of that is not cosmetic.
+         *
+         * Euler XYZ applies z first, so the limb is swung to vertical and
+         * then pitched out of the frontal plane — and the pitch that takes a
+         * limb hanging *down* backwards takes one standing *up* forwards. At
+         * one sign for all four, the two upper arms spent the squeeze
+         * reaching four metres out through the front of the screen: the span
+         * read 17.6 deep, all of it in front of the glass, with two arms
+         * crossing the face at the exact moment the shot wants the face.
+         */
+        limb.root.rotation.x = tuck * (Math.PI / 2) * (limb.up > 0 ? -1 : 1);
         limb.root.rotation.z =
           limb.lean + (limb.straight - limb.lean) * tuck + beat * 0.2 * haul;
         limb.joints[1].rotation.x = beat * 0.3 * haul;

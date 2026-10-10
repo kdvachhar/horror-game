@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { makeMetalPanelSurface, metalRepeat } from './textures.js';
-import { buildScreenFace, createScreenLife, buildWire, FACE } from './screenFace.js';
+import { buildScreenFace, createScreenLife, FACE } from './screenFace.js';
 import { createChaseMusic, playSpikeGrind, playScreech, playMeatLunge } from './audio.js';
 
 /**
@@ -119,12 +119,17 @@ export function createScreenBeast({
   const dark = new THREE.MeshStandardMaterial({ color: '#1d1f1a', roughness: 0.9, metalness: 0.3 });
 
   /**
-   * The frame, and it is four bars rather than a box with a hole in it.
+   * The casing, and it is four bars round the glass.
    *
-   * It has to read as having been *in* something a second ago. A clean bezel
-   * flying at you is a television; four torn bars with the wall's fixings
-   * still on them is a television that has been pulled off a wall, and the
-   * difference is entirely in the edges.
+   * This used to be ragged on purpose: torn bars, lumps of cabinet still
+   * bolted to the top, nine cables hanging off the back, because the idea
+   * was a screen that had been pulled off a wall.
+   *
+   * That is not what this is any more. It is an animal with a television for
+   * a body, and an animal's body is not wreckage — it is the shape it has
+   * always been. The casing is clean, the limbs below do the work the tear
+   * used to, and what sells "it came out of the wall" is the hole it leaves
+   * in the cabinet rather than the bits of cabinet it takes with it.
    */
   const steel = new THREE.MeshStandardMaterial({
     ...makeMetalPanelSurface(...metalRepeat(screen.wide, screen.high), '#6b6d64'),
@@ -144,20 +149,6 @@ export function createScreenBeast({
     group.add(bar);
   }
 
-  // The tear itself: lumps of the cabinet still bolted to the back of it,
-  // ragged along the top where the fixings let go last.
-  for (let i = 0; i < 11; i++) {
-    const w = 0.5 + ((i * 29) % 5) * 0.22;
-    const shard = new THREE.Mesh(new THREE.BoxGeometry(w, 0.3 + ((i * 17) % 4) * 0.26, 0.5), dark);
-    shard.position.set(
-      -screen.wide / 2 + 0.4 + (i * (screen.wide - 0.8)) / 10,
-      screen.high / 2 + edge + 0.1,
-      -0.12
-    );
-    shard.rotation.z = (((i * 13) % 7) - 3) * 0.12;
-    group.add(shard);
-  }
-
   /**
    * A backing behind all of it, and it is load-bearing twice.
    *
@@ -174,7 +165,11 @@ export function createScreenBeast({
    * television.
    */
   const backing = new THREE.Mesh(
-    new THREE.PlaneGeometry((screen.wide + edge * 2) * 1.3, (screen.high + edge * 2) * 1.3),
+    // The casing's own size and not a bit more. It was a quarter again
+    // larger, from when this was a slab with nothing else to its name, and
+    // it was then quietly the widest part of the animal: the first span
+    // taken after the limbs went on read 14.92, which was this, not them.
+    new THREE.PlaneGeometry(screen.wide + edge * 2, screen.high + edge * 2),
     new THREE.MeshBasicMaterial({ color: '#05060a', toneMapped: false, fog: false })
   );
   backing.position.z = -0.1;
@@ -193,41 +188,274 @@ export function createScreenBeast({
   faceGroup.position.z = 0.22;
   group.add(faceGroup);
 
+  /**
+   * And the rest of it, which is a lizard.
+   *
+   * Four banded limbs off the back of the casing and a long banded tail, and
+   * the bands are most of what makes it read: a smooth limb is a tube and a
+   * ringed one is an animal, which is the whole of the difference between a
+   * television with sticks on it and a thing that is about to be on top of
+   * you.
+   *
+   * **The limbs come out from behind the screen and not off its corners.**
+   * In the drawing they sprout from the four corners of the set, which is
+   * the right picture and the wrong metre: the hall at the top of the stair
+   * is cut to this thing's width, half a metre either side, and arms off the
+   * corners put five more metres on the span. Rooted inboard at a third of
+   * the width and swept up and down more than out, the whole animal still
+   * fits through its own door. See `span` below, which is measured rather
+   * than asserted.
+   */
+  const hide = new THREE.MeshStandardMaterial({ color: '#4c4f44', roughness: 0.88, metalness: 0.08 });
+  const band = new THREE.MeshStandardMaterial({ color: '#23251e', roughness: 0.92, metalness: 0.1 });
+
+  /**
+   * One limb: segments down a chain, each hung off the end of the last, so
+   * the whole thing bends from the shoulder by turning one group.
+   *
+   * Tapered, banded, and finished with four splayed digits — four because
+   * that is what is drawn and because a fifth at this size is a rounding
+   * error on a shape nobody gets to look at for more than a second.
+   */
+  const buildLimb = (length, thick) => {
+    const root = new THREE.Group();
+    const joints = [root];
+    const parts = 3;
+    let parent = root;
+    for (let i = 0; i < parts; i++) {
+      const seg = new THREE.Group();
+      seg.position.y = i === 0 ? 0 : -(length / parts);
+      parent.add(seg);
+      const t = thick * (1 - i * 0.16);
+      const bone = new THREE.Mesh(new THREE.BoxGeometry(t, length / parts, t * 0.78), hide);
+      bone.position.y = -(length / parts) / 2;
+      bone.castShadow = true;
+      seg.add(bone);
+      // The rings. Three to a segment, proud enough to catch the light.
+      for (let r = 1; r <= 3; r++) {
+        const ring = new THREE.Mesh(
+          new THREE.BoxGeometry(t * 1.1, length / parts * 0.07, t * 0.88),
+          band
+        );
+        ring.position.y = -(length / parts) * (r / 4);
+        seg.add(ring);
+      }
+      joints.push(seg);
+      parent = seg;
+    }
+    // The hand, at the end of the last one.
+    const paw = new THREE.Group();
+    paw.position.y = -(length / parts);
+    parent.add(paw);
+    const palm = new THREE.Mesh(
+      new THREE.BoxGeometry(thick * 0.9, thick * 0.7, thick * 0.6),
+      hide
+    );
+    palm.position.y = -thick * 0.3;
+    paw.add(palm);
+    for (let d = 0; d < 4; d++) {
+      const digit = new THREE.Group();
+      digit.position.y = -thick * 0.6;
+      digit.rotation.z = (d - 1.5) * 0.34;
+      paw.add(digit);
+      const finger = new THREE.Mesh(
+        new THREE.BoxGeometry(thick * 0.17, thick * 0.78, thick * 0.17),
+        hide
+      );
+      finger.position.y = -thick * 0.39;
+      digit.add(finger);
+    }
+    return { root, joints, paw };
+  };
+
+  /**
+   * Where the four of them go, and which way they point.
+   *
+   * `out` is the sideways lean off vertical. The top pair reach up and out
+   * and the bottom pair down and out, which is the drawing's pose and also
+   * the one that keeps the span inside the casing's own width.
+   */
+  /**
+   * And they fold, which is the only reason the drawing and the building can
+   * both be right.
+   *
+   * Spread, this animal is about fifteen across and thirteen tall. The hole
+   * at the top of the crate stair is 11.5 by 5.9, cut to the television when
+   * the television was all there was. One of those numbers had to give, and
+   * the ways of giving were: shorter limbs, which is not what is drawn; a
+   * bigger hole, which does not fit — the sill is at 3.6 in a room with ten
+   * metres of head, so an opening tall enough for it spread would come out
+   * through the ceiling; or it tucks.
+   *
+   * It tucks. Everything with four legs and a door to get through does, and
+   * it is the one answer that costs nothing: the limbs swing back flat
+   * against the body as it comes up on the wall and open again on the far
+   * side. The moment it threads itself through a hole it does not fit
+   * through is better than either thing it replaces.
+   */
+  const TUCK = { from: 7.0, tight: 2.0 };
+
+  const limbs = [];
+  for (const [side, up] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) {
+    const reach = up > 0 ? screen.high * 0.86 : screen.high * 0.78;
+    // Thick. At 0.62 against an eleven-metre body they read as sticks; the
+    // drawing's are heavy enough to be the reason the thing can move.
+    const limb = buildLimb(reach, 0.95);
+    // 0.29 and not 0.3. Folded it measured 11.57 across a hole of 11.5, and
+    // the seven centimetres were the fingertips.
+    limb.root.position.set(side * screen.wide * 0.29, (up * screen.high) / 2 - up * 0.3, -0.34);
+    // Built hanging down the -y axis, so a top limb is the same limb turned
+    // over. The lean is the same sign as the side it is on.
+    limb.root.rotation.z = up > 0 ? Math.PI - side * 0.55 : side * 0.5;
+    group.add(limb.root);
+    limbs.push({
+      ...limb,
+      side,
+      up,
+      phase: (side + 1) + (up + 1) * 1.7,
+      lean: limb.root.rotation.z,
+      /** The same limb with the lean taken out: straight up, or straight down. */
+      straight: up > 0 ? Math.PI : 0,
+    });
+  }
+
+  /**
+   * The tail, which is the same chain again and longer.
+   *
+   * Off the back and to one side, curling up at the end the way it is drawn.
+   * Every segment is a child of the one before it, so a wave put into the
+   * first joint travels the whole length without anything having to work out
+   * where the end of it is.
+   */
+  const tail = [];
+  {
+    let parent = group;
+    const links = 11;
+    for (let i = 0; i < links; i++) {
+      const seg = new THREE.Group();
+      if (i === 0) seg.position.set(screen.wide * 0.26, -screen.high * 0.1, -0.5);
+      else seg.position.z = -0.78;
+      // Gently. Each link is a child of the last, so a turn put in here is
+      // paid eleven times: at 0.09 a link the tail came round through eighty
+      // degrees and put the animal's widest point three metres outside its
+      // own shoulder, which is a tail that does not go through the hole the
+      // rest of it does.
+      seg.rotation.x = i === 0 ? -0.18 : 0.055;
+      seg.rotation.y = i === 0 ? 0.26 : 0.042;
+      parent.add(seg);
+      const t = 0.66 * (1 - i / (links + 2));
+      const bone = new THREE.Mesh(new THREE.BoxGeometry(t, t * 0.9, 0.8), hide);
+      bone.position.z = -0.4;
+      bone.castShadow = true;
+      seg.add(bone);
+      const ring = new THREE.Mesh(new THREE.BoxGeometry(t * 1.12, t * 1.0, 0.09), band);
+      ring.position.z = -0.72;
+      seg.add(ring);
+      tail.push(seg);
+      parent = seg;
+    }
+  }
+
+  /**
+   * And the maw, which is the face it pulls when it is loose.
+   *
+   * A jagged burst with a hole in it and a ring of teeth round the hole,
+   * drawn flat on the glass in the same light the eyes are, because it is
+   * part of the picture on the screen and not a thing bolted to the front of
+   * it. Hidden while the thing is still on the wall: up there it has the
+   * face it has had all game, and this is what that face turns into.
+   *
+   * Built out of THREE.Shape rather than boxes. Everything else this
+   * character is made of is rectangles because everything else about it is
+   * rectangular; a mouth full of triangles is the one place that stops being
+   * true, and faking triangles out of turned boxes would show.
+   */
+  const star = (points, outer, inner) => {
+    const shape = new THREE.Shape();
+    for (let i = 0; i <= points * 2; i++) {
+      const a = (i / (points * 2)) * Math.PI * 2 - Math.PI / 2;
+      const r = i % 2 ? inner : outer;
+      const x = Math.cos(a) * r;
+      const y = Math.sin(a) * r;
+      if (i === 0) shape.moveTo(x, y);
+      else shape.lineTo(x, y);
+    }
+    return shape;
+  };
+
+  const maw = new THREE.Group();
+  maw.position.set(0, -screen.high * 0.16, 0.24);
+  maw.scale.set(1.25, 1, 1);
+  maw.visible = false;
+  group.add(maw);
+  const mawParts = [];
+  const lit = () => new THREE.MeshBasicMaterial({ color: FACE, toneMapped: false, side: THREE.DoubleSide });
+
+  // The burst: a spiked ring, which is the outline the drawing has round the
+  // whole mouth.
+  // A bit over a third of the screen's height across, which is roughly the
+  // share of the set the drawing gives it.
+  const burstOuter = screen.high * 0.38;
+  const burstInner = screen.high * 0.185;
+  const burst = star(9, burstOuter, burstOuter * 0.66);
+  burst.holes.push(star(9, burstInner * 1.08, burstInner * 0.74));
+  const burstMesh = new THREE.Mesh(new THREE.ShapeGeometry(burst), lit());
+  maw.add(burstMesh);
+  mawParts.push(burstMesh);
+
+  // The opening, which is the screen with nothing on it, and the teeth
+  // standing in from the top and the bottom of it.
+  const gape = new THREE.Mesh(
+    new THREE.CircleGeometry(burstInner * 0.78, 18),
+    new THREE.MeshBasicMaterial({ color: '#04070a', toneMapped: false })
+  );
+  gape.position.z = -0.01;
+  maw.add(gape);
+
+  for (const row of [1, -1]) {
+    for (let i = 0; i < 7; i++) {
+      const across = (i / 6 - 0.5) * burstInner * 1.42;
+      const lip = row * Math.sqrt(Math.max(0, 1 - (across / (burstInner * 0.78)) ** 2)) * burstInner * 0.7;
+      const long = burstInner * (0.34 + ((i * 13) % 3) * 0.1);
+      const wide = burstInner * 0.19;
+      const tooth = new THREE.Shape();
+      tooth.moveTo(-wide, 0);
+      tooth.lineTo(wide, 0);
+      tooth.lineTo(0, -long);
+      const mesh = new THREE.Mesh(new THREE.ShapeGeometry(tooth), lit());
+      mesh.position.set(across, lip, 0.01);
+      mesh.rotation.z = row > 0 ? 0 : Math.PI;
+      maw.add(mesh);
+      mawParts.push(mesh);
+    }
+  }
+
   const glow = new THREE.PointLight(FACE, 0, 22, 1.7);
   glow.position.z = 1.6;
   group.add(glow);
-  const life = createScreenLife({ eyes, mouth, faceParts, glow, glowLevel: 4.2 });
+  // The maw is lit the same way the eyes are: pushed into the face's own
+  // parts list, so the breath and the flicker run through it rather than it
+  // sitting at a constant brightness in the middle of a screen that is not.
+  const life = createScreenLife({
+    eyes,
+    mouth,
+    faceParts: [...faceParts, ...mawParts],
+    glow,
+    glowLevel: 4.2,
+  });
 
   /**
-   * Cables out of the back, which are the only part of it that looks heavy.
+   * Showing the teeth, which happens once and does not stop.
    *
-   * It has no body. A slab sliding through the air is a slab; a slab dragging
-   * nine feeds behind it is a head that has been pulled off something, and the
-   * cables are what sell the weight because they are the only part of the
-   * silhouette that moves on its own.
+   * On from the frame it comes off the wall. The drawing is of the thing
+   * mid-chase and this is what it looks like mid-chase; the polite face is
+   * for the cabinet. The normal mouth goes away while this is up — one face
+   * has one mouth, and two would be two characters.
    */
-  const tails = [];
-  for (let i = 0; i < 9; i++) {
-    // Each on its own pivot at the point it leaves the back, because a wire
-    // swung about the middle of an eleven-metre slab does not swing, it
-    // orbits.
-    const pivot = new THREE.Group();
-    pivot.position.set(
-      (i / 8 - 0.5) * screen.wide * 0.86,
-      (((i * 23) % 5) / 4 - 0.5) * screen.high * 0.7,
-      -0.2
-    );
-    pivot.add(
-      buildWire(
-        new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3((i % 3) * 0.2 - 0.2, (i % 2) * 0.3 - 0.15, -1).normalize(),
-        1.4 + (i % 4) * 0.55,
-        ['#6d2a24', '#2c3a50', '#4a4330'][i % 3]
-      )
-    );
-    group.add(pivot);
-    tails.push({ pivot, phase: i * 0.7 });
-  }
+  const bare = (on) => {
+    maw.visible = on;
+    mouth.visible = !on;
+  };
 
   /**
    * And the music, which is the red hall's cue a minor third down.
@@ -328,6 +556,30 @@ export function createScreenBeast({
      * of them asked for it rather than being told, because the one number
      * that must not drift in this game is how wide this thing is.
      */
+    /**
+     * How wide the whole animal actually is, limbs and all, from its own
+     * bounding box.
+     *
+     * Measured and not worked out, because the thing it has to agree with is
+     * a hole in a wall somebody else's file decides the size of. The limbs
+     * were drawn off the corners of the set and had to come inboard to fit;
+     * this is how that is checked rather than hoped.
+     */
+    get span() {
+      // Measured square-on. The world box of a thing that is turned to face
+      // you reports the world axes, which for this animal is its depth where
+      // its width should be — the first reading taken that way said it was
+      // six metres across, which is the tail.
+      const was = group.rotation.y;
+      group.rotation.y = 0;
+      group.updateMatrixWorld(true);
+      const size = new THREE.Vector3();
+      new THREE.Box3().setFromObject(group).getSize(size);
+      group.rotation.y = was;
+      group.updateMatrixWorld(true);
+      return { wide: +size.x.toFixed(2), high: +size.y.toFixed(2), deep: +size.z.toFixed(2) };
+    },
+
     get screenSize() {
       return {
         wide: screen.wide + edge * 2,
@@ -422,6 +674,7 @@ export function createScreenBeast({
       nextLine = 0;
       quietFor = 0;
       life.setSnarl(0);
+      bare(false);
       group.visible = false;
       group.position.copy(home);
       group.rotation.y = FACING;
@@ -452,6 +705,7 @@ export function createScreenBeast({
         group.position.copy(here);
         group.rotation.z = Math.sin(since * 23) * 0.035 * (1 - eased) + eased * 0.06;
         if (since >= BREAKOUT.shake && since < BREAKOUT.shake + delta) playScreech(0.9);
+        if (since >= BREAKOUT.shake && !maw.visible) bare(true);
         if (since >= BREAKOUT.free) {
           phase = 'hunt';
           playMeatLunge(0.8);
@@ -537,11 +791,56 @@ export function createScreenBeast({
         }
       }
 
-      // The cables, trailing behind whatever it has just done.
-      for (const tail of tails) {
-        tail.pivot.rotation.x = Math.sin(since * 1.9 + tail.phase) * 0.22;
-        tail.pivot.rotation.z = Math.cos(since * 1.4 + tail.phase) * 0.26;
+      /**
+       * The limbs and the tail, which never stop.
+       *
+       * It has no gait — it does not walk, it comes at you flat and level —
+       * so the limbs are hauling at the air rather than at the ground, which
+       * is both easier to animate and more unpleasant to watch. Opposite
+       * corners swing against each other, the way everything with four of
+       * them does.
+       *
+       * The wave down the tail is one number used eleven times. Each link is
+       * a child of the one in front of it, so a turn put into the first
+       * arrives at the last with ten more on top of it, and it whips without
+       * anything here knowing where the end of it is.
+       */
+      const haul = phase === 'hunt' ? 1 : 0.35;
+      /**
+       * How far folded, from how near the wall with the hole in it is.
+       *
+       * Two moves at once, because the hole is tight in both directions.
+       * Swinging about the shoulder's x takes the limb backward out of the
+       * frontal plane, which collapses the height and leaves the width
+       * exactly where it was; taking the lean out at the same time brings
+       * the width in to the casing's own. Folded, the animal is the
+       * television again — 11.48 by 5.59 against a hole of 11.5 by 5.9.
+       */
+      // Folded by the time it is two metres off the wall rather than at the
+      // wall itself, so it is already the right shape when it arrives
+      // instead of still becoming it while it is halfway through.
+      const tuck =
+        phase === 'hunt'
+          ? Math.max(
+              0,
+              Math.min(1, (TUCK.from - Math.abs(here.z - gate.z)) / (TUCK.from - TUCK.tight))
+            )
+          : 0;
+      for (const limb of limbs) {
+        const beat = Math.sin(since * 2.6 + limb.phase) * (1 - tuck);
+        limb.root.rotation.x = tuck * (Math.PI / 2);
+        limb.root.rotation.z =
+          limb.lean + (limb.straight - limb.lean) * tuck + beat * 0.2 * haul;
+        limb.joints[1].rotation.x = beat * 0.3 * haul;
+        limb.joints[2].rotation.x = -beat * 0.42 * haul;
+        limb.joints[3].rotation.x = beat * 0.3 * haul;
+        limb.paw.rotation.x = -beat * 0.5 * haul;
       }
+      tail.forEach((seg, i) => {
+        if (i === 0) return;
+        seg.rotation.y = 0.042 + Math.sin(since * 2.1 - i * 0.55) * 0.07 * (0.4 + haul);
+        seg.rotation.x = 0.055 + Math.cos(since * 1.6 - i * 0.4) * 0.045;
+      });
 
       life.update(delta, 1);
     },

@@ -12,6 +12,7 @@ import {
 } from './textures.js';
 import { buildScreenFace, createScreenLife, FACE } from './screenFace.js';
 import { createScreenBeast, BREAKOUT } from './screenBeast.js';
+import { createScreenScare } from './screenScare.js';
 import { playButtonPress, playSpikeGrind, createLiftMotor } from './audio.js';
 import { showNote, setObjective } from './hud.js';
 
@@ -225,11 +226,12 @@ const CHASE_LINES = [
  * @param scene   the world
  * @param doorway where the lift room hands over: the far face of its door
  * @param player  for knowing when you are in here
+ * @param camera  for the one shot this room stages — see screenScare.js
  * @param death   the screen that goes up when the thing in the wall has you
  * @param onChase called once, the frame it starts: the way back shuts
  * @param onCalm  called by reset, to put the way back the way it was
  */
-export function createStorageRoom({ scene, doorway, player, death, onChase, onCalm }) {
+export function createStorageRoom({ scene, doorway, player, camera, death, onChase, onCalm }) {
   const group = new THREE.Group();
   scene.add(group);
 
@@ -1048,9 +1050,21 @@ export function createStorageRoom({ scene, doorway, player, death, onChase, onCa
     gate: { x: wayUp.x, y: wayUp.y + WAY_UP.high / 2, z: minZ },
     wreck,
     onCatch() {
-      death.kill('It had been the wall the whole time.');
+      scare.start(beast);
     },
   });
+
+  /**
+   * And the shot that happens when it does.
+   *
+   * Owned here because this room owns the thing doing it, which is the same
+   * arrangement the tall room has with seizure.js — a sequence lives with
+   * whatever it is a sequence of, and the three of them are peers rather
+   * than something held centrally. The catch used to be a bare `death.kill`,
+   * which after fourteen seconds of being chased is the screen going black
+   * on you with no idea what caught up.
+   */
+  const scare = createScreenScare({ scene, camera, player, death });
 
   /**
    * The breakout, which is one thing happening in two places.
@@ -1155,6 +1169,9 @@ export function createStorageRoom({ scene, doorway, player, death, onChase, onCa
     /** The thing out of the wall, for the hall that has to stop it. */
     beast,
 
+    /** The shot it ends on, for a harness. */
+    scare,
+
     /** Whether the chase is on, so a death knows which room it happened in. */
     get isChasing() {
       return chasing;
@@ -1200,6 +1217,9 @@ export function createStorageRoom({ scene, doorway, player, death, onChase, onCa
       chasing = false;
       chaseSince = 0;
       pressTheButton.spent = false;
+      // Before the beast, because this is what hands the body and the view
+      // back, and it is holding a reference to the thing being reset.
+      scare.reset();
       beast.reset();
       onCalm?.();
       wound.visible = false;
@@ -1223,6 +1243,19 @@ export function createStorageRoom({ scene, doorway, player, death, onChase, onCa
     },
 
     update(delta) {
+      /**
+       * While it has you, nothing else in this room is happening.
+       *
+       * The shot drives the beast itself — it has to, because the camera is
+       * looking at it and a frame written before the thing moved is a frame
+       * of where it was. So this returns rather than falling through to the
+       * `beast.update` below, which would move it twice.
+       */
+      if (scare.isPlaying) {
+        scare.update(delta);
+        return;
+      }
+
       const here = player.position;
       if (!entered && inside(here.x, here.z)) {
         entered = true;

@@ -158,6 +158,28 @@ export function createScreenBeast({
     group.add(shard);
   }
 
+  /**
+   * A backing behind all of it, and it is load-bearing twice.
+   *
+   * Scenery first: there was nothing between the four frame bars but the
+   * glass, so from any angle that was not square on you could see the room
+   * through the middle of the thing, which is not how a television works.
+   *
+   * It is a quarter again larger than the frame and no more. There was a
+   * version that tried to make this the thing that fills the screen in
+   * screenScare.js, which it cannot be: a 75 degree lens three metres off a
+   * vertical plane wants about twenty metres of it, and a black rectangle
+   * that size trailing the beast down the shed is a hole in the room. The
+   * shot carries its own backdrop for that; this is just the back of a
+   * television.
+   */
+  const backing = new THREE.Mesh(
+    new THREE.PlaneGeometry((screen.wide + edge * 2) * 1.3, (screen.high + edge * 2) * 1.3),
+    new THREE.MeshBasicMaterial({ color: '#05060a', toneMapped: false, fog: false })
+  );
+  backing.position.z = -0.1;
+  group.add(backing);
+
   // The glass, and the face in it. A second `createScreenLife`, because this
   // is a second screen — the one on the wall is still there with a hole where
   // this came out of it, and they are not the same object.
@@ -241,7 +263,7 @@ export function createScreenBeast({
    */
   const LIFT = screen.high / 2 + edge + 0.2;
 
-  /** 'wait' | 'out' | 'hunt' | 'done' */
+  /** 'wait' | 'out' | 'hunt' | 'seized' | 'done' */
   let phase = 'wait';
   let since = 0;
   let hunted = 0;
@@ -299,6 +321,56 @@ export function createScreenBeast({
       return +distanceTo(player.position).toFixed(2);
     },
 
+    /**
+     * How big it is, frame and all, for whatever has to fit it in something.
+     *
+     * The hall is built to this and so is the shot that ends the chase. Both
+     * of them asked for it rather than being told, because the one number
+     * that must not drift in this game is how wide this thing is.
+     */
+    get screenSize() {
+      return {
+        wide: screen.wide + edge * 2,
+        high: screen.high + edge * 2,
+        /**
+         * How high its middle sits when it is standing on the ground.
+         *
+         * Half its own height and a hand's width, so the bottom edge of the
+         * frame is just clear of the floor. The shot uses it; see the note
+         * on where it lands in screenScare.js.
+         */
+        rest: (screen.high + edge * 2) / 2 + 0.1,
+      };
+    },
+
+    /** Whether the shot has it. */
+    get isSeized() {
+      return phase === 'seized';
+    },
+
+    /**
+     * Hand it to screenScare.js, which drives it from here.
+     *
+     * It stops hunting, stops talking and kills its own music on this frame.
+     * The music in particular: a chase cue fading out under a jumpscare is a
+     * chase you are losing gently, and this is not that.
+     */
+    seize() {
+      if (phase !== 'hunt') return;
+      phase = 'seized';
+      script = null;
+      music.stop();
+      life.stop();
+      life.setSnarl(1);
+    },
+
+    /** Put it somewhere, for as long as something else owns where it is. */
+    place(at, yaw) {
+      here.copy(at);
+      group.position.copy(here);
+      group.rotation.set(0, yaw, 0);
+    },
+
     start(lines) {
       if (phase !== 'wait') return;
       phase = 'out';
@@ -349,6 +421,7 @@ export function createScreenBeast({
       script = null;
       nextLine = 0;
       quietFor = 0;
+      life.setSnarl(0);
       group.visible = false;
       group.position.copy(home);
       group.rotation.y = FACING;
@@ -384,6 +457,14 @@ export function createScreenBeast({
           playMeatLunge(0.8);
           if (script) life.speak(script);
         }
+      } else if (phase === 'seized') {
+        // Nothing, and that includes the roll. The shot owns where it is and
+        // which way it is facing; everything below this point is the face
+        // and the cables, and those go on doing what they do right up to the
+        // black. The sway it has while hunting is three degrees, which on
+        // something eleven metres wide swings its own edge seventeen
+        // centimetres through a frame it is supposed to be filling.
+        group.rotation.z = 0;
       } else if (phase === 'hunt') {
         hunted += delta;
 

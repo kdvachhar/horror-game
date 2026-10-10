@@ -124,6 +124,22 @@ export function buildScreenFace() {
   return { group, eyes, mouth, faceParts };
 }
 
+/**
+ * The snarl: how fast it arrives, and the mouth it arrives with.
+ *
+ * `rate` is the easing constant and it is deliberately absurd — at 40 the
+ * face is most of the way there inside two frames, which is the difference
+ * between a cut and a transition. Everything else on this face is tuned to
+ * be watchable; this one is tuned not to be.
+ *
+ * The mouth is the one it already has, thrown open: rest is 0.47 by 1, this
+ * is a bit over twice the height and a third again the width. Nothing is
+ * reshaped and nothing is added, for the same reason the frown is the same
+ * three blocks upside down — a face this simple has one mouth, and every
+ * expression it has is that mouth moved.
+ */
+const SNARL = { rate: 40, mouth: { open: 1.12, wide: 1.32 } };
+
 /** The loose wiring's colours, from the drawing. */
 const WIRE_COLOURS = ['#b23b2e', '#2f4b9c', '#8a9440'];
 
@@ -263,6 +279,24 @@ export function createScreenLife({ eyes, mouth, faceParts, glow = null, glowLeve
   // at a time. Almost nothing gets it.
   let angry = 0;
 
+  /**
+   * The one expression this face has that is not attached to a sentence.
+   *
+   * Everything else it does is delivery — the frown, the scowl, the shut
+   * eyes are all read off the line being spoken, which is right, because
+   * this character communicates by talking and the face is the talking.
+   *
+   * A jumpscare is the exception and it has to be. There is nothing being
+   * said: the point of the moment is that the thing has stopped talking to
+   * you. Doing it through the speech runner would mean speaking an empty
+   * line to carry two flags, which puts an invisible subtitle on screen and
+   * makes the worst face in the game a side effect of saying nothing.
+   *
+   * So it is its own channel, it sits over the top of whatever the line
+   * wants, and it arrives rather than settling. See SNARL.
+   */
+  let snarl = 0;
+
   return {
     speak(lines, onFinished) {
       speech.play(lines, onFinished);
@@ -276,6 +310,14 @@ export function createScreenLife({ eyes, mouth, faceParts, glow = null, glowLeve
     /** The line being delivered, for anything else it is meant to be doing. */
     get line() {
       return speech.line;
+    },
+
+    /**
+     * Pull the worst face it has, 0 to 1, over the top of anything it is
+     * saying. For screenScare.js, and for nothing else.
+     */
+    setSnarl(level) {
+      snarl = Math.max(0, Math.min(1, level));
     },
 
     /** @param lit 1 while the screen is on, easing to 0 as it goes out. */
@@ -307,9 +349,13 @@ export function createScreenLife({ eyes, mouth, faceParts, glow = null, glowLeve
        * the whole of an angry face. It works shut as well as open, because it
        * is the eye that turns and not something stuck on the front of it.
        */
-      browed += ((speech.line?.frown ? 1 : 0) - browed) * (1 - Math.exp(-9 * delta));
-      // Faster than the mouth. A frown settles onto a face; this arrives.
-      angry += ((speech.line?.brows === 'angry' ? 1 : 0) - angry) * (1 - Math.exp(-14 * delta));
+      const wantFrown = Math.max(snarl, speech.line?.frown ? 1 : 0);
+      const wantAngry = Math.max(snarl, speech.line?.brows === 'angry' ? 1 : 0);
+      // A frown settles onto a face and a scowl arrives on it. A snarl is
+      // neither: it is a cut, and anything slow enough to watch is not one.
+      const settle = snarl > 0 ? SNARL.rate : 9;
+      browed += (wantFrown - browed) * (1 - Math.exp(-settle * delta));
+      angry += (wantAngry - angry) * (1 - Math.exp(-(snarl > 0 ? SNARL.rate : 14) * delta));
 
       // It watches. The eyes track slowly from side to side.
       const look = Math.sin(time * 0.55) * 0.07;
@@ -317,7 +363,9 @@ export function createScreenLife({ eyes, mouth, faceParts, glow = null, glowLeve
       // Some lines are delivered with them shut, which on this face means the
       // arc rather than the plug — a pair of upturned semicircles, and how a
       // face this simple reads as pleased with itself.
-      const lidTarget = speech.line?.eyes === 'closed' ? 0.08 : 1;
+      // Wide, when it is snarling. The shut-eyed delivery is the one it keeps
+      // for lines it is pleased with, and this is not one of those.
+      const lidTarget = snarl > 0.5 ? 1 : speech.line?.eyes === 'closed' ? 0.08 : 1;
       eyesOpen += (lidTarget - eyesOpen) * (1 - Math.exp(-7 * delta));
 
       eyes.forEach((eye, i) => {
@@ -357,10 +405,11 @@ export function createScreenLife({ eyes, mouth, faceParts, glow = null, glowLeve
       // The mouth is shaped to the syllable actually being spoken: a rounded
       // "oh" narrows and drops it, a flat "ee" spreads it and barely opens it,
       // and the consonants between close it. Idles with a slow breath.
-      const target = speech.isSpeaking ? speech.mouth : MOUTH_AT_REST;
-      const idle = speech.isSpeaking ? 0 : Math.sin(time * 2.4) * 0.02;
-      mouthOpen += (target.open + idle - mouthOpen) * (1 - Math.exp(-24 * delta));
-      mouthWide += (target.wide - mouthWide) * (1 - Math.exp(-17 * delta));
+      const target = snarl > 0.5 ? SNARL.mouth : speech.isSpeaking ? speech.mouth : MOUTH_AT_REST;
+      const idle = speech.isSpeaking || snarl > 0.5 ? 0 : Math.sin(time * 2.4) * 0.02;
+      const jaw = snarl > 0.5 ? SNARL.rate : 24;
+      mouthOpen += (target.open + idle - mouthOpen) * (1 - Math.exp(-jaw * delta));
+      mouthWide += (target.wide - mouthWide) * (1 - Math.exp(-(snarl > 0.5 ? SNARL.rate : 17) * delta));
 
       // 0.3 keeps the lips together rather than collapsing the mouth to a line.
       mouth.scale.set(mouthWide, 0.3 + mouthOpen * 1.5, 1);

@@ -368,6 +368,7 @@ const storageRoom = createStorageRoom({
   scene,
   doorway: giantHall.lift.wayOn,
   player,
+  camera,
   death,
   /**
    * The way back shuts when the thing comes out of the wall.

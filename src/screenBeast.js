@@ -1015,7 +1015,24 @@ export function createScreenBeast({
    */
   const bare = (on) => {
     maw.visible = on;
-    mouth.visible = !on;
+    /**
+     * And the drawn face goes with the glass it was drawn on.
+     *
+     * The eyes were kept through two cuts of this on the argument that they
+     * are what makes the thing chasing you the thing that has been talking
+     * to you — the one part of the character that survives into the animal.
+     * That argument loses to a simpler one: the face is a picture on a
+     * screen, and the screen is broken. Two lit green plug-shapes floating
+     * in a hole where there is no longer anything to draw them on is a face
+     * that has outlived its tube.
+     *
+     * What is left in their place is better anyway. The sockets were built
+     * as rings of meat round an unlit pit, so with nothing in front of them
+     * the face keeps the holes and loses the eyes, which is the whole of
+     * what the change is: the thing stops looking at you out of a television
+     * and starts looking at you out of a head.
+     */
+    faceGroup.visible = !on;
     glassWhole.visible = !on;
     broken.visible = on;
     visage.visible = on;

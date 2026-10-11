@@ -229,8 +229,8 @@ export function createScreenBeast({
    *
    * makeMeatSurface is what the thing in the shaft is covered in, and the two
    * of them being obviously the same substance is the most useful thing this
-   * body does: there was something in the basement made of this and there is
-   * something in the roof made of this.
+   * creature is made of: there was something in the basement made of this and
+   * there is something in the roof made of this.
    */
   const meatSurface = makeMeatSurface(2, 2);
   const flesh = new THREE.MeshStandardMaterial({
@@ -240,34 +240,32 @@ export function createScreenBeast({
   });
   const gristle = new THREE.MeshStandardMaterial({ color: '#2a0f0d', roughness: 0.6, metalness: 0.03 });
 
-  /** One lump, so the body, the face and the shoulders are made the same way. */
-  const lumpInto = (parent, x, y, z, rx, ry, rz, turn, tumble = true) => {
+  /**
+   * One lump of meat, which is what the face is made of.
+   *
+   * It used to make the body as well, and that is where the one parameter
+   * this does not have went: the body turned every lump on all three axes,
+   * because a sack has no up in it and tumbling is most of what stops
+   * spheres from reading as spheres. A face is the opposite — it has an up,
+   * and the same turn applied to it was catastrophic in a way that only
+   * showed on screen: a brow is a two and a half metre bar a third of a
+   * metre thick, and a bar like that rolled sixty degrees is a sausage. Nine
+   * of them made a heap of offal hanging over a television. So: rolled in
+   * its own plane, and nothing else.
+   */
+  const lumpInto = (parent, x, y, z, rx, ry, rz, roll) => {
     const lump = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 9), flesh);
     lump.position.set(x, y, z);
     lump.scale.set(rx, ry, rz);
-    /**
-     * Tumbled in the body, rolled in the face.
-     *
-     * The body wants all three axes: it is a sack, there is no up in it, and
-     * turning every lump is most of what stops nineteen spheres reading as
-     * nineteen spheres. A face is the opposite — it has an up, and the same
-     * turn applied to it was catastrophic in a way that only showed on
-     * screen: a brow is a two and a half metre bar a third of a metre thick,
-     * and a bar like that rolled sixty degrees is a sausage. Nine of them
-     * made a heap of offal hanging over a television.
-     */
-    if (tumble) lump.rotation.set(turn * 1.7, turn * 2.3, turn * 0.9);
-    else lump.rotation.z = turn;
+    lump.rotation.z = roll;
     /**
      * It casts nothing and receives nothing, and neither is laziness.
      *
-     * The body lives behind a lit screen in a room with seventy point lights
-     * in it. Nobody is ever on the side of it where its shadow would land,
-     * and the shadow it would receive is one the screen in front of it is
-     * drowning anyway. Switched on, the body put six milliseconds a frame on
-     * the chase — a quarter again on the scene it happens in — for an effect
-     * that is by construction invisible. The limbs and the tail keep theirs:
-     * those are the parts that are seen against the room.
+     * These live inside a lit set in a room with seventy point lights in it.
+     * Nobody is ever on the side of them where their shadow would land, and
+     * the shadow they would receive is one the screen in front of them is
+     * drowning anyway. The limbs and the tail keep theirs: those are the
+     * parts that are seen against the room.
      */
     parent.add(lump);
     return lump;
@@ -289,7 +287,7 @@ export function createScreenBeast({
    * The face, and it is not on the screen any more. It is behind it.
    *
    * This is the thing the broken glass is broken to show: a head's worth of
-   * the same meat the body is, filling the back of the set, bulging forward
+   * the same meat the limbs are, filling the back of the set, bulging forward
    * through the hole where the picture used to be. The brow, the two swollen
    * rings the eyes sit in, the cheeks either side of the mouth, the jaw under
    * it.
@@ -352,7 +350,7 @@ export function createScreenBeast({
     [2.15, -0.45, 0.25, 1.25, 1.05, 0.32, -0.22],
     [0, -1.9, 0.21, 2.2, 0.46, 0.28, 0], // the jaw, under it
   ]) {
-    lumpInto(visage, x, y, front - rz, rx, ry, rz, roll, false);
+    lumpInto(visage, x, y, front - rz, rx, ry, rz, roll);
   }
 
   /**
@@ -485,6 +483,49 @@ export function createScreenBeast({
   group.add(faceGroup);
 
   /**
+   * There is no body, and there was.
+   *
+   * The television used to be set into the front of a mass of meat —
+   * thirteen turned ellipsoids ten metres across, with six more arms coming
+   * out of its flanks — on the argument that an animal with a screen for a
+   * face wants something behind the face to be an animal with.
+   *
+   * It does not read. The mass is only ever seen from in front, behind its
+   * own lit screen, which is the one lighting condition under which a sack
+   * of meat and a sack of anything else are the same object: what came
+   * through was a dark lump the television was dragging, and a lump is the
+   * one shape a silhouette cannot make frightening. What carries this thing
+   * is the set, the face in the broken glass and the limbs — those are lit,
+   * those move, and those are what comes round the corner at you.
+   *
+   * So it is a television with limbs on it, which is what is drawn. The
+   * backing plane above is what stops you seeing the room through the middle
+   * of it, and the knuckle of flesh at each shoulder is what stops a limb
+   * starting in mid-air.
+   *
+   * What went with the mass, so the history is in one place and not in a
+   * diff:
+   *
+   *   - The thirteen lumps. A millisecond and a half a frame of the shed's
+   *     sixteen, square on at nine metres, measured by switching them off
+   *     mid-chase and rendering off the vsync clock — a frame interval
+   *     cannot read below 16.7 and so cannot see a mesh this cheap. It was
+   *     eight milliseconds before the light pool landed, when every one of
+   *     those pixels was shaded against seventy lights.
+   *   - The six deep arms rooted in it, two and a half to five metres behind
+   *     the glass. They had nothing left to come out of, and an arm with a
+   *     ball of flesh at the top of it hanging in clear air is worse than no
+   *     arm. Four was the drawing in the first place.
+   *   - The squash, which was the mass deforming to get through the hole in
+   *     the crate wall because it was wider and taller than the hole. The
+   *     casing is 11.5 by 5.9 and the hole is cut to the casing.
+   *
+   * The fold and the crush stay: those are the limbs putting themselves away
+   * and the whole animal bowing into a corridor, and both are still true of
+   * a television.
+   */
+
+  /**
    * And the rest of it, which is a lizard.
    *
    * Four banded limbs off the back of the casing and a long banded tail, and
@@ -502,91 +543,6 @@ export function createScreenBeast({
    * fits through its own door. See `span` below, which is measured rather
    * than asserted.
    */
-  /**
-   * The body, and it is meat.
-   *
-   * The television is set into the front of a mass of flesh — the screen is
-   * the only part of this that is a machine, and everything carrying it is
-   * the same stuff the thing in the shaft is made of.
-   *
-   * Lumps, not a shape. Nineteen spheres squashed, turned and overlapped on a
-   * deterministic hash, which is all a body like this is — there is nothing
-   * to read on it, it is only ever seen in silhouette behind a lit screen,
-   * and the one thing it has to do is not look manufactured.
-   *
-   * **It is bigger than the hole it has to get through, and it goes through
-   * anyway.** This used to be bounded inside the casing's own outline, which
-   * kept the door arithmetic trivial and made the animal a television with a
-   * cushion behind it: the mass could never be the biggest thing about it,
-   * because the biggest thing about it had to be 11.5 by 5.9. The bound is
-   * gone. The body is a metre and a half wider than the set on each side and
-   * a metre taller, and the way it gets through the hole is the way the limbs
-   * do — it gives. See the squash in the update, which is the same `tuck`
-   * ramp the fold runs on: the meat narrows and lengthens as it comes up on
-   * the wall and swells again on the far side. A thing that has to deform to
-   * follow you through a gap is worth more than any amount of mass that
-   * happens to fit.
-   */
-  /**
-   * How far it goes, and it is no longer bounded by the casing.
-   *
-   * `wide` and `high` are half-extents of the mass, `deep` is how far back it
-   * runs. Each lump is still placed so its own longest radius lands inside
-   * these — the bound is the *longest* axis, not the one being bounded,
-   * because these are turned as well as squashed and a tumbled ellipsoid can
-   * present any of its three radii in any direction. Bounding height by the
-   * height is what made an earlier cut of this seven and three-quarter metres
-   * tall inside a five and a half metre casing.
-   */
-  const CARCASS = { wide: screen.wide / 2 + 1.5, high: (screen.high + edge * 2) / 2 + 1.1, deep: 5.4 };
-  const body = new THREE.Group();
-  body.position.z = -1.8;
-  group.add(body);
-  /**
-   * Thirteen of them, and what that did and did not buy.
-   *
-   * This body costs about eight milliseconds a frame on its own, measured by
-   * switching it off mid-chase with the thing square on at nine metres,
-   * which is the worst case and also the shot the room is built around. None
-   * of it is geometry — thirteen ellipsoids is three thousand triangles. It
-   * is fill: a mass thirteen metres across, every pixel of it shaded against
-   * a room with seventy point lights in it.
-   *
-   * **Going from nineteen to thirteen did not change that by a millisecond,
-   * and that is the useful finding.** Opaque meshes are drawn front to back,
-   * so a fragment behind a lump already drawn is rejected before it is
-   * shaded; the cost is the area the mass covers, which is set by CARCASS
-   * and is the same either way. The only thing that would make this cheaper
-   * is making it smaller, which is the one thing it is not allowed to be.
-   *
-   * Thirteen stays because it is the same silhouette for six fewer draw
-   * calls, not because it was the fix. A cheaper material is the other lever
-   * and it was measured too: Lambert instead of Standard is worth about two
-   * milliseconds, which is not enough to make this body out of different
-   * meat from the thing in the shaft.
-   */
-  for (let i = 0; i < 13; i++) {
-    const t = i / 12;
-    const rx = 2.0 + ((i * 17) % 4) * 0.36;
-    const ry = 1.5 + ((i * 13) % 4) * 0.3;
-    const rz = 1.5 + ((i * 7) % 3) * 0.44;
-    const reach = Math.max(rx, ry, rz);
-    const across = ((((i * 37) % 11) / 10) * 2 - 1) * Math.max(0, CARCASS.wide - reach);
-    const up = ((((i * 23) % 7) / 6) * 2 - 1) * Math.max(0, CARCASS.high - reach);
-    lumpInto(body, across, up, -0.4 - ((i * 29) % 7) * (CARCASS.deep / 7), rx, ry, rz, t);
-  }
-
-  /**
-   * How much it gives to get through.
-   *
-   * `by` is how far the mass is squeezed in at full tuck and `out` is how far
-   * it stretches backwards to make up for it. The numbers are not taste: the
-   * mass is 6.78 out from the middle and the hole is 5.75, so a quarter off
-   * the width is the least that will do it, and 3.9 tall against 2.95 is
-   * where the 0.3 on the vertical comes from. Both are checked rather than
-   * trusted — see `span`.
-   */
-  const SQUASH = { wide: 0.26, high: 0.3, out: 0.5 };
 
   const band = new THREE.MeshStandardMaterial({ color: '#23251e', roughness: 0.92, metalness: 0.1 });
 
@@ -594,10 +550,10 @@ export function createScreenBeast({
    * One limb: segments down a chain, each hung off the end of the last, so
    * the whole thing bends from the shoulder by turning one group.
    *
-   * Made of the same meat the body is, because that is what it is: the
-   * drawing has the limbs coming off the lump and not off the television,
-   * and a grey arm bolted to a set is a prop where a meat one is an animal
-   * wearing a screen.
+   * Made of the same meat the face behind the glass is, because that is
+   * what it is: the drawing has the limbs coming off something living and
+   * not off the back of a television, and a grey arm bolted to a set is a
+   * prop where a meat one is an animal wearing a screen.
    *
    * Tapered, banded, and finished with four splayed digits — four because
    * that is what is drawn and because a fifth at this size is a rounding
@@ -617,10 +573,8 @@ export function createScreenBeast({
       bone.position.y = -(length / parts) / 2;
       bone.castShadow = shadow;
       seg.add(bone);
-      // The rings. Three to a segment on the four that are seen against the
-      // room, one on the arms off the back of the mass — they are behind the
-      // body from every angle you ever have on this thing, and a ring you
-      // cannot see is a draw call in a room with seventy lights in it.
+      // The rings. Three to a segment, and they are most of what makes a
+      // limb read: a smooth one is a tube and a ringed one is an animal.
       for (let r = 1; r <= rings; r++) {
         const ring = new THREE.Mesh(
           new THREE.BoxGeometry(t * 1.1, length / parts * 0.07, t * 0.88),
@@ -678,7 +632,7 @@ export function createScreenBeast({
    *
    * It tucks. Everything with four legs and a door to get through does, and
    * it is the one answer that costs nothing: the limbs swing back flat
-   * against the body as it comes up on the wall and open again on the far
+   * against the set as it comes up on the wall and open again on the far
    * side. The moment it threads itself through a hole it does not fit
    * through is better than either thing it replaces.
    */
@@ -687,17 +641,20 @@ export function createScreenBeast({
   const limbs = [];
   for (const [side, up] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) {
     const reach = up > 0 ? screen.high * 0.86 : screen.high * 0.78;
-    // Thick. At 0.62 against an eleven-metre body they read as sticks; the
-    // drawing's are heavy enough to be the reason the thing can move.
+    // Thick. At 0.62 against an eleven-metre television they read as sticks;
+    // the drawing's are heavy enough to be the reason the thing can move.
     const limb = buildLimb(reach, 0.95);
     /**
-     * Rooted in the meat and not on the casing.
+     * Rooted behind the set and not on its corners.
      *
      * 0.29 of the width and not 0.3, because folded it measured 11.57 across
      * a hole of 11.5 and the seven centimetres were the fingertips. Back at
-     * -1.2 rather than -0.34, so the shoulder is inside the body rather than
-     * stuck on the back of the television — with a knuckle of flesh over it,
-     * which is what stops a limb that starts in mid-air.
+     * -1.2 rather than -0.34, so the shoulder is a metre behind the glass
+     * rather than stuck flat on the back of the television — with a knuckle
+     * of flesh over it, which is what stops a limb that starts in mid-air.
+     * That knuckle is now the only meat on this thing that is not its face,
+     * and it is doing the whole of that job: see the body above, which there
+     * is not one of.
      *
      * And 0.6 in from the casing's edge rather than 0.3: the knuckle is a
      * metre across, and at the old inset it stood a hand's width proud of
@@ -724,57 +681,6 @@ export function createScreenBeast({
       straight: up > 0 ? Math.PI : 0,
     });
   }
-
-  /**
-   * And the rest of the arms, which come out of the meat rather than the set.
-   *
-   * Four was the drawing and four was a lizard. The mass behind the screen is
-   * bigger than the screen now, and a body that size with one limb at each
-   * corner reads as a creature carrying a television; six more of them coming
-   * out of the flanks and the back of it reads as the body being the animal
-   * and the television being the part of it that talks. They are shorter,
-   * thinner and set deeper, in no pattern — paired limbs are a skeleton and
-   * this does not have one.
-   *
-   * **Rooted inside the casing's own width even though the body is not.** The
-   * fold takes the lean out and swings the limb back along the body, so a
-   * folded arm is exactly as wide as the point it is rooted at: these sit
-   * between 1.8 and 3.3 out, which is inside the hole with room to spare, and
-   * the mass they emerge from is what gives instead. Their rings and their
-   * shadows are off — behind a body this size they are never seen against
-   * anything.
-   *
-   * [side, height, how far back, length as a share of the screen, thickness]
-   */
-  const EXTRA = [
-    [-1, 1.9, -2.6, 0.72, 0.78],
-    [1, 1.3, -3.2, 0.66, 0.72],
-    [-1, -1.4, -3.6, 0.62, 0.7],
-    [1, -2.0, -2.9, 0.7, 0.76],
-    [-1, 0.2, -4.6, 0.58, 0.66],
-    [1, -0.4, -4.9, 0.54, 0.64],
-  ];
-  EXTRA.forEach(([side, y, z, reach, thick], i) => {
-    const limb = buildLimb(screen.high * reach, thick, { rings: 1, digits: 3, shadow: false });
-    limb.root.position.set(side * screen.wide * (0.17 + ((i * 7) % 3) * 0.07), y, z);
-    const down = y < 0;
-    limb.root.rotation.z = down
-      ? side * (0.7 + (i % 3) * 0.14)
-      : Math.PI - side * (0.8 + (i % 3) * 0.12);
-    group.add(limb.root);
-    const socket = new THREE.Mesh(new THREE.SphereGeometry(thick, 10, 8), flesh);
-    socket.position.copy(limb.root.position);
-    socket.scale.set(1.2, 1.2, 1.4);
-    group.add(socket);
-    limbs.push({
-      ...limb,
-      side,
-      up: down ? -1 : 1,
-      phase: 0.4 + i * 1.27,
-      lean: limb.root.rotation.z,
-      straight: down ? 0 : Math.PI,
-    });
-  });
 
   /**
    * The tail, which is the same chain again and longer.
@@ -963,7 +869,7 @@ export function createScreenBeast({
    * material facing a room with a lamp in it comes back grey and grey is a
    * wall — the meat cube's every opening is painted this way and for this
    * reason, see CAVITY in meatCube.js. And a ring of gum in front of it, in
-   * the body's own flesh, so the teeth are standing in something.
+   * the face's own flesh, so the teeth are standing in something.
    */
   const throat = new THREE.Mesh(
     new THREE.ShapeGeometry(ragged(11, SHARD.inner * 1.3, SHARD.inner * 1.05, 7)),
@@ -1139,8 +1045,15 @@ export function createScreenBeast({
    * `span` walks nine hundred vertices and zeroes the yaw to do it; it is a
    * getter for harnesses, not a thing to call sixty times a second. These
    * are what it reports spread, to the nearest tenth.
+   *
+   * The width came down a third of a metre when the mass went: sampled over
+   * nine seconds of chase the old animal peaked at 13.84 across and this one
+   * at 13.50, which is the one place the body was ever the biggest thing
+   * about it. The height did not move at all — 13.53 both ways, because that
+   * has always been two limbs reaching in opposite directions — so the fold
+   * curve below, which is fitted to it, is untouched.
    */
-  const SPREAD = { wide: 13.6, high: 13.3 };
+  const SPREAD = { wide: 13.5, high: 13.3 };
 
   /** 'wait' | 'out' | 'hunt' | 'seized' | 'done' */
   let phase = 'wait';
@@ -1774,8 +1687,8 @@ export function createScreenBeast({
        * Beyond the wall it keeps most of the tuck, because beyond the wall it
        * is in a corridor the size of itself. Not all of it: a tenth of the
        * spread back is enough for the limbs to be visibly working without
-       * putting them through the brick, and the squash easing off is the one
-       * thing that shows the mass is still bigger than the gap it just came
+       * putting them through the brick, and that tenth coming back is the
+       * one thing that shows it is still bigger than the gap it just came
        * through.
        */
       /**
@@ -1835,17 +1748,6 @@ export function createScreenBeast({
       const wantFold = phase === 'hunt' || phase === 'done' ? Math.max(near, needed) : near;
       folded += (wantFold - folded) * (snapFit ? 1 : 1 - Math.exp(-3.4 * delta));
       const tuck = folded;
-      /**
-       * The meat giving, on the same ramp the limbs fold on.
-       *
-       * This is the only deformation in the game and it earns its place: the
-       * body is wider and taller than the hole, so either it squeezes or it
-       * passes through solid wall. Nonuniform scale on a group of turned
-       * lumps shears them, which on anything built would be a bug and on a
-       * sack of meat being pushed through a letterbox is the effect.
-       */
-      body.scale.set(1 - tuck * SQUASH.wide, 1 - tuck * SQUASH.high, 1 + tuck * SQUASH.out);
-
       /**
        * And then, if the place it is in is smaller than it is, it crushes.
        *

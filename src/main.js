@@ -287,80 +287,44 @@ const death = createDeathScreen({
      * — the chase is on *and* you are past the breach — and the nearer of
      * the two is the one that should win.
      */
-    const died = player.position;
     /**
-     * Caught in the last corridor, which is its own checkpoint.
+     * Anywhere in the chase: back to the button, one second before the screen
+     * tears.
      *
-     * Before the splits branch, for the same reason that one is before the
-     * shed's: during this stretch both are true and the nearer should win.
-     * What is behind you here is the climb, three junctions and eight arrows
-     * — about ninety seconds of ground you have already covered, most of it
-     * standing still at a keypad — and the run that killed you is sixteen
-     * metres long. Paying for the second with the first is the game over the
-     * death screen is supposed not to be.
-     */
-    if (codeLift.inTheCorridor(died.x, died.z)) {
-      storageRoom.scare.reset();
-      codeLift.backToTheCar();
-      const back = codeLift.atTheCar;
-      player.teleport({ position: back.position, yaw: back.yaw, pitch: 0 });
-      // Out of sight until you walk out of the car again, which is what arms
-      // it: the corridor's own trigger does that and it has just been rewound.
-      storageRoom.beast.lurk();
-      setObjective('Get to the window');
-      return;
-    }
-    if (splitHalls.contains(died.x, died.z) || codeLift.contains(died.x, died.z)) {
-      /**
-       * The shot first, and it is not optional.
-       *
-       * What kills you is the jumpscare, and while it is playing it owns the
-       * camera *and* the creature — it puts the thing where the lens wants
-       * it every frame. Restarting without winding it back therefore put a
-       * beast at the breach for exactly one frame, after which the shot that
-       * was still running dragged it back to where it had caught you:
-       * measured at seventy-six metres away on a respawn meant to be eleven.
-       * The shed's branch gets this for free inside storageRoom.reset; this
-       * one has to ask for it, because it must not rewind the shed.
-       */
-      storageRoom.scare.reset();
-      splitHalls.reset();
-      codeLift.reset();
-      const back = splitHalls.entry;
-      player.teleport({ position: back.position, yaw: back.yaw, pitch: 0 });
-      storageRoom.beast.restartAt(
-        // Twenty metres back up the hall, which measures as about thirteen
-        // by the time you have control: it starts at three metres a second
-        // and spends the first instants of the restart getting up to speed.
-        // Eleven gave a respawn at six and a half, which is a second and a
-        // half of grace and reads as being killed by the checkpoint.
-        new THREE.Vector3(back.position[0], back.position[1] + 3.2, back.position[2] + 20)
-      );
-      setObjective('Climb the fall');
-      return;
-    }
-
-    /**
-     * Killed in the shed, or in the hall past it: back to the button with the
-     * machine already talking, one second before the screen tears.
+     * One rule for two hundred metres, and it is the rule that was asked for
+     * twice. There were three checkpoints here — the lift's bottom corridor,
+     * the breach at the foot of the climb, and the shed — each one winding
+     * back only what was in front of it, on the reasoning that being sent to
+     * the top of the building for a death sixteen metres from the window is
+     * ninety seconds of ground you have already covered. That reasoning is
+     * still true and it is still written down here, because it is the thing
+     * to undo if this turns out to be too much: the two middle branches read
+     * `codeLift.inTheCorridor(died)` and `splitHalls.contains(died)`, and each
+     * reset only its own rooms and restarted the creature a measured distance
+     * behind you.
      *
-     * It used to put you at the door, which is thirty-six metres of dark shed,
-     * a button, a lamp sequence and five lines of monologue away from the
-     * thing you actually died to. None of that is the chase and all of it is
-     * on rails the second time. So the room is wound back and then wound
-     * straight forward again to the last word spoken — `skipToChase` is
-     * exactly that, and already existed for the scene jump — with you standing
-     * at the button where you would have been when you pressed it.
+     * What it costs now is the whole route — the shed, the hall, the climb,
+     * three junctions, eight arrows and the ride — and what it buys is that
+     * every death in this stretch gives you back the same thing, which is the
+     * moment the machine comes apart. A retry that starts somewhere other
+     * than the start of the set piece is a retry at a checkpoint; this is a
+     * retry at the beginning.
      *
-     * The objective and the one instruction come from `startChase`, which is
-     * also what slams the door behind you, drops the roof two and nine tenths
-     * of a second later and says "Run." That is the whole of the first run's
-     * opening, which is the point: what you get back is the set piece, not the
-     * walk up to it.
+     * Every room between here and the window is wound back, not just the
+     * shed. The lift goes with them, which means the combination is wiped and
+     * has to be entered again: a car sitting at the bottom with the code
+     * spent is a route you cannot walk a second time.
      */
     if (storageRoom.isChasing) {
+      // The shot first, and it is not optional: while the jumpscare is playing
+      // it owns the camera *and* the creature, and a restart that leaves it
+      // running drags the thing back to wherever it caught you. This comes
+      // free inside storageRoom.reset, which is why it is not a line of its
+      // own — see the note on it there.
       storageRoom.reset();
       transferHall.reset();
+      splitHalls.reset();
+      codeLift.reset();
       const back = storageRoom.atThePress;
       player.teleport({ position: back.position, yaw: back.yaw, pitch: 0 });
       storageRoom.skipToChase();

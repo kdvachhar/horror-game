@@ -891,6 +891,21 @@ function bucketWithYou() {
 }
 
 /**
+ * And the same thing for the two jumps that land past the point where you
+ * lose it: in the lobby, on the near side of the rock, still coming.
+ *
+ * Following, not waiting, because what it is doing down there is trying —
+ * it walks at the bank, hops at it three times and stands. A bucket parked
+ * tidily in a corner is a bucket that decided to stay.
+ */
+function bucketBehindTheBank() {
+  const [x, y, z] = splitHalls.atTheLift.position;
+  friend.spawn(new THREE.Vector3(x, y, z));
+  friend.collect();
+  followWanted = true;
+}
+
+/**
  * Your friend comes round in there with you.
  *
  * It walked through that door at your heels and the voice said it was going to
@@ -1469,7 +1484,10 @@ const SCENES = [
       pastTheChase();
       const at = codeLift.entry;
       player.teleport({ position: at.position, yaw: at.yaw, pitch: 0 });
-      bucketWithYou();
+      // Not with you. Anybody standing in this car walked over the rock in
+      // the lobby to get here and left the bucket on the other side of it,
+      // so that is where the jump puts it. See BANK in splitHalls.js.
+      bucketBehindTheBank();
       setObjective('Work the pad');
     },
   },
@@ -1481,7 +1499,7 @@ const SCENES = [
       codeLift.sendDown();
       const at = codeLift.atTheWindow;
       player.teleport({ position: at.position, yaw: at.yaw, pitch: 0 });
-      bucketWithYou();
+      bucketBehindTheBank();
       setObjective('Get to the window');
     },
   },
@@ -1800,7 +1818,25 @@ renderer.setAnimationLoop((time) => {
   const driveOnly =
     gauntlet.contains(friend.position.x, friend.position.z) ||
     (giantHall.lift.holds(friend.position) && !giantHall.lift.pairDoor.isOpen);
-  friend.setRecallAllowed(!driveOnly);
+  /**
+   * And the one place it is meant to be left behind.
+   *
+   * There is a bank of rock across the lift lobby with a low spot in it that
+   * you step over and the bucket cannot — see BANK in splitHalls.js. Nothing
+   * about that works if the rescue is still armed: it would hop at the rock
+   * three times, give itself up as stuck, and be put down beside you in the
+   * car, which is the game taking the one loss in it back.
+   *
+   * So the rescue is off for exactly as long as you are over the rock and it
+   * is not. Everything else about it is unchanged — it is still following
+   * you, it still walks up to the rock and tries — and the moment is that it
+   * is still trying when the doors shut.
+   */
+  const cutOff =
+    friend.isActive &&
+    splitHalls.pastTheBank(player.position) &&
+    !splitHalls.pastTheBank(friend.position);
+  friend.setRecallAllowed(!driveOnly && !cutOff);
   if (driveOnly && friend.isFollowing) friend.setFollowing(false);
   /**
    * The bucket comes with you through the two-body door.

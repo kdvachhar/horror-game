@@ -197,6 +197,23 @@ const URGENT_FOLLOW = 1.5;
 
 /** Hops it may take without getting anywhere before it stops trying. */
 const HOPS_BEFORE_GIVING_UP = 3;
+/**
+ * And how long it stands there before trying again, which the cap above
+ * turned out to need.
+ *
+ * The cap is cleared by covering ground, on the reasoning that a bucket that
+ * has got somewhere has earned another three tries. A bucket hopping at a
+ * wall covers ground: it comes off the face sideways, half a metre at a
+ * time, and that clears the counter and buys it three more — for ever. It
+ * was academic until there was somewhere it is *meant* to fail, and then it
+ * was fifty-nine clangs during an eleven second lift ride, from a thing that
+ * is supposed to be standing behind a rock watching you go.
+ *
+ * Six seconds, and it is a rest rather than an end. It never gives up on you
+ * permanently, which would be a different and worse animal; it just stops
+ * being a drum kit about it.
+ */
+const HOP_REST = 6;
 
 const RECALL_DIR = new THREE.Vector3();
 const EYE_FORCE = new THREE.Vector3();
@@ -327,6 +344,9 @@ export function createFriend(scene) {
   let listenerLevel = 1;
   let lastStep = 0;
   let stepCooldown = 0;
+  /** Where the feet were last frame, for telling walking from leaning. */
+  let footX = 0;
+  let footZ = 0;
   /** Riding something that says where it is. See sit(). */
   let seated = false;
 
@@ -369,6 +389,8 @@ export function createFriend(scene) {
   // Hops taken since it last covered any ground. Cleared by moving, not by
   // hopping, or it would never reach the cap.
   let hopsSinceProgress = 0;
+  /** Seconds left of standing there before it tries again. See HOP_REST. */
+  let hopRest = 0;
   // Where it was last frame, for measuring ground covered rather than intent.
   let lastX = 0;
   let lastZ = 0;
@@ -581,10 +603,15 @@ export function createFriend(scene) {
     // until you come back for it. Three tries is enough for anything a hop was
     // going to fix; after that it waits, and only covering ground earns it the
     // right to try again.
-    if (stuckTimer > 0.7 && grounded && hopsSinceProgress < HOPS_BEFORE_GIVING_UP) {
+    hopRest = Math.max(0, hopRest - delta);
+    if (stuckTimer > 0.7 && grounded && hopRest <= 0) {
       velocity.y = HOP_IMPULSE;
       stuckTimer = 0;
       hopsSinceProgress++;
+      if (hopsSinceProgress >= HOPS_BEFORE_GIVING_UP) {
+        hopsSinceProgress = 0;
+        hopRest = HOP_REST;
+      }
       // Same sound as a jump you asked for. Without this a following bucket
       // hops in silence and then thumps on the way down, which reads as the
       // landing having come from nowhere.
@@ -1065,6 +1092,21 @@ export function createFriend(scene) {
       const speed = Math.hypot(velocity.x, velocity.z);
       walk(delta, speed);
 
+      /**
+       * What the feet are actually doing, which is not what `speed` says.
+       *
+       * resolveCollisions corrects the position and never touches the
+       * velocity, so a bucket leaning on a wall goes on accelerating into it
+       * and reports a brisk 6.5m/s while standing still. The legs can keep
+       * swinging on that — it is trying, and a bucket pressed against rock
+       * with its legs still should read as broken — but the sound cannot:
+       * `speed` alone had it walking on the spot, two steps a second,
+       * audibly, for as long as whatever it was leaning on was there.
+       */
+      const went = delta > 0 ? Math.hypot(position.x - footX, position.z - footZ) / delta : 0;
+      footX = position.x;
+      footZ = position.z;
+
       // A foot plants at each half cycle of the gait, so the step lands with
       // the leg you can watch going down rather than on a clock of its own.
       //
@@ -1073,7 +1115,7 @@ export function createFriend(scene) {
       const step = Math.floor(walkPhase / Math.PI);
       if (step !== lastStep) {
         lastStep = step;
-        if (grounded && speed > 0.5 && stepCooldown <= 0) {
+        if (grounded && speed > 0.5 && went > 0.5 && stepCooldown <= 0) {
           stepCooldown = STEP_MIN_GAP;
           playBucketStep(listenerLevel * Math.min(1, 0.45 + speed / 5));
         }

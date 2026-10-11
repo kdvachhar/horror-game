@@ -36,7 +36,11 @@ import { showNote, setObjective } from './hud.js';
  *   is long enough to be a mistake and not long enough to be a chore.
  *
  *   **The lobby**, which is where the lift is and where this file stops. See
- *   codeLift.js.
+ *   codeLift.js — and BANK, the rock across it, which is where the bucket
+ *   stops. It is the only obstacle in this building built to be passable by
+ *   one of the two bodies and not the other, and it is there so that losing
+ *   your friend is a thing you watch happen rather than a thing you notice
+ *   later.
  *
  * **It is built out of cells rather than walls**, and that is the only
  * structural idea in here worth knowing. A maze written as walls is a maze
@@ -114,6 +118,33 @@ const FALL = { wide: 18, long: 26, high: 11.6 };
  * fills a corridor exactly and is visibly being made to.
  */
 const RUN = { wide: 7.0, high: 4.6 };
+
+/**
+ * The rubble across the lobby, and it is the end of your friend's run.
+ *
+ * The bucket comes with you from the two-body door — see `keepUp` in
+ * friend.js — and the lift is the one way on it cannot take. That was always
+ * going to be true and it used to happen by accident, with the doors simply
+ * shutting on whatever had not kept up. This is the same fact, said out loud
+ * and in a place you can see it: a bank of rock across the lobby with a low
+ * spot in the middle of it, and the doors on the other side.
+ *
+ * **The two heights are the whole of it, and they are not taste.** You step
+ * 0.9 for free and the bucket steps 0.25 and hops 0.66 — five and a bit
+ * metres a second into a 5.4 impulse against 22 of gravity, which is as high
+ * as that thing will ever get off the ground. So the saddle is at 0.8: over
+ * it without breaking stride for you, and a tenth of a metre more than
+ * everything the bucket has for it. The crest either side is 1.4, which is
+ * past your own free step, so the saddle is the way over rather than a
+ * suggestion.
+ *
+ * `deep` is only two metres because this is a thing you cross, not a thing
+ * you climb: the climb out of the fall is eight pads and twenty metres, and
+ * a second one of those at the end of the maze would be the maze having a
+ * staircase in it. `apron` is the floor left in front of the lift doors on
+ * the far side, which is where you stand to watch it not follow you.
+ */
+const BANK = { deep: 2.0, apron: 2.0, saddle: 2.6, low: 0.8, high: 1.4 };
 
 /** How high the upper floor sits over the hall you came from. */
 const LIFT_UP = CLIMB.pads[CLIMB.pads.length - 1][2];
@@ -625,6 +656,107 @@ export function createSplitHalls({ scene, doorway, player }) {
     );
   }
 
+  // ------------------------------------------------------- the lobby bank ---
+
+  /**
+   * The rock in front of the lift, built the way the heap is built.
+   *
+   * Three masses across the lobby — crest, saddle, crest — each a box with a
+   * `top` and a `bottom`, and the `bottom` is the thing to get right. This
+   * deck is eighty metres up over four other rooms, and a box without one is
+   * solid at every height below itself: the heap in the chamber can go
+   * without because the chamber floor is the bottom of the building, and
+   * these cannot. Same lesson as the floors above, third time it is written
+   * down.
+   *
+   * Then a body under each surface, because a collider with no mesh is an
+   * invisible staircase, and stones over every edge a camera can reach.
+   */
+  const bankZ0 = lobby.z0 + BANK.apron;
+  const bankZ1 = bankZ0 + BANK.deep;
+  /** The line something is on one side or the other of. See `pastTheBank`. */
+  const bankLine = (bankZ0 + bankZ1) / 2;
+
+  for (const [bx0, bx1, rise] of [
+    [lobby.x0, liftX - BANK.saddle / 2, BANK.high],
+    [liftX - BANK.saddle / 2, liftX + BANK.saddle / 2, BANK.low],
+    [liftX + BANK.saddle / 2, lobby.x1, BANK.high],
+  ]) {
+    const top = deck + rise;
+    solid(bx0, bx1, bankZ0, bankZ1, { top, bottom: deck });
+
+    const mass = new THREE.Mesh(new THREE.BoxGeometry(bx1 - bx0, rise, BANK.deep), rock);
+    mass.position.set((bx0 + bx1) / 2, deck + rise / 2, bankLine);
+    mass.castShadow = true;
+    mass.receiveShadow = true;
+    group.add(mass);
+
+    /**
+     * And then enough rock on it that it is rock.
+     *
+     * The first cut was the mass and a sprinkle of small stones half buried
+     * in it, which from the lobby door read as a poured concrete bench with
+     * gravel on it. A heap is made of its silhouette: the stones that matter
+     * are the ones standing proud of the top edge, big enough to break the
+     * line of the box, and there have to be enough of them that the line is
+     * broken all the way along.
+     *
+     * Two bands and a cap. The faces get stones down their height, the lip
+     * gets them sitting a hand's width under the top so they stand over it,
+     * and the middle of the saddle gets none at all: that is where your feet
+     * go, and the one thing this must not do is make the way over look like
+     * it is not the way over.
+     */
+    const span = bx1 - bx0;
+    const mid = (bx0 + bx1) / 2;
+    const stones = Math.max(9, Math.round(span * 4.5));
+    for (let i = 0; i < stones; i++) {
+      const band = i % 3;
+      const ox = (random() - 0.5) * span * 0.98;
+      // The saddle's own crossing, which stays clear — on its faces as well
+      // as on its top. A boulder standing against the front of the one low
+      // spot in the room is a low spot nobody reads as one.
+      if (rise === BANK.low && Math.abs(ox) < BANK.saddle * 0.34) continue;
+      const big = 0.5 + random() * 0.6;
+      if (band === 2) {
+        stone(mid + ox, deck + rise - 0.16 - random() * 0.22, bankLine + (random() - 0.5) * BANK.deep * 0.7, big);
+      } else {
+        stone(
+          mid + ox,
+          deck + 0.2 + random() * (rise - 0.1),
+          bankLine + (band ? 1 : -1) * (BANK.deep / 2 - 0.1),
+          big
+        );
+      }
+    }
+  }
+
+  // And a scatter either side of it on the floor, because rock that stops in
+  // a straight line across a room is rock that was placed.
+  for (let i = 0; i < 18; i++) {
+    const side = i % 2 ? 1 : -1;
+    stone(
+      liftX + (random() - 0.5) * (lobby.x1 - lobby.x0) * 0.92,
+      deck + random() * 0.22,
+      bankLine + side * (BANK.deep / 2 + 0.3 + random() * 1.9),
+      0.3 + random() * 0.5
+    );
+  }
+
+  /**
+   * A painted edge on the low spot.
+   *
+   * The same stripe as every other edge in this building you are meant to
+   * put a foot on, and here it is load-bearing twice: the lobby is lit by
+   * one lamp, an unlit rock face reads as a wall rather than a step, and the
+   * whole beat only works if crossing this never looks like a puzzle. You
+   * are supposed to go over it without thinking. The thing behind you is not.
+   */
+  const notch = new THREE.Mesh(new THREE.PlaneGeometry(BANK.saddle * 0.9, 0.16), hazard);
+  notch.rotation.x = -Math.PI / 2;
+  notch.position.set(liftX, deck + BANK.low + 0.01, bankZ1 - 0.12);
+  group.add(notch);
+
   // ------------------------------------------------------------ the fitting ---
 
   /**
@@ -866,10 +998,27 @@ export function createSplitHalls({ scene, doorway, player }) {
       return { x: liftX, y: deck, z: lobby.z0, width: LIFT_DOOR.wide, height: LIFT_DOOR.high };
     },
 
-    /** Standing in the lobby, facing the lift. */
+    /**
+     * Standing in the lobby, facing the lift — on the near side of the rock,
+     * which is where anything that is not you ends its run. See BANK.
+     */
     get atTheLift() {
-      return { position: [liftX, deck, lobby.z0 + 3.0], yaw: 0 };
+      return { position: [liftX, deck, bankZ1 + 1.6], yaw: 0 };
     },
+
+    /**
+     * Which side of the lobby's rubble something is on.
+     *
+     * The lift side is the far side, and it is the one thing in this
+     * building the bucket is not getting to. Read by the rescue in main.js:
+     * once you are over this and it is not, giving up and teleporting it to
+     * you would undo the only moment in the game where you lose it.
+     *
+     * A plain z test, and it holds past the lobby as well — everything on
+     * the far side of this line is the car, the shaft and the last corridor,
+     * and nothing else in the building reaches that far back.
+     */
+    pastTheBank: (at) => at.z < bankLine,
 
     /** Every pad of the climb, for a harness that has to jump them. */
     get pads() {

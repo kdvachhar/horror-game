@@ -633,9 +633,13 @@ export function createSplitHalls({ scene, doorway, player }) {
    * Every point light in this game is paid for by every room in it: three.js
    * shades one global list, so a lamp here is a lamp on the frame cost of the
    * first hall. The building is already carrying seventy of them. So this
-   * whole section — a chamber and a hundred metres of corridor — gets four,
-   * and everything else is unlit emissive, which costs nothing and is this
-   * building's standing answer to "it has to be findable in the dark".
+   * whole section — a chamber and a hundred metres of corridor — is lit by
+   * nine, with the membership gate below keeping them out of the scene until
+   * you are nearly in here, and everything else is unlit emissive, which
+   * costs nothing and is this building's standing answer to "it has to be
+   * findable in the dark".
+   *
+   * It was four, and four was wrong: see the measurements under `LAMP`.
    *
    * The strips are what you actually navigate by. One down the length of every
    * corridor, at the ceiling, lit — so the route reads as a lit line ahead of
@@ -659,7 +663,8 @@ export function createSplitHalls({ scene, doorway, player }) {
   for (const cell of cells) if (cell !== fall) stripIn(cell);
 
   /**
-   * Five of them, and the numbers are the building's and not a guess.
+   * The chamber's two first, and their numbers are the building's and not a
+   * guess.
    *
    * The first cut had one lamp in the chamber at 30, which on a room eighteen
    * by twenty-six by eleven and a half is nothing: the screenshot of the
@@ -676,16 +681,83 @@ export function createSplitHalls({ scene, doorway, player }) {
    * [x, y, z, how bright, how far]
    */
   const lamps = [];
-  for (const [x, y, z, watt, reach] of [
-    [axis, low + FALL.high - 1.6, head - 6, 120, 34],
-    [axis, low + FALL.high - 1.6, mouth + 7, 120, 34],
-    [axis, deck + RUN.high - 0.4, mouth - 16, 44, 20],
-    [axis - 9, deck + RUN.high - 0.4, mouth - 32, 44, 20],
-    [liftX, deck + RUN.high - 0.4, mouth - 50, 44, 20],
-  ]) {
+  const fit = (x, y, z, watt, reach) => {
     const lamp = new THREE.PointLight(0xc2cbb0, 0, reach, 1.5);
     lamp.position.set(x, y, z);
     lamps.push({ lamp, watt });
+  };
+  fit(axis, low + FALL.high - 1.6, head - 6, 120, 34);
+  fit(axis, low + FALL.high - 1.6, mouth + 7, 120, 34);
+
+  /**
+   * And one in every corridor, which is the correction.
+   *
+   * Three lamps for a hundred and thirty metres of maze put the light where
+   * the first junction is and nowhere else, and I had written that down as
+   * restraint. It is not restraint, it is three quarters of the route being
+   * unlit, and it does not survive being measured. Mean luminance of the
+   * frame, read off the back buffer at nine standpoints:
+   *
+   *   the first split            0.043      the second split    0.024
+   *   its left branch            0.040      its right branch    0.005
+   *   the third split            0.0002     its left branch     0.005
+   *   the lift                   0.020      two of three dead ends under 0.007
+   *
+   * The third junction measured two ten-thousandths, which is not a dark
+   * corridor, it is a black screen with a strip of emissive in it. A maze you
+   * navigate by one unlit line on the ceiling is not atmospheric, it is a
+   * corridor you cannot see the walls of — and this is the stretch with the
+   * thing in it, which you are supposed to be able to look at.
+   *
+   * So every cell gets at least one, and the long cross-aisles get a lamp
+   * every `span` metres of their length. `span` is the dial: at 24 it is one
+   * per corridor and seven in total, at 16 it is ten. Each one is the
+   * chamber's lamp a little dimmed rather than the old corridor's at 44 —
+   * these are seven metres wide and four and a half high, and 44 over a reach
+   * of 20 lights about a third of that.
+   *
+   * The same nine standpoints after, against the chamber's 0.111 as the one
+   * place in here whose light was already right:
+   *
+   *   the first split            0.117      the second split    0.139
+   *   its left branch            0.193      its right branch    0.183
+   *   the third split            0.100      its left branch     0.096
+   *   the lift                   0.117      the dead ends       0.047 to 0.179
+   *
+   * Which is the corridors sitting about where the chamber sits, give or take
+   * the ones where a lamp is close to a wall, and the darkest thing left in
+   * the maze being a dead end — where walking into the dark and finding
+   * nothing is the point.
+   *
+   * **And it costs 0.9 ms.** The whole of this section's light, all nine,
+   * measured by pulling them out of the scene graph mid-run: 18.5 ms with and
+   * 16.6 without, at the first junction. The warning at the top of this block
+   * is about a lamp here being paid for by rooms a hundred and fifty metres
+   * away — which is still true, and is what the membership gate below is for —
+   * but the marginal cost of a lamp *in the room you are standing in* is two
+   * or three tenths of a millisecond, not the one and a half the earlier
+   * measurement implies. That measurement was taken in the first hall, which
+   * fills the screen with lit geometry; the cost is per fragment, so the same
+   * lamp is worth five times as much there as it is in a corridor.
+   */
+  const LAMP = { watt: 70, reach: 28, span: 24 };
+  for (const cell of cells) {
+    if (cell === fall) continue;
+    const wide = cell.x1 - cell.x0;
+    const long = cell.z1 - cell.z0;
+    const alongZ = long >= wide;
+    const length = alongZ ? long : wide;
+    const n = Math.max(1, Math.round(length / LAMP.span));
+    for (let i = 0; i < n; i++) {
+      const t = (i + 0.5) / n;
+      fit(
+        alongZ ? (cell.x0 + cell.x1) / 2 : cell.x0 + t * wide,
+        deck + RUN.high - 0.4,
+        alongZ ? cell.z0 + t * long : (cell.z0 + cell.z1) / 2,
+        LAMP.watt,
+        LAMP.reach
+      );
+    }
   }
 
   /**

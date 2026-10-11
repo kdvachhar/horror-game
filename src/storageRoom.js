@@ -1205,6 +1205,24 @@ export function createStorageRoom({ scene, doorway, player, camera, death, clear
       return { position: [near + 2.2, floorY, midZ], yaw: -Math.PI / 2 };
     },
 
+    /**
+     * At the button, the way you are standing when you have just pressed it.
+     *
+     * Which is where you go when it kills you. Everything before this moment
+     * in the room is a walk down a dark shed and a machine clearing its
+     * throat: thirty-six metres, a lamp sequence and five lines of a thing
+     * explaining itself, and none of it is the part you died to. The part you
+     * died to starts when the screen tears, and that is what this is the
+     * front row of.
+     *
+     * A metre and a half short of the button and facing it, so you are
+     * looking at the machine when it comes apart — and clear of the apron,
+     * which the roof is about to come down on. See `HOLD` and boulderDrop.js.
+     */
+    get atThePress() {
+      return { position: [buttonX - 1.6, floorY, midZ], yaw: -Math.PI / 2 };
+    },
+
     /** Whether it has been switched on, for a harness and for whatever asks. */
     get isAwake() {
       return awake;
@@ -1257,6 +1275,18 @@ export function createStorageRoom({ scene, doorway, player, camera, death, clear
       wake();
       since = WAKE.speak + 0.01;
       said = true;
+      /**
+       * And you have already been in here, which is not a detail.
+       *
+       * `entered` is what gates the note and the objective you get for
+       * walking in — and it is set inside `update`, which runs *after*
+       * whoever called this has set an objective of their own. A reset
+       * followed by this therefore put "Find the switch" on the screen one
+       * frame into a chase, over the top of the "Run" that `startChase`
+       * had just written, and the note about the racking in the dark played
+       * while something was coming down the aisle at you.
+       */
+      entered = true;
       startChase();
     },
 

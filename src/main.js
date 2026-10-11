@@ -340,12 +340,30 @@ const death = createDeathScreen({
       return;
     }
 
+    /**
+     * Killed in the shed, or in the hall past it: back to the button with the
+     * machine already talking, one second before the screen tears.
+     *
+     * It used to put you at the door, which is thirty-six metres of dark shed,
+     * a button, a lamp sequence and five lines of monologue away from the
+     * thing you actually died to. None of that is the chase and all of it is
+     * on rails the second time. So the room is wound back and then wound
+     * straight forward again to the last word spoken — `skipToChase` is
+     * exactly that, and already existed for the scene jump — with you standing
+     * at the button where you would have been when you pressed it.
+     *
+     * The objective and the one instruction come from `startChase`, which is
+     * also what slams the door behind you, drops the roof two and nine tenths
+     * of a second later and says "Run." That is the whole of the first run's
+     * opening, which is the point: what you get back is the set piece, not the
+     * walk up to it.
+     */
     if (storageRoom.isChasing) {
       storageRoom.reset();
       transferHall.reset();
-      const back = storageRoom.entry;
+      const back = storageRoom.atThePress;
       player.teleport({ position: back.position, yaw: back.yaw, pitch: 0 });
-      setObjective('Find the switch');
+      storageRoom.skipToChase();
       return;
     }
 

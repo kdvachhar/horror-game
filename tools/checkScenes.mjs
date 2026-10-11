@@ -23,8 +23,17 @@
 import { launchBrowser, preparePage, bootGame } from './browser.mjs';
 
 const URL = process.env.GAME_URL ?? 'http://localhost:5173/';
-/** Generous: the world is about 200m across and the shaft is 76 tall. */
-const BOUNDS = { x: 200, y: 120, z: 200 };
+/**
+ * Generous, and it has had to grow once.
+ *
+ * It was 200 on every axis, with a comment saying the world was about 200m
+ * across and the shaft 76 tall. Both stopped being true when the far end of
+ * the building went in: the corridor past the lift reaches -215 on z, so the
+ * jump to it failed this check by being correct. A sanity box is for catching
+ * a scene that drops you into the void, not for holding the level designer to
+ * last month's floor plan.
+ */
+const BOUNDS = { x: 220, y: 140, z: 300 };
 
 const browser = await launchBrowser();
 

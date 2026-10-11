@@ -44,6 +44,21 @@ const HIGH = 6.4;
 const LONG = 42;
 
 /**
+ * The hole in the far end, which used to be a wall.
+ *
+ * Past the shutter this hall was the frontier of the building: a short landing
+ * and a flat wall, because there was nothing to put behind it. There is now.
+ *
+ * It is a breach and not a door, and the difference is the whole of what the
+ * next hour of this building is. A door is a thing somebody fitted, which
+ * means somebody meant you to be able to leave; six metres of broken wall with
+ * the rock still lying in it means the way on is a thing that happened to the
+ * building rather than a thing it offers. You have just been chased through a
+ * wall by something that came out of one. This is the room agreeing with that.
+ */
+const ONWARD = { wide: 6.0, high: 4.2 };
+
+/**
  * The shutter, and why it is a cheat.
  *
  * The thing behind you is slower than a run and faster than a walk, so a
@@ -59,8 +74,22 @@ const LONG = 42;
  *
  * It is on a trigger and not on a timer, because a timer would be a second
  * race you cannot see the clock of.
+ *
+ * **Both numbers were wrong and the arithmetic says so.** They were a trip of
+ * 9 and a fall of 1.15, and you run at 5.6: nine metres takes 1.61 seconds,
+ * which is half a second after the shutter has finished landing. Nobody has
+ * ever got under this. It did not show for two weeks because the far side of
+ * it was a blank wall — being stopped by the shutter and being stopped by the
+ * end of the building are the same experience, right up to the moment there
+ * is a building on the other side.
+ *
+ * So: a longer fall and a shorter run at it. Seven metres is 1.25 seconds,
+ * by which point the slab is a third of the way down and there are four
+ * metres of air under it; it lands two thirds of a second after you are
+ * through. The other half of the fix is that the shutter's collider now
+ * follows the slab — see `bottom`, below.
  */
-const SHUTTER = { trip: 9.0, fall: 1.15, thick: 0.42 };
+const SHUTTER = { trip: 7.0, fall: 1.9, thick: 0.42 };
 
 const WALL_TINT = '#3c4039';
 const FLOOR_TINT = '#32342d';
@@ -146,7 +175,23 @@ export function createTransferHall({ scene, doorway, player, onSeal }) {
   const mid = floorY + HIGH / 2;
   panel(wallOf(LONG, HIGH), LONG, HIGH, minX, mid, midZ, Math.PI / 2);
   panel(wallOf(LONG, HIGH), LONG, HIGH, maxX, mid, midZ, -Math.PI / 2);
-  panel(wallOf(WIDE, HIGH), WIDE, HIGH, midX, mid, foot, 0);
+
+  /**
+   * The far end, in three pieces round the breach.
+   *
+   * Same shape as the near end and for the same reason: two returns and a
+   * head. What is left of a thirteen metre wall with a six metre hole in it.
+   */
+  const outLow = midX - ONWARD.wide / 2;
+  const outHigh = midX + ONWARD.wide / 2;
+  for (const [w, h, px, py] of [
+    [outLow - minX, HIGH, (minX + outLow) / 2, mid],
+    [maxX - outHigh, HIGH, (outHigh + maxX) / 2, mid],
+    [ONWARD.wide, HIGH - ONWARD.high, midX, floorY + ONWARD.high + (HIGH - ONWARD.high) / 2],
+  ]) {
+    if (w <= 0.001 || h <= 0.001) continue;
+    panel(wallOf(w, h), w, h, px, py, foot, 0);
+  }
 
   /**
    * The near end, in three pieces round the way in.
@@ -178,14 +223,16 @@ export function createTransferHall({ scene, doorway, player, onSeal }) {
   for (const [a, b, c, d] of [
     [minX - 0.3, minX, foot - 0.3, head + 0.3],
     [maxX, maxX + 0.3, foot - 0.3, head + 0.3],
-    [minX - 0.3, maxX + 0.3, foot - 0.3, foot],
+    [minX - 0.3, outLow, foot - 0.3, foot],
+    [outHigh, maxX + 0.3, foot - 0.3, foot],
     [minX, inLow, head, head + 0.3],
     [inHigh, maxX, head, head + 0.3],
   ]) {
     solid(a, b, c, d, { bottom: floorY });
   }
-  // The head over the way in, so the opening has a top from this side too.
+  // The heads over the two openings, so each has a top from this side too.
   solid(inLow, inHigh, head, head + 0.3, { bottom: floorY + doorway.height });
+  solid(outLow, outHigh, foot - 0.3, foot, { bottom: floorY + ONWARD.high });
 
   // ----------------------------------------------------------- the fitting ---
 
@@ -261,27 +308,34 @@ export function createTransferHall({ scene, doorway, player, onSeal }) {
   let open = 1;
   shutter.position.y = HIGH;
 
-  colliders.push({
+  /**
+   * And it blocks what it covers, which it did not.
+   *
+   * This was one box from the floor to the ceiling, switched on the instant
+   * the shutter was told to move — so a slab that was visibly six metres in
+   * the air was, to anything walking at it, a wall. That is the other half of
+   * why nobody ever got under it.
+   *
+   * `bottom` is the underside of the slab and it is written every frame from
+   * the same number that draws it, so the hole under a half-shut shutter is
+   * exactly as tall as it looks. A box with a `bottom` and no `top` is solid
+   * from there upward and nothing below it — see collision.js — which is the
+   * definition of a thing hanging from a ceiling.
+   */
+  const gateBox = {
     minX,
     maxX,
     minZ: gateZ - SHUTTER.thick / 2,
     maxZ: gateZ + SHUTTER.thick / 2,
-    bottom: floorY,
-    top: floorY + HIGH,
-    enabled: () => open < 0.99,
-  });
+    bottom: floorY + HIGH,
+  };
+  colliders.push(gateBox);
 
-  // Past it: a short landing and nothing yet. The frontier of the building.
-  const beyond = new THREE.Mesh(
-    new THREE.PlaneGeometry(WIDE, 0.1),
-    new THREE.MeshBasicMaterial({ color: '#0a0b09', toneMapped: false, fog: false })
-  );
-  beyond.position.set(midX, floorY + 0.05, foot + 0.2);
-  group.add(beyond);
 
   const inside = (x, z) => x > minX && x < maxX && z > foot && z < head;
 
   let sealed = false;
+  let stopped = false;
   let entered = false;
   let lit = 0;
   let said = false;
@@ -296,6 +350,11 @@ export function createTransferHall({ scene, doorway, player, onSeal }) {
     /** Through the hole and standing in it, for a scene jump. */
     get entry() {
       return { position: [midX, floorY, head - 2.6], yaw: 0 };
+    },
+
+    /** The breach in the far end, for whatever is built on the other side. */
+    get onward() {
+      return { x: midX, y: floorY, z: foot, width: ONWARD.wide, height: ONWARD.high };
     },
 
     /** The hole, for whatever is coming through it. */
@@ -320,11 +379,13 @@ export function createTransferHall({ scene, doorway, player, onSeal }) {
 
     reset() {
       sealed = false;
+      stopped = false;
       entered = false;
       said = false;
       lit = 0;
       open = 1;
       shutter.position.y = HIGH;
+      gateBox.bottom = floorY + HIGH;
       for (const lamp of lamps) lamp.intensity = 0;
       for (const { strip } of strips) strip.material.color.copy(DEAD_STRIP);
     },
@@ -352,13 +413,31 @@ export function createTransferHall({ scene, doorway, player, onSeal }) {
       if (!sealed && entered && here.z < gateZ + SHUTTER.trip && inside(here.x, here.z)) {
         sealed = true;
         playSpikeGrind(0.7);
-        onSeal?.();
       }
       if (sealed && open > 0) {
         const was = open;
         open = Math.max(0, open - delta / SHUTTER.fall);
         shutter.position.y = HIGH * open;
         if (was > 0 && open === 0) playWardDoor();
+      }
+      gateBox.bottom = floorY + HIGH * open;
+
+      /**
+       * And the thing behind you only gives up once this has shut *and* you
+       * are on the far side of it.
+       *
+       * It used to stop on the frame the shutter was triggered, which is the
+       * one arrangement that can wedge the game: a player who does not make
+       * it under ends up alive, sealed into a dead-end corridor, with the
+       * only thing that could have killed them switched off nine metres
+       * away. Now, if you are on the wrong side when it lands, it is still
+       * coming — and being caught here puts you back in the shed with the
+       * racking up and the shutter raised, which is a retry rather than a
+       * wedge. See death.onRestart in main.js.
+       */
+      if (sealed && !stopped && open === 0 && here.z < gateZ) {
+        stopped = true;
+        onSeal?.();
       }
 
       if (sealed && !said && here.z < gateZ) {

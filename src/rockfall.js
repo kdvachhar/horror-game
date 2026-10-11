@@ -68,8 +68,10 @@ const ROCK_TINT = '#4a4b44';
 const LINER_TINT = '#3c403a';
 
 /** Deterministic, because a heap of rock that is different every load cannot be
- * screenshotted, walked twice, or argued about. */
-function seeded(seed) {
+ * screenshotted, walked twice, or argued about. Exported because the climb at
+ * the far end of the building is made of the same stuff and wants the same
+ * guarantee — see splitHalls.js. */
+export function seeded(seed) {
   let s = seed >>> 0;
   return () => {
     s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
@@ -78,7 +80,7 @@ function seeded(seed) {
 }
 
 /** Pushes a polyhedron's shared vertices about so a repeated shape reads new. */
-function jitter(geometry, random, amount) {
+export function jitter(geometry, random, amount) {
   const position = geometry.attributes.position;
   const moved = new Map();
   for (let i = 0; i < position.count; i++) {

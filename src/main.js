@@ -54,6 +54,8 @@ import { createPossession } from './possession.js';
 import { createPainter } from './painter.js';
 import { createSpeechRunner } from './voice.js';
 import { updateWireCurrent } from './wire.js';
+import { createSplitHalls } from './splitHalls.js';
+import { createCodeLift } from './codeLift.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 
@@ -402,6 +404,22 @@ const transferHall = createTransferHall({
 room.colliders.push(...transferHall.colliders);
 
 /**
+ * And out of the breach in the far end of it: the collapse, the three splits,
+ * and the lift at the end of them.
+ *
+ * Three files in a chain, each hung off the last one's opening — the shed's
+ * transfer hole, the hall's breach, the lobby's lift doors — so no file in the
+ * run knows where it is in the world and moving any of them moves everything
+ * behind it. The chase ends at the hall's shutter; everything from here on is
+ * quiet, and deliberately.
+ */
+const splitHalls = createSplitHalls({ scene, doorway: transferHall.onward, player });
+room.colliders.push(...splitHalls.colliders);
+
+const codeLift = createCodeLift({ scene, doorway: splitHalls.liftDoor, player, camera });
+room.colliders.push(...codeLift.colliders);
+
+/**
  * Every room has now put its boxes in, so this is the one moment the world is
  * complete and nothing has moved yet.
  *
@@ -536,6 +554,7 @@ for (const target of controlRoom.interactions) interactions.add(target);
 // rockfall, which is on the far side of a hole only the bucket fits through.
 for (const target of giantHall.interactions) interactions.add(target);
 for (const target of storageRoom.interactions) interactions.add(target);
+for (const target of codeLift.interactions) interactions.add(target);
 
 /**
  * What you think, turning round and finding the way you came in is shut.
@@ -829,6 +848,8 @@ function resetSequences() {
   tallRoom.reset();
   storageRoom.reset();
   transferHall.reset();
+  splitHalls.reset();
+  codeLift.reset();
   handoverSaid = false;
   // The loop fires the cutscene the moment a door that has been open closes.
   // Clearing this stops a jump from immediately retriggering it underneath you.
@@ -1226,7 +1247,72 @@ const SCENES = [
       setObjective('Keep going');
     },
   },
+  {
+    label: '19 · The fall',
+    hint: 'Past the shutter, at the foot of the heap you have to climb',
+    go() {
+      pastTheChase();
+      const entry = splitHalls.entry;
+      player.teleport({ position: entry.position, yaw: entry.yaw, pitch: 0 });
+      setObjective('Climb the fall');
+    },
+  },
+  {
+    label: '20 · The splits',
+    hint: 'Up on the deck, in the mouth of the first junction',
+    go() {
+      pastTheChase();
+      const at = splitHalls.atTheFirstSplit;
+      player.teleport({ position: at.position, yaw: at.yaw, pitch: 0 });
+      setObjective('Find the way on');
+    },
+  },
+  {
+    label: '21 · The lift',
+    hint: 'In the car, with eight arrows to put in and no floors to pick from',
+    go() {
+      pastTheChase();
+      const at = codeLift.entry;
+      player.teleport({ position: at.position, yaw: at.yaw, pitch: 0 });
+      setObjective('Work the pad');
+    },
+  },
+  {
+    label: '22 · The window',
+    hint: 'Out of the lift at the bottom, looking down the last corridor',
+    go() {
+      pastTheChase();
+      codeLift.sendDown();
+      const at = codeLift.atTheWindow;
+      player.teleport({ position: at.position, yaw: at.yaw, pitch: 0 });
+      setObjective('Get to the window');
+    },
+  },
 ];
+
+/**
+ * Everything that has to have happened before the far end of the building is
+ * somewhere you can be, with nothing about where in it you end up.
+ *
+ * The same idea as reachTheTallRoom and for the same reason: four of the jumps
+ * above land past the chase, and four copies of the list that gets you there
+ * is four chances for one of them to drift.
+ *
+ * **It deliberately does not run the chase.** The first cut called
+ * skipToChase and then stopped the thing, on the theory that a jump to the
+ * far end should reproduce the world state a player would arrive in. It
+ * reproduced one more thing than that: the shed's own screen is still
+ * working through its lines when the jump lands, so every one of these
+ * scenes opened with "Run." sitting under it, and the beast's music started
+ * somewhere behind a sealed shutter. Nothing past the hall depends on any of
+ * it — the corridors are geometry and the lift is a lock — so the honest
+ * setup for "look at the far end of the building" is to not have had a chase
+ * at all.
+ */
+function pastTheChase() {
+  reachTheTallRoom();
+  giantHall.lift.parkAtTop();
+}
 
 /**
  * And every hole in the tall room, which is a different kind of jump.
@@ -1511,6 +1597,10 @@ renderer.setAnimationLoop((time) => {
   // stops the thing that room let out and a frame's lag on that is a frame of
   // it standing inside a closed shutter.
   transferHall.update(delta);
+  splitHalls.update(delta);
+  // After the halls it hangs off, so a frame in which you step out of the car
+  // is a frame the corridor under it has already had.
+  codeLift.update(delta);
   // After the room that raises it. The screen's own clock is only the beat it
   // waits before it will take a key — see death.js — and that beat starts on
   // the frame the room puts it up.
@@ -1562,7 +1652,7 @@ renderer.setAnimationLoop((time) => {
 
 // Dev-only handle for poking at the scene from the console.
 if (import.meta.env.DEV) {
-  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, corpseHall, controlRoom, giantHall, tallRoom, storageRoom, transferHall, wakeUp, possession, painter, monologue, death };
+  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, corpseHall, controlRoom, giantHall, tallRoom, storageRoom, transferHall, splitHalls, codeLift, wakeUp, possession, painter, monologue, death };
   window.game.__tvLines = TV_LINES;
   /**
    * The scene jumps, so a harness can walk all fifteen of them.

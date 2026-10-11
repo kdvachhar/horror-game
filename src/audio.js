@@ -367,6 +367,44 @@ export function playButtonPress(level = 1) {
 }
 
 /**
+ * No.
+ *
+ * Two short low buzzes, falling. It is the sound a machine makes when it has
+ * understood you perfectly and is not going to do it, which is a different
+ * sound from a machine that is broken — square waves rather than noise, in
+ * time rather than ragged, and the second one lower than the first. The lift
+ * in the split halls is the only thing in the building that can refuse you.
+ *
+ * Deliberately not a klaxon. The pad is eight presses long and a wrong press
+ * costs you all eight, so this is a sound you are going to hear several times
+ * in a row, and anything with a sting on it would be unbearable by the third.
+ */
+export function playRefuse(level = 1) {
+  if (!ready() || level < 0.02) return;
+  playedCount++;
+
+  const t = context.currentTime + 0.005;
+  for (const [at, hz] of [[0, 150], [0.17, 112]]) {
+    const osc = context.createOscillator();
+    osc.type = 'square';
+    osc.frequency.value = hz;
+    const body = context.createBiquadFilter();
+    body.type = 'lowpass';
+    body.frequency.value = 900;
+    body.Q.value = 0.8;
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, t + at);
+    gain.gain.exponentialRampToValueAtTime(0.1 * level, t + at + 0.012);
+    gain.gain.setValueAtTime(0.1 * level, t + at + 0.11);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + at + 0.15);
+    osc.connect(body).connect(gain);
+    send(gain, 0.5);
+    osc.start(t + at);
+    osc.stop(t + at + 0.2);
+  }
+}
+
+/**
  * The ward door coming open: a latch letting go, then a slow hinge. The glide
  * is deliberate here — a hinge really does creak up in pitch as it turns, which
  * is the one place a swept filter is the honest thing rather than a cartoon.

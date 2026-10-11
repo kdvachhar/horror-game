@@ -858,6 +858,80 @@ export function createChaseMusic({ root: ROOT = CHASE_ROOT, tempo = [96, 56] } =
     src.stop(t + dur + 0.07);
   }
 
+  /**
+   * The horn, which is the single biggest thing separating a chase cue from a
+   * loop with a drum on it.
+   *
+   * A stack of detuned saws — root, fifth, octave — hit hard and shut off
+   * through a filter that opens on the attack and closes over the note. That
+   * envelope is the whole trick: brass is bright at the front of a note and
+   * dark by the end of it, and a sawtooth with a flat filter on it is a
+   * synthesiser playing a chord. The fifth is what makes it an announcement
+   * rather than a noise; it is the one consonant interval anywhere in this
+   * cue, and it is here because something has to be stated plainly before the
+   * semitones underneath it can be wrong about it.
+   */
+  function brass(t, freq, dur, level) {
+    const tone = context.createBiquadFilter();
+    tone.type = 'lowpass';
+    tone.frequency.setValueAtTime(380, t);
+    tone.frequency.exponentialRampToValueAtTime(1900 + pressure * 2600, t + 0.05);
+    tone.frequency.exponentialRampToValueAtTime(420, t + dur);
+    tone.Q.value = 3;
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(level, t + 0.022);
+    gain.gain.exponentialRampToValueAtTime(level * 0.55, t + dur * 0.6);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    tone.connect(gain).connect(bus);
+    for (const [mult, cents] of [
+      [2, -9],
+      [2, 9],
+      [3, -5],
+      [4, 6],
+    ]) {
+      const osc = context.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = freq * mult;
+      osc.detune.value = cents;
+      osc.connect(tone);
+      osc.start(t);
+      osc.stop(t + dur + 0.04);
+    }
+  }
+
+  /**
+   * And the thing up at the top, which is nearly inaudible and does most of
+   * the work.
+   *
+   * Three saws four octaves up, a few cents apart, held across a whole bar at
+   * a level you would not notice going in or out. It is the band a scream
+   * lives in. On its own it is a thin whine; under everything else it is the
+   * difference between a cue you are listening to and a cue that is happening
+   * to you. Only once the thing is genuinely close — there is nowhere to go
+   * after this, so it has to be the last layer to arrive.
+   */
+  function shimmer(t, freq, dur, level) {
+    const tone = context.createBiquadFilter();
+    tone.type = 'bandpass';
+    tone.frequency.value = freq * 16;
+    tone.Q.value = 1.4;
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(level, t + dur * 0.5);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    tone.connect(gain).connect(bus);
+    for (const cents of [-14, 3, 17]) {
+      const osc = context.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = freq * 16;
+      osc.detune.value = cents;
+      osc.connect(tone);
+      osc.start(t);
+      osc.stop(t + dur + 0.05);
+    }
+  }
+
   /** A metal scrape on the offbeat, once it is close. Noise, not a note. */
   function scrape(t, level) {
     const src = context.createBufferSource();
@@ -888,7 +962,22 @@ export function createChaseMusic({ root: ROOT = CHASE_ROOT, tempo = [96, 56] } =
     const beat = index % 16;
     const level = 0.1 + pressure * 0.16;
     const root = bar % 2 ? FLAT2 : ROOT;
-    const other = bar % 2 ? ROOT : FLAT2;
+    /**
+     * And the bars come in fours, which is the other half of "dramatic".
+     *
+     * The cue used to be two bars long: root, semitone, root, semitone, for
+     * as long as the chase lasted. Every layer in it was a function of how
+     * near the thing was and nothing in it was a function of *time*, so a
+     * player running at a steady distance heard one bar on repeat — which is
+     * tension, but it is flat tension, and flat tension stops being heard.
+     *
+     * Four bars, and the last one turns. The interval the drone holds against
+     * the root is the semitone for three bars and the tritone for the fourth,
+     * which is the oldest trick there is for "this is going somewhere and you
+     * will not like where" — and the horn and the riser both land on the turn.
+     */
+    const cycle = bar % 4;
+    const other = cycle === 3 ? root * 1.4142 : bar % 2 ? ROOT : FLAT2;
 
     // Eighths, always. This is the thing you hear first and last.
     if (beat % 2 === 0) pulse(t, root, 0.17, level);
@@ -909,6 +998,26 @@ export function createChaseMusic({ root: ROOT = CHASE_ROOT, tempo = [96, 56] } =
     if (pressure > 0.5 && beat === 12) riser(t, span * 4, 0.05 + pressure * 0.09);
     // Sixteenths on the run-in: the bar itself starts to hurry at the end.
     if (pressure > 0.62 && (beat === 13 || beat === 15)) pulse(t, root, 0.1, level * 0.85);
+
+    /**
+     * The horn, on the one of every bar and harder on the one of every four.
+     *
+     * It comes in almost immediately — pressure 0.08 is "it is in the room"
+     * — because the moment this cue has to sell is the moment the thing is
+     * loose, and a chase that works up to its own announcement has already
+     * missed it.
+     */
+    if (pressure > 0.08 && beat === 0) {
+      brass(t, root, span * (cycle === 3 ? 7 : 5), 0.055 + pressure * 0.1 + (cycle === 0 ? 0.03 : 0));
+    }
+    // And a second, shorter one in the middle of the bar once it is close, so
+    // the half-bar has something landing on it too.
+    if (pressure > 0.4 && beat === 8) brass(t, other, span * 3, 0.04 + pressure * 0.06);
+    // A second impact on the half, for the same reason.
+    if (pressure > 0.35 && beat === 8) impact(t, 0.1 + pressure * 0.16);
+    // The turn into the next four: a riser across the whole of the fourth bar.
+    if (pressure > 0.3 && cycle === 3 && beat === 8) riser(t, span * 8, 0.05 + pressure * 0.1);
+    if (pressure > 0.5 && beat === 0) shimmer(t, root, span * 16, 0.012 + pressure * 0.03);
   }
 
   return {
@@ -944,7 +1053,11 @@ export function createChaseMusic({ root: ROOT = CHASE_ROOT, tempo = [96, 56] } =
       glue.release.value = 0.12;
 
       const out = context.createGain();
-      out.gain.value = 1.3;
+      // Up from 1.3 with the horn and the shimmer in. The limiter above is
+      // doing more work than it was and that is the intention: a chase cue
+      // that is holding its own downbeat down is a chase cue that sounds
+      // bigger than the speaker it is coming out of.
+      out.gain.value = 1.45;
 
       bus.connect(glue).connect(out);
       // Drier than before: the level is up, and reverb on top of that is mud

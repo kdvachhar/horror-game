@@ -52,29 +52,71 @@ import { showNote, setObjective } from './hud.js';
  */
 
 /**
- * The climb, and why none of it is a jump.
+ * The climb, and every one of these is a jump.
  *
- * `rise` is two thirds of a metre against a step height of 0.9, so you walk up
- * the heap the way you walk up a kerb — no timing, no run-up, nothing to fail.
- * That is a rule the whole building keeps and it is worth saying once in the
- * one room most likely to break it: a heap of rock is exactly the shape that
- * invites a jump puzzle, and a jump puzzle is a thing you can be stuck on,
- * which is the worst possible state to be in directly after being chased.
+ * It was eight piles at two thirds of a metre — under a step's height, so it
+ * was walked, with a note here explaining at length that a jump puzzle is a
+ * thing you can be stuck on. That was the right call for a stretch with
+ * nothing behind you. There is something behind you now, and a staircase you
+ * walk up without looking is not a climb, it is a ramp with texture.
  *
- * The zigzag is 1.6 either side of the middle, which is small against piles
- * 4.4 across: consecutive steps overlap by more than a metre, so there is
- * always floor under the next one before you have left the last.
+ * So: nothing here is walkable. Every rise is 0.95 against a step height of
+ * 0.9, which is the smallest number that cannot be strolled up and the
+ * largest that is nowhere near the 1.31 a jump actually clears — the
+ * difficulty is in doing eight of them in a row with a thing in the room,
+ * not in any one of them being near the edge of what the body can do.
+ *
+ * Two of the eight are flat and 2.8 metres across instead, which is the
+ * other half of making a climb read as a climb: a run of identical hops is a
+ * rhythm you stop looking at, and one gap in the floor puts your eyes back
+ * on it.
+ *
+ * **Every gap was measured rather than reasoned about.** The envelope is
+ * v0 7.6 against gravity 22, so the apex is 1.31 and the time available to
+ * land 0.95 higher than you left is 0.53 seconds — about 2.4 metres at a
+ * realistic 4.5 metres a second, which is why no step-up here is more than
+ * 2.2 and no flat leap more than 2.8. See the harness note in the commit.
+ *
+ * Falling off is not death. You land in the rubble at the bottom and climb
+ * it again, which with the thing in the chamber is quite enough of a cost.
+ *
+ * [sideways off the middle, how far into the chamber, how high above its floor]
  */
-const CLIMB = { steps: 8, rise: 0.675, along: 2.6, aside: 1.6, wide: 4.4, deep: 3.2 };
+const CLIMB = {
+  wide: 2.8,
+  deep: 1.8,
+  pads: [
+    [0.0, 4.0, 0.95],
+    [-0.8, 6.0, 1.90],
+    [0.0, 8.0, 2.85],
+    [0.0, 10.8, 2.85],
+    [0.8, 12.8, 3.80],
+    [0.0, 14.8, 4.75],
+    [0.0, 17.6, 4.75],
+    [0.0, 19.6, 5.70],
+  ],
+};
 
 /** The chamber the heap is in. Tall, because the way out of it is five up. */
 const FALL = { wide: 18, long: 26, high: 11.6 };
 
-/** The corridors. One width, one height, everywhere. */
-const RUN = { wide: 4.0, high: 3.4 };
+/**
+ * The corridors. One width, one height, everywhere — and the width is the
+ * width of the thing that is following you, give or take.
+ *
+ * Seven across and four and a half high. The animal is eleven and a half
+ * across folded and it comes down these anyway, by crushing: see the note on
+ * `clearance` at the bottom of this file and on `cram` in screenBeast.js.
+ * Four metres, which is what these were when nothing was chasing you, put
+ * the thing at a third of its own size and read as a different, smaller
+ * monster; twelve would have let it through at full size and turned the
+ * whole maze into four more transfer halls. Seven is the number at which it
+ * fills a corridor exactly and is visibly being made to.
+ */
+const RUN = { wide: 7.0, high: 4.6 };
 
 /** How high the upper floor sits over the hall you came from. */
-const LIFT_UP = CLIMB.steps * CLIMB.rise;
+const LIFT_UP = CLIMB.pads[CLIMB.pads.length - 1][2];
 
 const WALL_TINT = '#3a3e36';
 const FLOOR_TINT = '#2f312b';
@@ -253,12 +295,13 @@ export function createSplitHalls({ scene, doorway, player }) {
    * on the same side is a rule, and a rule is a maze solved from the first
    * junction.
    */
-  const spine = run('spine', axis - RUN.wide / 2, axis + RUN.wide / 2, mouth - 14, mouth, { open: ['maxZ'] });
-  const cross1 = run('cross1', axis - 11, axis + 9, mouth - 18, mouth - 14);
-  const leg1 = run('leg1', axis - 11, axis - 7, mouth - 30, mouth - 18);
-  const cross2 = run('cross2', axis - 20, axis - 5, mouth - 34, mouth - 30);
-  const leg2 = run('leg2', axis - 9, axis - 5, mouth - 46, mouth - 34);
-  const cross3 = run('cross3', axis - 13, axis + 5, mouth - 50, mouth - 46);
+  const half = RUN.wide / 2;
+  const spine = run('spine', axis - half, axis + half, mouth - 15, mouth, { open: ['maxZ'] });
+  const cross1 = run('cross1', axis - 16.5, axis + 11, mouth - 22, mouth - 15);
+  const leg1 = run('leg1', axis - 16.5, axis - 9.5, mouth - 34, mouth - 22);
+  const cross2 = run('cross2', axis - 28, axis + 0.5, mouth - 41, mouth - 34);
+  const leg2 = run('leg2', axis - 6.5, axis + 0.5, mouth - 53, mouth - 41);
+  const cross3 = run('cross3', axis - 19, axis + 5, mouth - 60, mouth - 53);
   /**
    * The lobby, and its far wall is a wall with a hole in it rather than a
    * missing wall.
@@ -272,7 +315,7 @@ export function createSplitHalls({ scene, doorway, player }) {
    * and holes in walls are what `holes` is for — see below, where it is
    * punched.
    */
-  const lobby = run('lobby', axis - 21, axis - 13, mouth - 54, mouth - 46);
+  const lobby = run('lobby', axis - 29, axis - 19, mouth - 62, mouth - 53);
 
   const cells = [fall, spine, cross1, leg1, cross2, leg2, cross3, lobby];
 
@@ -282,6 +325,8 @@ export function createSplitHalls({ scene, doorway, player }) {
    * other side of it is somebody else's file.
    */
   const LIFT_DOOR = { wide: 2.8, high: 2.7 };
+  // Narrower than the thing chasing you by a factor of four, which is the
+  // point of it: the lift is the one way on that it cannot take.
   const liftX = (lobby.x0 + lobby.x1) / 2;
   lobby.holes = {
     minZ: [
@@ -478,52 +523,53 @@ export function createSplitHalls({ scene, doorway, player }) {
    * cheapest version of this that is not a lie.
    */
   const steps = [];
-  for (let i = 0; i < CLIMB.steps; i++) {
-    const top = low + CLIMB.rise * (i + 1);
-    const sx = axis + (i % 2 ? CLIMB.aside : -CLIMB.aside);
-    const sz = head - 4.5 - i * CLIMB.along;
-    steps.push({ top, x: sx, z: sz });
+  for (const [aside, along, top] of CLIMB.pads) {
+    const sx = axis + aside;
+    const sz = head - along;
+    const sy = low + top;
+    steps.push({ top: sy, x: sx, z: sz });
     solid(sx - CLIMB.wide / 2, sx + CLIMB.wide / 2, sz - CLIMB.deep / 2, sz + CLIMB.deep / 2, {
-      top,
+      top: sy,
     });
 
     const block = new THREE.Mesh(
-      new THREE.BoxGeometry(CLIMB.wide * 0.98, top - low, CLIMB.deep * 0.98),
+      new THREE.BoxGeometry(CLIMB.wide * 0.98, sy - low, CLIMB.deep * 0.98),
       rock
     );
-    block.position.set(sx, (low + top) / 2, sz);
+    block.position.set(sx, (low + sy) / 2, sz);
     block.castShadow = true;
     block.receiveShadow = true;
     group.add(block);
 
     /**
-     * A painted nose on the lip of every step.
+     * A painted nose on the lip of every pad.
      *
-     * The heap is rock in a chamber lit by two lamps, and a rock edge at two
-     * thirds of a metre is a thing you walk into rather than up. The paint is
-     * this building's one language for an edge you step on — see the hazard
-     * lip on the shutter — and it is the only thing in the chamber that tells
-     * you the heap is a staircase before you are standing on it.
+     * The heap is rock in a chamber lit by two lamps, and an unlit rock edge
+     * is a thing you walk into rather than jump to. The paint is this
+     * building's one language for an edge you step on — see the hazard lip
+     * on the shutter — and now that every one of these has to be jumped at,
+     * it is doing more than atmosphere: it is the only thing in the chamber
+     * that says where the next landing is while you are in the air.
      */
-    const nose = new THREE.Mesh(new THREE.PlaneGeometry(CLIMB.wide * 0.8, 0.16), hazard);
+    const nose = new THREE.Mesh(new THREE.PlaneGeometry(CLIMB.wide * 0.86, 0.18), hazard);
     nose.rotation.x = -Math.PI / 2;
-    nose.position.set(sx, top + 0.01, sz + CLIMB.deep / 2 - 0.22);
+    nose.position.set(sx, sy + 0.01, sz + CLIMB.deep / 2 - 0.18);
     group.add(nose);
 
     // Stones over the lip and along the sides, so the block has rock on every
-    // edge a camera can get to. None on the middle of the tread: that is the
-    // bit you walk on, and a boulder standing on a step is a step you trip on.
-    for (let st = 0; st < 9; st++) {
+    // edge a camera can get to. None on the middle of the tread: that is
+    // where you are landing, and a boulder on a landing is a landing missed.
+    for (let st = 0; st < 7; st++) {
       const edge = st % 3;
       const ox = edge === 0 ? (random() - 0.5) * CLIMB.wide : (st % 2 ? 1 : -1) * CLIMB.wide * 0.5;
-      const oz = edge === 0 ? CLIMB.deep * 0.52 : (random() - 0.5) * CLIMB.deep;
-      stone(sx + ox, top - 0.25 - random() * 0.45, sz + oz, 0.55 + random() * 0.7);
+      const oz = edge === 0 ? CLIMB.deep * 0.54 : (random() - 0.5) * CLIMB.deep;
+      stone(sx + ox, sy - 0.3 - random() * 0.4, sz + oz, 0.45 + random() * 0.55);
     }
   }
 
   /** The landing at the top, which is what the last step steps onto. */
   const ledgeZ0 = mouth;
-  const ledgeZ1 = steps[CLIMB.steps - 1].z - CLIMB.deep / 2 + 0.4;
+  const ledgeZ1 = steps[steps.length - 1].z - CLIMB.deep / 2 + 0.4;
   solid(axis - 5, axis + 5, ledgeZ0, ledgeZ1, { top: deck });
   const ledge = new THREE.Mesh(new THREE.PlaneGeometry(10, ledgeZ1 - ledgeZ0), floorOf(10, 4));
   ledge.rotation.x = -Math.PI / 2;
@@ -679,6 +725,20 @@ export function createSplitHalls({ scene, doorway, player }) {
 
   const inside = (x, z) =>
     cells.some((c) => x > c.x0 && x < c.x1 && z > c.z0 && z < c.z1);
+  /**
+   * The same test with a couple of metres of slack, for the thing that is
+   * bigger than the corridor it is in.
+   *
+   * Asked exactly, a creature whose middle has drifted a hand's width into a
+   * wall while it turns a corner is "nowhere", and nowhere means no opinion
+   * means it springs back to full size for a frame and crushes again on the
+   * next. Measured across one approach, the span flapped between 6.8 and
+   * 13.5 four times in eight seconds. Two metres of slack is more than any
+   * corner can push it out by and far less than the gap to the next
+   * corridor.
+   */
+  const nearCell = (x, z) =>
+    cells.some((c) => x > c.x0 - 2 && x < c.x1 + 2 && z > c.z0 - 2 && z < c.z1 + 2);
   const inCell = (cell, x, z) => x > cell.x0 && x < cell.x1 && z > cell.z0 && z < cell.z1;
 
   let lit = 0;
@@ -693,6 +753,26 @@ export function createSplitHalls({ scene, doorway, player }) {
 
     /** Whether a point is in here, for whoever needs to know. */
     contains: (x, z) => inside(x, z),
+
+    /**
+     * How much room there is at a point, for the thing that has to fit.
+     *
+     * The chamber reports its real size, which is nearly enough for the
+     * animal spread; the corridors report seven by four and a half, which is
+     * nothing like enough, and it crushes down to them. Returning null for
+     * everywhere else means "no opinion" rather than "infinite" — see `cram`
+     * in screenBeast.js, which only ever shrinks.
+     */
+    clearance(x, z) {
+      // Shaded in from the real sizes, because the thing is measured from
+      // its own bounding box and it sways three degrees while it moves: a
+      // room that reports its exact dimensions gets an animal whose
+      // fingertips are in the plaster. The chamber gives up a metre of head
+      // as well, since the creature hangs about three metres off the floor
+      // rather than standing on it.
+      if (inCell(fall, x, z)) return { wide: FALL.wide - 2, high: FALL.high - 1.0 };
+      return nearCell(x, z) ? { wide: RUN.wide - 0.5, high: RUN.high - 0.4 } : null;
+    },
 
     /** Through the breach, at the foot of the heap. */
     get entry() {
@@ -717,6 +797,11 @@ export function createSplitHalls({ scene, doorway, player }) {
     /** Standing in the lobby, facing the lift. */
     get atTheLift() {
       return { position: [liftX, deck, lobby.z0 + 3.0], yaw: 0 };
+    },
+
+    /** Every pad of the climb, for a harness that has to jump them. */
+    get pads() {
+      return steps.map((s) => ({ x: s.x, y: s.top, z: s.z }));
     },
 
     /** Every dead end, for a harness that wants to walk into all of them. */

@@ -272,6 +272,51 @@ const death = createDeathScreen({
      * on" is a fact the room owns and a copy of it in this file is a copy
      * that goes stale the first time the chase learns a new way to end.
      */
+    /**
+     * And a third place, because the chase is now the length of the
+     * building rather than the length of one hall.
+     *
+     * Sending somebody who has been caught in the lift lobby back to the
+     * shed is four minutes of ground they have already covered, most of it
+     * a climb. The breach is the checkpoint: everything past it winds back
+     * and the thing starts again from the hall behind you, which is the
+     * same relationship you had with it the first time you came through.
+     *
+     * Before the shed's branch, because during this stretch both are true
+     * — the chase is on *and* you are past the breach — and the nearer of
+     * the two is the one that should win.
+     */
+    const died = player.position;
+    if (splitHalls.contains(died.x, died.z) || codeLift.contains(died.x, died.z)) {
+      /**
+       * The shot first, and it is not optional.
+       *
+       * What kills you is the jumpscare, and while it is playing it owns the
+       * camera *and* the creature — it puts the thing where the lens wants
+       * it every frame. Restarting without winding it back therefore put a
+       * beast at the breach for exactly one frame, after which the shot that
+       * was still running dragged it back to where it had caught you:
+       * measured at seventy-six metres away on a respawn meant to be eleven.
+       * The shed's branch gets this for free inside storageRoom.reset; this
+       * one has to ask for it, because it must not rewind the shed.
+       */
+      storageRoom.scare.reset();
+      splitHalls.reset();
+      codeLift.reset();
+      const back = splitHalls.entry;
+      player.teleport({ position: back.position, yaw: back.yaw, pitch: 0 });
+      storageRoom.beast.restartAt(
+        // Twenty metres back up the hall, which measures as about thirteen
+        // by the time you have control: it starts at three metres a second
+        // and spends the first instants of the restart getting up to speed.
+        // Eleven gave a respawn at six and a half, which is a second and a
+        // half of grace and reads as being killed by the checkpoint.
+        new THREE.Vector3(back.position[0], back.position[1] + 3.2, back.position[2] + 20)
+      );
+      setObjective('Climb the fall');
+      return;
+    }
+
     if (storageRoom.isChasing) {
       storageRoom.reset();
       transferHall.reset();
@@ -382,6 +427,20 @@ const storageRoom = createStorageRoom({
    * also the one door in this building you cannot open alone, so it shutting
    * costs you nothing you could have used.
    */
+  /**
+   * How much room the thing has, wherever it has got to.
+   *
+   * Asked of every room that has an opinion, in the order it meets them.
+   * The shed itself is not in the list: it is twenty-six across and ten
+   * high and the animal is welcome to all of it, which is what the reveal
+   * needs. Everything past it is tighter than the animal and says so, and
+   * the animal folds and then crushes to suit. See `cram` in screenBeast.js.
+   *
+   * A function rather than a value because two of the three rooms it asks
+   * do not exist yet on this line — the hall hangs off this room's opening
+   * and the corridors hang off the hall's.
+   */
+  clearance: (x, z) => transferHall.clearance(x, z) ?? splitHalls.clearance(x, z),
   onChase: () => giantHall.lift.pairDoor.slam(),
   onCalm: () => giantHall.lift.pairDoor.release(),
 });
@@ -399,7 +458,23 @@ const transferHall = createTransferHall({
   scene,
   doorway: storageRoom.wayUp,
   player,
-  onSeal: () => storageRoom.beast.stop(),
+  /**
+   * The shutter no longer ends the chase, it delays it.
+   *
+   * Stopping the thing here was right while this hall was the last room in
+   * the building. It is now the fortieth metre of about two hundred, and a
+   * pursuer that gives up at the fortieth is a pursuer the rest of the
+   * route never meets.
+   *
+   * Two and four fifths of a second is what the shutter is worth instead,
+   * and that number is the lead for the whole rest of the run: the thing is
+   * held while you are on the heap, so every second of it is a second of
+   * climbing you get for free and about five metres it never gets back. At
+   * four and a half the measured gap at the lift was twenty-four metres —
+   * two junctions away, which is not a chase. At 2.8 you reach the pad with
+   * it in the corridor behind you.
+   */
+  onSeal: () => storageRoom.beast.holdAt(transferHall.gateZ, 2.8),
 });
 room.colliders.push(...transferHall.colliders);
 
@@ -416,7 +491,13 @@ room.colliders.push(...transferHall.colliders);
 const splitHalls = createSplitHalls({ scene, doorway: transferHall.onward, player });
 room.colliders.push(...splitHalls.colliders);
 
-const codeLift = createCodeLift({ scene, doorway: splitHalls.liftDoor, player, camera });
+const codeLift = createCodeLift({
+  scene,
+  doorway: splitHalls.liftDoor,
+  player,
+  camera,
+  onLeave: () => storageRoom.beast.stop(),
+});
 room.colliders.push(...codeLift.colliders);
 
 /**

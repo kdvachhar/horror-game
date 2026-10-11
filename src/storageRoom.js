@@ -231,7 +231,7 @@ const CHASE_LINES = [
  * @param onChase called once, the frame it starts: the way back shuts
  * @param onCalm  called by reset, to put the way back the way it was
  */
-export function createStorageRoom({ scene, doorway, player, camera, death, onChase, onCalm }) {
+export function createStorageRoom({ scene, doorway, player, camera, death, clearance, onChase, onCalm }) {
   const group = new THREE.Group();
   scene.add(group);
 
@@ -1049,6 +1049,11 @@ export function createStorageRoom({ scene, doorway, player, camera, death, onCha
     at: { x: far - RIG.deep - 0.2, y: floorY + RIG.screen.at, z: midZ },
     gate: { x: wayUp.x, y: wayUp.y + WAY_UP.high / 2, z: minZ },
     wreck,
+    // Handed through rather than owned: this room is open enough that it has
+    // no opinion about the thing's size, and every room that does have one is
+    // on the other side of a wall it has not come through yet. See main.js,
+    // which is the only place that knows the whole building.
+    clearance,
     onCatch() {
       scare.start(beast);
     },

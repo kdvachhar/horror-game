@@ -145,8 +145,9 @@ function arrowShape() {
  * @param doorway the lobby's lift opening: { x, y, z, width, height }
  * @param player  whose feet ride down with it
  * @param camera  for working out which arrow is being looked at
+ * @param onLeave called once, the frame the doors start to shut on the ride
  */
-export function createCodeLift({ scene, doorway, player, camera }) {
+export function createCodeLift({ scene, doorway, player, camera, onLeave }) {
   const group = new THREE.Group();
   scene.add(group);
 
@@ -768,6 +769,21 @@ export function createCodeLift({ scene, doorway, player, camera }) {
         phase = 'closing';
         since = 0;
         setObjective('Hold on');
+        /**
+         * And this is where the thing behind you stops, which is the whole
+         * job of the lift.
+         *
+         * Everything from the shed to the lobby is a route it can follow,
+         * because everything from the shed to the lobby is a hole it can
+         * fold or crush through. The car's doorway is two metres eight. It
+         * is the first opening in the building that is simply too small,
+         * and the eight arrows are the price of using it.
+         *
+         * Called on the doors starting to shut rather than on arrival at
+         * the bottom: it follows where you have been, and twelve metres of
+         * shaft is somewhere you have been.
+         */
+        onLeave?.();
       }
       return;
     }

@@ -347,6 +347,18 @@ export function createTransferHall({ scene, doorway, player, onSeal }) {
     /** Whether a point is in here, for whoever needs to know. */
     contains: (x, z) => inside(x, z),
 
+    /**
+     * How much room there is in here, for the thing that has to fit.
+     *
+     * Thirteen by six and a half, against an animal eleven and a half by
+     * five and a half once its limbs are away — so this hall is the one
+     * place in the building that is *exactly* its size, which is what it was
+     * built as. The number it hands back is what folds the limbs: see `cram`
+     * and the fold in screenBeast.js, where this used to be a hard-coded
+     * 0.88 and is now the hall saying how big it is.
+     */
+    clearance: (x, z) => (inside(x, z) ? { wide: WIDE, high: HIGH } : null),
+
     /** Through the hole and standing in it, for a scene jump. */
     get entry() {
       return { position: [midX, floorY, head - 2.6], yaw: 0 };
@@ -365,6 +377,11 @@ export function createTransferHall({ scene, doorway, player, onSeal }) {
     /** Whether the shutter has come down. */
     get isSealed() {
       return sealed;
+    },
+
+    /** Where the shutter stands, for whatever has to be held at it. */
+    get gateZ() {
+      return gateZ;
     },
 
     /** How far up the shutter is, nought to one, for a harness. */

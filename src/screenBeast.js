@@ -57,7 +57,48 @@ import { createChaseMusic, playSpikeGrind, playScreech, playMeatLunge } from './
  * at 0.65 — so this is the first time the game asks for the run key, and it
  * says so: see the note on the frame the chase starts.
  */
-const SPEED = { from: 3.0, to: 6.4, ramp: 10 };
+/**
+ * And it has two speeds, because it now has two jobs.
+ *
+ * `to` is the sprint-beating 6.4 and it is right for forty-two metres of
+ * straight hall: the whole of that room is "you cannot outrun this, you can
+ * only reach the hole first". It is catastrophic for the hundred and fifty
+ * metres that come after it. A pursuer a metre a second faster than you, over
+ * a route with a climb and three wrong turns in it, is not a chase — it is a
+ * countdown with scenery, and it ends the same way every time no matter what
+ * the player does.
+ *
+ * So the burst decays. It ramps to 6.4 in the first ten seconds, holds while
+ * the hall is being run, and settles to `cruise` by twenty-six. From there it
+ * is always behind you and always closer than it was, because everything that
+ * costs you time costs you distance: the climb, a wrong branch, a missed
+ * jump, the eight presses at the end.
+ *
+ * `cruise` is 5.1 against a sprint of 5.6, and the half a metre is the whole
+ * design of the second half of this chase. At 4.5 the first measured run
+ * never saw it closer than twenty metres across the entire route — which is
+ * a thing following you at a polite distance, not a thing chasing you. At 5.1
+ * a player who never stops arrives at the lift with it about a dozen metres
+ * back, and a player who takes one wrong branch arrives with it in the
+ * corridor behind them.
+ */
+const SPEED = { from: 3.0, to: 6.4, ramp: 10, cruise: 5.1, settle: 26 };
+
+/**
+ * How it finds its way through a building it cannot see.
+ *
+ * It follows where you have been. Every `step` metres of your travel drops a
+ * crumb, the crumbs are a queue, and it walks the queue — so it comes round
+ * corners, up the heap, into the dead end you just came out of, without
+ * anything in this file knowing that any of those exist. There is no navmesh
+ * in this game and there is not going to be one for a single pursuer.
+ *
+ * Inside `cut` it stops following the trail and comes straight at you, which
+ * matters at the end of a corridor: a thing that insists on walking your
+ * exact path when it is four metres away reads as a tram, and a thing that
+ * stops caring about the path once it can reach you reads as having seen you.
+ */
+const TRAIL = { step: 1.1, cut: 9.0, keep: 260 };
 
 /**
  * How near it has to be before it has you.
@@ -99,6 +140,8 @@ const EARSHOT = 26;
  * @param at       where it starts: the middle of the glass, in world space
  * @param gate     { x, y, z, width, height } the one hole it has to fit through
  * @param wreck    called with the beast's position, for the room to ruin
+ * @param clearance (x, z) => { wide, high } of the space there, or null for
+ *                 somewhere nothing has an opinion about. What it squeezes to.
  * @param onCatch  called the frame it has you, before the death screen
  */
 export function createScreenBeast({
@@ -110,6 +153,7 @@ export function createScreenBeast({
   at,
   gate,
   wreck,
+  clearance,
   onCatch,
 }) {
   const group = new THREE.Group();
@@ -1073,6 +1117,26 @@ export function createScreenBeast({
    */
   const LIFT = screen.high / 2 + edge + 0.2;
 
+  /**
+   * How big it is once the limbs are away: the casing, and nothing more.
+   *
+   * This is the floor of the fold and therefore the thing `clearance` is
+   * measured against — anything tighter than this and the only way through
+   * is to crush. Taken off the screen rather than written down, so it cannot
+   * drift from the television it is.
+   */
+  const FOLDED = { wide: screen.wide + edge * 2, high: screen.high + edge * 2 };
+
+  /**
+   * And how big it is with everything out, which is measured once and
+   * written down rather than taken from `span` every frame.
+   *
+   * `span` walks nine hundred vertices and zeroes the yaw to do it; it is a
+   * getter for harnesses, not a thing to call sixty times a second. These
+   * are what it reports spread, to the nearest tenth.
+   */
+  const SPREAD = { wide: 13.6, high: 13.3 };
+
   /** 'wait' | 'out' | 'hunt' | 'seized' | 'done' */
   let phase = 'wait';
   let since = 0;
@@ -1093,6 +1157,13 @@ export function createScreenBeast({
   let script = null;
   let nextLine = 0;
   let quietFor = 0;
+  /** Where you have been, oldest first. See TRAIL. */
+  let trail = [];
+  let heldUntil = null;
+  /** How crushed it currently is, eased. 1 is its own size. */
+  const cram = { x: 1, y: 1 };
+  /** And how folded, eased the same way. 0 is limbs out. */
+  let folded = 0;
   const home = new THREE.Vector3(at.x, at.y, at.z);
   const here = new THREE.Vector3().copy(home);
   const want = new THREE.Vector3();
@@ -1100,7 +1171,14 @@ export function createScreenBeast({
   /** Which side of the gate's wall a point is on. -1 is the shed, 1 is beyond. */
   const sideOf = (z) => (z < gate.z ? 1 : -1);
 
-  const speed = () => SPEED.from + (SPEED.to - SPEED.from) * Math.min(1, hunted / SPEED.ramp);
+  const speed = () => {
+    const burst = SPEED.from + (SPEED.to - SPEED.from) * Math.min(1, hunted / SPEED.ramp);
+    const easing = Math.max(
+      0,
+      Math.min(1, (hunted - SPEED.ramp) / (SPEED.settle - SPEED.ramp))
+    );
+    return burst + (SPEED.cruise - burst) * easing;
+  };
 
   const distanceTo = (p) => Math.hypot(here.x - p.x, here.z - p.z);
 
@@ -1213,6 +1291,50 @@ export function createScreenBeast({
       life.setSnarl(1);
     },
 
+    /**
+     * Something has come down in front of it: stay this side of `z` for
+     * `seconds`, then come through whatever it is.
+     *
+     * This replaces the shutter ending the chase. A barrier that stops the
+     * thing for good is the end of the game's only pursuer forty metres into
+     * a two-hundred metre run; a barrier that stops it for four seconds is a
+     * head start, which is the thing the rest of the route is built out of.
+     * It makes the noise on the way out rather than on the way in — what you
+     * hear from the far side of a shutter is not it arriving, it is it
+     * leaving.
+     */
+    holdAt(z, seconds) {
+      if (phase !== 'hunt') return;
+      heldUntil = { z, left: seconds };
+    },
+
+    /** Whether something is currently in its way. For a harness. */
+    get isHeld() {
+      return heldUntil !== null;
+    },
+
+    /**
+     * Put it back and start it again, for a death that should not cost the
+     * whole building.
+     *
+     * The trail goes with it. Crumbs are a record of where you went before
+     * you died, and a thing that respawns and then walks your last run is a
+     * thing chasing a ghost.
+     */
+    restartAt(at, yaw = FACING) {
+      phase = 'hunt';
+      hunted = 0;
+      caught = false;
+      heldUntil = null;
+      trail = [];
+      here.copy(at);
+      group.visible = true;
+      group.position.copy(here);
+      group.rotation.set(0, yaw, 0);
+      bare(true);
+      music.start();
+    },
+
     /** Put it somewhere, for as long as something else owns where it is. */
     place(at, yaw) {
       here.copy(at);
@@ -1270,6 +1392,12 @@ export function createScreenBeast({
       script = null;
       nextLine = 0;
       quietFor = 0;
+      trail = [];
+      heldUntil = null;
+      cram.x = 1;
+      cram.y = 1;
+      folded = 0;
+      group.scale.set(1, 1, 1);
       life.setSnarl(0);
       bare(false);
       group.visible = false;
@@ -1285,6 +1413,23 @@ export function createScreenBeast({
       music.update();
       if (phase === 'wait') return;
       since += delta;
+
+      /**
+       * Drop a crumb, and do it from the frame it comes off the wall rather
+       * than the frame it starts moving.
+       *
+       * Those are three seconds apart and they are the three seconds in
+       * which you get your head start — all of which is path the thing would
+       * otherwise have no record of. Started at the hunt, its first crumb is
+       * fourteen metres down the shed and it walks to that through whatever
+       * is in the way.
+       */
+      const you = player.position;
+      const last = trail[trail.length - 1];
+      if (!last || Math.hypot(you.x - last.x, you.z - last.z) > TRAIL.step) {
+        trail.push({ x: you.x, y: you.y, z: you.z });
+        if (trail.length > TRAIL.keep) trail.shift();
+      }
 
       if (phase === 'out') {
         /**
@@ -1332,23 +1477,45 @@ export function createScreenBeast({
         }
 
         /**
-         * Where it is going, which is you unless a wall is in the way.
+         * Where it is going, which is where you went.
          *
-         * The only obstacle it respects in the whole building is the one hole
-         * it has to fit through. If you and it are on opposite sides of that
-         * wall it steers for the middle of the opening first and for you
-         * afterwards, which is the difference between a thing that follows
-         * you up through the roof and a thing that slides through eleven
-         * metres of brick on the way.
+         * This used to be one special case: a single gate, and if you and it
+         * were on opposite sides of that one wall it steered for the opening
+         * first. That was exactly enough for a room with one hole in it, and
+         * nothing at all for the hundred and fifty metres past it — a route
+         * with a climb, three junctions and six dead ends has no single
+         * opening to aim at, and a pursuer that aims straight at the player
+         * crosses it through the rock.
+         *
+         * So it walks your crumbs. The oldest one it has not reached is where
+         * it is going; reaching one throws it away. Corners, the heap, the
+         * branch you took by mistake — it does all of them without this file
+         * knowing any of them are there.
+         *
+         * Close in, it stops caring about the path and comes straight at you.
+         * See TRAIL.cut.
          */
         const prey = player.position;
-        const split = sideOf(prey.z) !== sideOf(here.z);
+        const flatTo = Math.hypot(prey.x - here.x, prey.z - here.z);
+        while (trail.length && Math.hypot(trail[0].x - here.x, trail[0].z - here.z) < TRAIL.step * 1.6) {
+          trail.shift();
+        }
+        const crumb = flatTo > TRAIL.cut ? trail[0] : null;
         want.set(
-          split ? gate.x : prey.x,
-          (split ? gate.y : prey.y + LIFT) + Math.sin(hunted * 1.7) * 0.18,
-          split ? gate.z + (sideOf(prey.z) > 0 ? -0.6 : 0.6) : prey.z
+          crumb ? crumb.x : prey.x,
+          (crumb ? crumb.y : prey.y) + LIFT + Math.sin(hunted * 1.7) * 0.18,
+          crumb ? crumb.z : prey.z
         );
 
+        /**
+         * Unless something has come down in front of it, in which case it is
+         * at that thing rather than at you.
+         *
+         * `heldUntil` is a plane and a clock. The shutter at the end of the
+         * hall used to end the chase outright; now it buys you the seconds it
+         * takes the thing to get through it, which is a better use of a
+         * shutter and the only reason the run that follows is survivable.
+         */
         const step = speed() * delta;
         const dx = want.x - here.x;
         const dy = want.y - here.y;
@@ -1362,6 +1529,16 @@ export function createScreenBeast({
         // Up faster than along, so it is never left hanging under a sill it
         // has already arrived at.
         here.y += Math.max(-step * 1.6, Math.min(step * 1.6, dy));
+
+        if (heldUntil) {
+          heldUntil.left -= delta;
+          here.z = Math.max(here.z, heldUntil.z + 1.2);
+          if (heldUntil.left <= 0) {
+            heldUntil = null;
+            playSpikeGrind(1);
+            playScreech(0.8);
+          }
+        }
 
         group.position.copy(here);
         // Turned to face whatever it is going at. The face is drawn in the
@@ -1416,6 +1593,7 @@ export function createScreenBeast({
       // Folded by the time it is two metres off the wall rather than at the
       // wall itself, so it is already the right shape when it arrives
       // instead of still becoming it while it is halfway through.
+      const room = clearance?.(here.x, here.z);
       const near =
         phase === 'hunt'
           ? Math.max(
@@ -1439,7 +1617,63 @@ export function createScreenBeast({
        * thing that shows the mass is still bigger than the gap it just came
        * through.
        */
-      const tuck = phase === 'hunt' && sideOf(here.z) > 0 ? Math.max(near, 0.88) : near;
+      /**
+       * And the room it is in has a say, which is where the 0.88 went.
+       *
+       * The fold used to be purely a function of how near the one hole in
+       * the shed was, with a hard 0.88 clamped on for "anywhere past it" —
+       * a number picked because that is what fits the transfer hall. That
+       * hall can say so itself: thirteen wide and six and a half high
+       * against a spread of about fourteen by twelve and a half works out
+       * at 0.88 on its own, and the same sum gives nearly zero for the
+       * eleven-metre chamber past the breach, which is the one place after
+       * the shed where it gets to open out again. One rule, three rooms, no
+       * constants.
+       */
+      /**
+       * And the curve on it is measured, because the fold is not linear.
+       *
+       * Folding swings four limbs about their shoulders. Early in that
+       * swing they are still almost as far up and down as they started —
+       * most of the height only comes off in the last third of the
+       * movement. Straight interpolation therefore under-folds: asked for
+       * the 0.35 that the chamber's ten and a half metres of head works out
+       * at, the animal came back twelve and a half tall and had its
+       * shoulders through the ceiling.
+       *
+       * Three measured points — 0 gives 13.3, 0.35 gives 12.4, 1 gives 5.8 —
+       * fit height = spread - range * tuck^2.2 closely enough, so the
+       * demand is raised to that root. It is a fit to this creature's own
+       * geometry and it is wrong the moment the limbs change; `span` is
+       * what checks it.
+       */
+      const needed = room
+        ? Math.max(
+            0,
+            Math.min(1, (SPREAD.high - room.high) / (SPREAD.high - FOLDED.high))
+          ) ** (1 / 2.2)
+        : 0;
+      /**
+       * Eased, for the same reason the crush is.
+       *
+       * The fold used to be read straight off how near the wall was, which
+       * is a quantity that changes smoothly, so nothing ever snapped. The
+       * rooms it now asks are a set of boxes, and crossing between two of
+       * them steps the answer: a limb that goes from spread to folded
+       * between one frame and the next does not read as folding, it reads as
+       * a different model.
+       */
+      // Named `wantFold` and not `want`: there is already a `want` in this
+      // closure — the vector the steering aims at — and a `const want` here
+      // shadows it for the whole of `update`, which puts the steering's own
+      // `want.set(...)` fifty lines above into the temporal dead zone. It
+      // threw "Cannot access 'want' before initialization" every frame, and
+      // an exception every frame is a game loop that does not run: the
+      // symptom was the player standing still in an empty aisle while the
+      // thing walked up to them.
+      const wantFold = phase === 'hunt' || phase === 'done' ? Math.max(near, needed) : near;
+      folded += (wantFold - folded) * (1 - Math.exp(-3.4 * delta));
+      const tuck = folded;
       /**
        * The meat giving, on the same ramp the limbs fold on.
        *
@@ -1450,6 +1684,33 @@ export function createScreenBeast({
        * sack of meat being pushed through a letterbox is the effect.
        */
       body.scale.set(1 - tuck * SQUASH.wide, 1 - tuck * SQUASH.high, 1 + tuck * SQUASH.out);
+
+      /**
+       * And then, if the place it is in is smaller than it is, it crushes.
+       *
+       * The fold is an animal putting its limbs away and it bottoms out at
+       * the size of the television, which is eleven and a half metres. The
+       * corridors past the collapse are seven. Something has to give and it
+       * is not going to be the corridors: a building whose every passage is
+       * wide enough for this thing is a building with no corridors in it.
+       *
+       * So it crushes. `clearance` is asked what the space here is and the
+       * whole animal — screen, frame, meat, limbs — is scaled to fit it, on
+       * both axes independently, never above its own size. A television
+       * forced through a service tunnel, bowing, is a better answer than any
+       * of the alternatives: a monster that stops at the door, a monster
+       * that walks through rock, or a building made of aircraft hangars.
+       *
+       * Eased rather than snapped, because the squeeze is the thing worth
+       * watching. Non-uniform scale shears everything under it as it turns,
+       * which on a creature being forced through a hole is the effect.
+       */
+      const wantX = room ? Math.min(1, room.wide / FOLDED.wide) : 1;
+      const wantY = room ? Math.min(1, room.high / FOLDED.high) : 1;
+      const ease = 1 - Math.exp(-2.6 * delta);
+      cram.x += (wantX - cram.x) * ease;
+      cram.y += (wantY - cram.y) * ease;
+      group.scale.set(cram.x, cram.y, Math.min(cram.x, cram.y) * 0.4 + 0.6);
       for (const limb of limbs) {
         const beat = Math.sin(since * 2.6 + limb.phase) * (1 - tuck);
         /**

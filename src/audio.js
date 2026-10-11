@@ -1767,3 +1767,73 @@ export function playCollapse(level = 1) {
     hit.stop(at + len + 0.02);
   }
 }
+
+/**
+ * Loose rock moving: a handful of stones finding somewhere else to sit.
+ *
+ * The small relation of `playCollapse` and written for a different job. A
+ * collapse is an event — twenty tonnes arriving once — and this is a
+ * condition: something is leaning on a heap and the heap is answering, over
+ * and over, for as long as it is held there. So it is the clatter layer and
+ * almost nothing else: eight short bandpassed hits scattered over a second,
+ * no sub to speak of and no two the same pitch, with a breath of dust under
+ * them so it reads as rock and not as a woodblock.
+ *
+ * Deliberately quiet at the bottom of its range, because the thing it is
+ * describing is a long way behind you and the point of hearing it is to know
+ * the heap has not finished.
+ */
+export function playRubble(level = 1) {
+  if (!ready() || level < 0.02) return;
+  playedCount++;
+  const t = context.currentTime + 0.005;
+
+  for (let i = 0; i < 8; i++) {
+    const at = t + Math.random() * 0.95;
+    const hit = context.createBufferSource();
+    hit.buffer = getNoise();
+    const knock = context.createBiquadFilter();
+    knock.type = 'bandpass';
+    knock.frequency.value = 300 + Math.random() * 1500;
+    knock.Q.value = 1.4 + Math.random() * 2.6;
+    const gain = context.createGain();
+    const loud = (0.05 + Math.random() * 0.13) * level;
+    const len = 0.07 + Math.random() * 0.2;
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.linearRampToValueAtTime(loud, at + 0.006);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + len);
+    hit.connect(knock).connect(gain);
+    send(gain, 0.9);
+    hit.start(at, Math.random() * 1.5);
+    hit.stop(at + len + 0.02);
+  }
+
+  // The dust, and one stone bigger than the others landing under it.
+  const dust = context.createBufferSource();
+  dust.buffer = getNoise();
+  const air = context.createBiquadFilter();
+  air.type = 'bandpass';
+  air.frequency.value = 520;
+  air.Q.value = 0.8;
+  const dustGain = context.createGain();
+  dustGain.gain.setValueAtTime(0.0001, t);
+  dustGain.gain.linearRampToValueAtTime(0.06 * level, t + 0.12);
+  dustGain.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
+  dust.connect(air).connect(dustGain);
+  send(dustGain, 1);
+  dust.start(t, Math.random() * 1.5);
+  dust.stop(t + 1.35);
+
+  const body = context.createOscillator();
+  body.type = 'sine';
+  body.frequency.setValueAtTime(70, t);
+  body.frequency.exponentialRampToValueAtTime(42, t + 0.3);
+  const bodyGain = context.createGain();
+  bodyGain.gain.setValueAtTime(0.0001, t + 0.02);
+  bodyGain.gain.linearRampToValueAtTime(0.12 * level, t + 0.05);
+  bodyGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+  body.connect(bodyGain);
+  send(bodyGain, 0.5);
+  body.start(t);
+  body.stop(t + 0.55);
+}

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { makeRockSurface } from './textures.js';
 import { seeded, jitter } from './rockfall.js';
-import { playCollapse, playSpikeGrind } from './audio.js';
+import { playCollapse, playSpikeGrind, playRubble } from './audio.js';
 
 /**
  * The roof coming in across the front of the machine, and the head start it
@@ -79,8 +79,16 @@ const DROP = { from: 8.4, gravity: 36, bounce: 0.26, settle: 0.34 };
  */
 const GAP = { wide: 6.6, fall: 1.05, open: 1.2 };
 
-/** Shaking, for as long as something is leaning on it. */
-const STRAIN = { shift: 0.05, rate: 23, grind: 1.9 };
+/**
+ * Shaking, for as long as something is leaning on it.
+ *
+ * `grind` is how often the heap takes the weight audibly and `fall` how often
+ * some of it comes loose. Two cadences rather than one, and neither of them a
+ * round multiple of the other, so a minute of being held behind this never
+ * settles into a rhythm — which is the thing that would make it read as a
+ * loop rather than as a heap under load.
+ */
+const STRAIN = { shift: 0.05, rate: 23, grind: 2.4, fall: 1.3 };
 
 const ROCK_TINT = '#4a4b44';
 
@@ -374,6 +382,7 @@ export function createBoulderDrop({
   let strain = 0;
   let giving = 0;
   let grind = 0;
+  let falling = 0;
 
   const dropIt = () => {
     if (state !== 'up') return;
@@ -516,6 +525,7 @@ export function createBoulderDrop({
       strain = 0;
       giving = 0;
       grind = 0;
+      falling = 0;
       group.visible = false;
       group.position.set(0, base, 0);
       hole.visible = false;
@@ -578,6 +588,22 @@ export function createBoulderDrop({
         if (state === 'down' && grind <= 0) {
           grind = STRAIN.grind;
           playSpikeGrind(0.2 + 0.3 * strain);
+        }
+        /**
+         * And rock coming off it, which is the only thing in this game that
+         * tells you the heap is losing.
+         *
+         * You are forty metres away with your back to it for every second of
+         * this and the shake is invisible from there. What is left is the
+         * sound: something big is leaning on twenty tonnes of roof and the
+         * roof is shedding — stones finding somewhere else to sit, eighteen
+         * seconds of them, getting worse as the strain comes up. Jittered so
+         * no two falls land on the same beat.
+         */
+        falling -= delta;
+        if (state === 'down' && falling <= 0) {
+          falling = STRAIN.fall * (0.7 + Math.random() * 0.6);
+          playRubble(0.35 + 0.65 * strain);
         }
       }
 

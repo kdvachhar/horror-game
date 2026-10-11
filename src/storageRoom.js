@@ -241,11 +241,28 @@ const WAKE_LINES = [
  * the character you have been talking to rather than a shape. A monster that
  * stops talking the moment it becomes a monster was never the character.
  */
-const CHASE_LINES = [
-  { text: 'Stay there.', hold: 2.2, brows: 'angry', frown: true },
-  { text: 'There is nothing up there.', hold: 3.0, brows: 'angry' },
-  { text: 'I have been every screen in this building.', hold: 3.6, brows: 'angry', frown: true },
-];
+/**
+ * What it says while it is chasing you: nothing.
+ *
+ * It had three lines on a loop — "Stay there", "There is nothing up there",
+ * "I have been every screen in this building" — and they were the wrong
+ * instrument for this part. The machine on the wall talks, at length, and that
+ * is the scene: a thing in a screen explaining itself to you in a room you
+ * cannot leave. Then the screen comes off the wall, and what comes through it
+ * is not a character with an argument any more. A subtitle under an animal is
+ * a subtitle under an animal.
+ *
+ * It also broke the one thing the chase is doing to you. Everything you can
+ * hear in the back half of this building is a report on where the thing is —
+ * the racking going over beside you, the rock shedding behind you, the cue
+ * rising — and a voice track on top of that is the only sound in the mix that
+ * is not telling you anything. It still screeches, it still breathes; it has
+ * simply stopped making its case.
+ *
+ * `beast.start` takes its lines as an argument and already treats none as
+ * none, so this is the absence of a list rather than a flag — see `script` in
+ * screenBeast.js, which stays null and never asks the face to speak.
+ */
 
 /**
  * @param scene   the world
@@ -1135,7 +1152,7 @@ export function createStorageRoom({ scene, doorway, player, camera, death, clear
     if (chasing) return;
     chasing = true;
     chaseSince = 0;
-    beast.start(CHASE_LINES);
+    beast.start();
     onChase?.();
     /**
      * And the one instruction, because this is the first thing in the game

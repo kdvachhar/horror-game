@@ -132,6 +132,11 @@ export const BREAKOUT = { shake: 1.2, tear: 2.4, free: 2.9 };
 const EARSHOT = 26;
 
 /**
+ * The least this thing is ever worth, as the music hears it. See `pressure`.
+ */
+const DRAMA = 0.55;
+
+/**
  * @param scene    the world
  * @param player   whose feet it is coming for
  * @param death    the screen that goes up when it gets there
@@ -1160,6 +1165,8 @@ export function createScreenBeast({
   /** Where you have been, oldest first. See TRAIL. */
   let trail = [];
   let heldUntil = null;
+  /** Out of sight but still after you — the lift shaft. See `lurk`. */
+  let lurking = false;
   /**
    * Fit the next frame's fold and crush instead of easing into them.
    *
@@ -1212,8 +1219,29 @@ export function createScreenBeast({
 
     /** How close it is as the music hears it, nought to one. */
     get pressure() {
-      if (phase !== 'hunt') return 0;
-      return 1 - Math.min(1, distanceTo(player.position) / EARSHOT);
+      if (phase !== 'hunt' && !lurking) return 0;
+      /**
+       * And it never drops below `DRAMA` while this thing is after you.
+       *
+       * `pressure` is what the cue is arranged against — the drone comes in at
+       * 0.18, the pulse at 0.3, the second horn at 0.4, the scrape at 0.45,
+       * the riser and the shimmer at 0.5 — and it was purely how near the
+       * thing is, over an earshot of twenty-six metres. The chase is now two
+       * hundred metres long and the measured gap through the maze is sixty to
+       * a hundred, which is to say **the whole arrangement was switched off
+       * for almost all of it**: a kick and a heartbeat, and the horn I wrote
+       * for this played in the shed and then not again.
+       *
+       * So the floor is the top of the arrangement and proximity is what is
+       * left above it. At 0.55 everything but the last pair of offbeat pulses
+       * is in from the frame it comes off the wall, and the tempo starts at
+       * 127 rather than 96. Being nearly caught still sounds worse than being
+       * eighty metres ahead — 0.55 to 1 is tempo, level, and the filters
+       * opening — but there is no longer a version of this chase that sounds
+       * like nothing is happening.
+       */
+      const near = 1 - Math.min(1, distanceTo(player.position) / EARSHOT);
+      return Math.max(DRAMA, near);
     },
 
     /** Metres, flat, to whoever it is after. For a harness. */
@@ -1369,6 +1397,7 @@ export function createScreenBeast({
       hunted = 0;
       caught = false;
       heldUntil = null;
+      lurking = false;
       trail = [];
       snapFit = true;
       here.copy(at);
@@ -1434,6 +1463,7 @@ export function createScreenBeast({
       hunted = 0;
       caught = false;
       heldUntil = null;
+      lurking = false;
       trail = [];
       group.visible = true;
       music.start();
@@ -1457,7 +1487,17 @@ export function createScreenBeast({
     lurk() {
       if (phase === 'wait') return;
       phase = 'done';
-      music.stop();
+      /**
+       * The music stays. It is on the roof of the car with you.
+       *
+       * This used to stop the cue, which is what `stop` is for — and `stop`
+       * means it has given up. Twelve metres of shaft with the thing coming
+       * down it after you is the opposite of that, and eight and a half
+       * seconds of silence in the middle of a chase reads as the chase being
+       * over. `lurking` is what keeps `pressure` up while there is nothing to
+       * measure a distance to.
+       */
+      lurking = true;
       life.stop();
       group.visible = false;
     },
@@ -1471,6 +1511,7 @@ export function createScreenBeast({
     stop() {
       if (phase === 'done' || phase === 'wait') return;
       phase = 'done';
+      lurking = false;
       music.stop();
       life.stop();
     },
@@ -1480,6 +1521,7 @@ export function createScreenBeast({
       since = 0;
       hunted = 0;
       caught = false;
+      lurking = false;
       here.copy(home);
       script = null;
       nextLine = 0;

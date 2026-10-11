@@ -1160,6 +1160,18 @@ export function createScreenBeast({
   /** Where you have been, oldest first. See TRAIL. */
   let trail = [];
   let heldUntil = null;
+  /**
+   * Fit the next frame's fold and crush instead of easing into them.
+   *
+   * Both are eased, which is right everywhere except the frame it is put
+   * somewhere new. It arrives at full size and takes about a second to come
+   * down to the room — and where it is put is now, twice, somewhere it is
+   * meant to come out of: a shaft at the bottom of a lift, into a corridor
+   * six and a half metres wide. For half a second it stood eight and a half
+   * across with its arms through the walls, which is the one half second
+   * anybody who hears it arrive is going to turn round for.
+   */
+  let snapFit = false;
   /** How crushed it currently is, eased. 1 is its own size. */
   const cram = { x: 1, y: 1 };
   /** And how folded, eased the same way. 0 is limbs out. */
@@ -1358,6 +1370,7 @@ export function createScreenBeast({
       caught = false;
       heldUntil = null;
       trail = [];
+      snapFit = true;
       here.copy(at);
       group.visible = true;
       group.position.copy(here);
@@ -1399,6 +1412,31 @@ export function createScreenBeast({
       script = lines ?? null;
       nextLine = 0;
       quietFor = 0;
+    },
+
+    /**
+     * It has not finished, which is also not the same as gone.
+     *
+     * For the end of the corridor. It gives up at the gap because the gap is
+     * too small, and then — fourteen seconds later, with you at the window
+     * and no longer listening — it does not. Everything about where it is
+     * stays where it is: this is the same animal in the same place, told to
+     * start again, and the only reason it is a method rather than a second
+     * call to `restartAt` is that there is nowhere to put it. It is already
+     * standing where it needs to be.
+     *
+     * The trail goes, like it does on a respawn. Crumbs from before it stopped
+     * are a record of a run that is over, and you have not moved since.
+     */
+    again() {
+      if (phase !== 'done') return;
+      phase = 'hunt';
+      hunted = 0;
+      caught = false;
+      heldUntil = null;
+      trail = [];
+      group.visible = true;
+      music.start();
     },
 
     /**
@@ -1753,7 +1791,7 @@ export function createScreenBeast({
       // symptom was the player standing still in an empty aisle while the
       // thing walked up to them.
       const wantFold = phase === 'hunt' || phase === 'done' ? Math.max(near, needed) : near;
-      folded += (wantFold - folded) * (1 - Math.exp(-3.4 * delta));
+      folded += (wantFold - folded) * (snapFit ? 1 : 1 - Math.exp(-3.4 * delta));
       const tuck = folded;
       /**
        * The meat giving, on the same ramp the limbs fold on.
@@ -1788,9 +1826,10 @@ export function createScreenBeast({
        */
       const wantX = room ? Math.min(1, room.wide / FOLDED.wide) : 1;
       const wantY = room ? Math.min(1, room.high / FOLDED.high) : 1;
-      const ease = 1 - Math.exp(-2.6 * delta);
+      const ease = snapFit ? 1 : 1 - Math.exp(-2.6 * delta);
       cram.x += (wantX - cram.x) * ease;
       cram.y += (wantY - cram.y) * ease;
+      snapFit = false;
       group.scale.set(cram.x, cram.y, Math.min(cram.x, cram.y) * 0.4 + 0.6);
       for (const limb of limbs) {
         const beat = Math.sin(since * 2.6 + limb.phase) * (1 - tuck);

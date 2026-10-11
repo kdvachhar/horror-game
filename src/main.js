@@ -573,6 +573,23 @@ const codeLift = createCodeLift({
       y: [codeLift.atTheShaft.y - 1.0, codeLift.atTheShaft.y + 1.0],
     }),
   onWindow: () => storageRoom.beast.stop(),
+  /**
+   * And it starts again, which is the last thing this building does.
+   *
+   * Nothing is moved and nothing is rebuilt: it is standing a metre behind
+   * the gap where it gave up, and `again` tells it to stop having given up.
+   * What changed in between is on the lift's side — the gap hands out its own
+   * two and a bit metres as a clearance once the clock runs out, so the thing
+   * that could not fit through it crushes itself down to the size of the hole
+   * and comes through. See `clearance` in codeLift.js.
+   *
+   * There is nowhere to go from the window. That is not an oversight in this
+   * line, it is the state of the end of the game: the corridor past the gap is
+   * six metres long, the thing fills it, and what is on the other side of the
+   * glass is not built. This is the beat that says the building is not done
+   * with you, and it currently has one outcome.
+   */
+  onAgain: () => storageRoom.beast.again(),
 });
 room.colliders.push(...codeLift.colliders);
 

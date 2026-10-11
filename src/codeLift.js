@@ -104,8 +104,20 @@ const PINCH = { wide: 2.2, high: 2.2, at: 6.0 };
  * the wall, which is a thing giving up in the middle of an empty corridor. In
  * two and four fifths of a second it covers that, arrives at the gap, and is
  * pressing at it when it goes quiet.
+ *
+ * And `again` is how long the quiet lasts, which is the last number in this
+ * game and the only one in it that is a lie. The gap held. You watched it
+ * hold. The thing went quiet behind a hole the size of a person, and you
+ * turned round and looked out of a window at the rest of the building —
+ * fourteen seconds is what that is worth: long enough to stop listening for
+ * it, short enough that stopping was the mistake.
+ *
+ * It does not break the wall. It comes through the hole — see `clearance`,
+ * which hands it the size of the gap once the clock runs out. Every opening in
+ * this building since the shed has been something it could fold into, and the
+ * last one is the smallest thing it has ever had to be.
  */
-const CHASE = { after: 5.0, beat: 2.8 };
+const CHASE = { after: 5.0, beat: 2.8, again: 14.0, squeeze: 2.2 };
 
 /**
  * The window at the end of it, and the first one in the building.
@@ -206,6 +218,7 @@ function arrowShape() {
  *                 something can come out of the shaft behind you
  * @param onSafe   once, when you are through the gap at the end of it
  * @param onWindow once, when you are at the glass
+ * @param onAgain  once, `CHASE.again` seconds after that: the gap gives
  */
 export function createCodeLift({
   scene,
@@ -216,6 +229,7 @@ export function createCodeLift({
   onOut,
   onSafe,
   onWindow,
+  onAgain,
 }) {
   const group = new THREE.Group();
   scene.add(group);
@@ -821,6 +835,13 @@ export function createCodeLift({
    */
   let looked = null;
   let quiet = false;
+  /**
+   * Counting the quiet at the window: `yielding` once the gap starts letting
+   * it in, `came` once it is through.
+   */
+  let rested = null;
+  let yielding = false;
+  let came = false;
   /** How much of the ride is left to make a noise on, and the shake of it. */
   let banged = 0;
   let shook = 0;
@@ -1020,6 +1041,30 @@ export function createCodeLift({
      */
     clearance(x, z) {
       if (!inCorridor(x, z)) return null;
+      /**
+       * And the gap itself, but only once it is allowed through it.
+       *
+       * This is the whole of the last beat and it is two numbers behind a
+       * conditional. A room that declares its clearance gets a creature
+       * crushed to fit it — see `cram` in screenBeast.js — so the gap handing
+       * out its own size *is* the thing coming through the gap. No wall
+       * breaks and nothing animates.
+       *
+       * Gated on `yielding`, because this is a volume and the thing spends
+       * the quiet standing in it. Ungated it would squeeze itself down to two
+       * metres while it was still supposed to be a thing that cannot fit, and
+       * the hold would be keeping a creature the size of the hole out of the
+       * hole.
+       *
+       * Two and a half metres either side of the plane, so the squeeze is
+       * something it does on the way in rather than something that happens to
+       * it in one frame. Past the wall the corridor's own number takes over
+       * and it comes back up to six, which is the half of this worth having:
+       * it is the size of a door for about a second and a half.
+       */
+      if (yielding && Math.abs(z - pinchZ) < 2.5) {
+        return { wide: PINCH.wide - 0.2, high: PINCH.high - 0.2 };
+      }
       return { wide: OUT.wide - 0.5, high: OUT.high - 0.4 };
     },
 
@@ -1069,6 +1114,12 @@ export function createCodeLift({
       through = false;
       looked = null;
       quiet = false;
+      rested = null;
+      came = false;
+      // The wall holds again on the retry: whatever came through it is going
+      // back in the shaft, so the hole it made itself through is a hole it has
+      // not made yet.
+      yielding = false;
     },
 
     /** Out of the lift at the bottom, looking down the corridor. */
@@ -1135,6 +1186,9 @@ export function createCodeLift({
       through = false;
       looked = null;
       quiet = false;
+      rested = null;
+      yielding = false;
+      came = false;
       banged = 0;
       shook = 0;
       shut = 0;
@@ -1262,7 +1316,44 @@ export function createCodeLift({
         looked += delta;
         if (looked >= CHASE.beat) {
           quiet = true;
+          rested = 0;
           onWindow?.();
+        }
+      }
+      /**
+       * And then it comes through the gap.
+       *
+       * The clock starts when it goes quiet rather than when you arrive, so
+       * what you are being given is fourteen seconds of silence and not
+       * fourteen seconds of a thing pressing at a wall.
+       */
+      if (rested !== null && !came) {
+        rested += delta;
+        /**
+         * In two parts, and the gap between them is the whole image.
+         *
+         * The squeeze first: `yielding` hands the gap's own two metres out as
+         * a clearance, and the thing behind the wall collapses itself into
+         * that over about a second and a half while it is still being held
+         * off. Then it is let go, and what comes through the hole is already
+         * the size of the hole.
+         *
+         * One event measured 0.9 seconds between the thing being released and
+         * the thing having you, and the crush is eased over about a second —
+         * so what actually came through a two metre door was four metres nine
+         * of animal, in a corridor, having not squeezed at all. The squeeze
+         * has to happen before the release or it does not happen.
+         */
+        if (!yielding && rested >= CHASE.again - CHASE.squeeze) {
+          yielding = true;
+          // Concrete, not rock: nothing is coming down. This is the sound of
+          // something making itself the size of a door.
+          playSpikeGrind(1);
+          playScreech(1);
+        }
+        if (rested >= CHASE.again) {
+          came = true;
+          onAgain?.();
         }
       }
     },

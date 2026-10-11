@@ -55,6 +55,7 @@ import { createPainter } from './painter.js';
 import { createSpeechRunner } from './voice.js';
 import { updateWireCurrent } from './wire.js';
 import { createSplitHalls } from './splitHalls.js';
+import { createLightPool } from './lightPool.js';
 import { createCodeLift } from './codeLift.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -592,6 +593,15 @@ const codeLift = createCodeLift({
   onAgain: () => storageRoom.beast.again(),
 });
 room.colliders.push(...codeLift.colliders);
+
+/**
+ * And the stand-ins for every lamp in it.
+ *
+ * After every room, because it finds the lamps by walking the scene — though
+ * it keeps looking, so a room that builds one later or takes one away is
+ * handled. See lightPool.js, which is where the frame went.
+ */
+const lightPool = createLightPool({ scene, camera });
 
 /**
  * Every room has now put its boxes in, so this is the one moment the world is
@@ -1598,18 +1608,55 @@ let lastTime = performance.now();
  *
  * Judged on a two-second average rather than on single frames, because one slow
  * frame is a shader compiling or a garbage collection and is no evidence about
- * anything. The two thresholds are far apart on purpose: it steps down above
- * 20ms a frame and up only below 12, so the ratio it settles on is comfortably
- * inside both and there is no value that is simultaneously too slow to keep and
- * fast enough to go back to.
+ * anything.
  *
- * Frames are also thrown away for a moment after a change, so the resize itself
- * — which reallocates every buffer — is never the thing being measured.
+ * **The up threshold used to be 12ms and that is not reachable.** What this
+ * measures is the interval between frames, and the browser will not hand you
+ * one sooner than the display refreshes: with vsync on a 60Hz panel a game
+ * that is coasting reads 16.7ms, a game that is drowning reads 16.7ms plus
+ * whatever it misses, and *nothing* ever reads 12. So the ratio could only
+ * ever walk down. One slow patch — a heavy room, a compile, a laptop on
+ * battery — ratcheted it to the bottom step of 0.6 and it stayed there for the
+ * rest of the session. Measured: every scene in the building sitting on step 1
+ * of 8, three of them at a locked 16.7ms with the headroom to draw three times
+ * the pixels they were drawing.
+ *
+ * So the test for "this machine is keeping up" is the one the display allows:
+ * an average inside a hair of the refresh period, which means it is missing
+ * almost nothing. 17.3 is about two per cent of frames dropped — one bad frame
+ * in sixty pulls a 16.7 average up by 0.28.
+ *
+ * The asymmetry is what keeps it still. Dropping takes one bad window of two
+ * seconds; climbing takes `needRuns` good ones in a row, and every time a
+ * climb turns out to have been wrong that number goes up. A machine that can
+ * nearly hold the next step up therefore tries it, drops back, and then waits
+ * four, then eight, then twenty seconds before trying again, instead of
+ * flickering between two resolutions for the whole game.
+ *
+ * Frames are also thrown away for a moment after a change, so the resize
+ * itself — which reallocates every buffer — is never the thing being measured.
  */
 const TUNE_WINDOW = 2;
+/** Frame interval that counts as keeping up, and as falling behind. */
+const TUNE_FAST = 17.3;
+const TUNE_SLOW = 20;
 let tuneClock = 0;
 let tuneFrames = 0;
 let tuneSettle = 0;
+let goodRuns = 0;
+let needRuns = 3;
+
+function stepPixels(by) {
+  const next = Math.max(0, Math.min(PIXEL_STEPS.length - 1, pixelStep + by));
+  // Already at the end of what it can do, or at the display's own ratio, in
+  // which case going up would allocate more pixels than the screen has.
+  if (next === pixelStep) return false;
+  if (by > 0 && PIXEL_STEPS[pixelStep] >= window.devicePixelRatio) return false;
+  pixelStep = next;
+  applyPixelRatio();
+  tuneSettle = 0.7;
+  return true;
+}
 
 function tuneResolution(delta) {
   if (tuneSettle > 0) {
@@ -1626,17 +1673,22 @@ function tuneResolution(delta) {
   tuneClock = 0;
   tuneFrames = 0;
 
-  const want = ms > 20 ? -1 : ms < 12 ? 1 : 0;
-  if (want === 0) return;
-  const next = Math.max(0, Math.min(PIXEL_STEPS.length - 1, pixelStep + want));
-  // Already at the end of what it can do, or at the display's own ratio, in
-  // which case going up would allocate more pixels than the screen has.
-  if (next === pixelStep) return;
-  if (want > 0 && PIXEL_STEPS[pixelStep] >= window.devicePixelRatio) return;
-
-  pixelStep = next;
-  applyPixelRatio();
-  tuneSettle = 0.7;
+  if (ms > TUNE_SLOW) {
+    // Whatever we were trying was too much. Be slower to try it again.
+    if (stepPixels(-1)) needRuns = Math.min(10, needRuns + 2);
+    goodRuns = 0;
+    return;
+  }
+  if (ms < TUNE_FAST) {
+    goodRuns += 1;
+    if (goodRuns >= needRuns) {
+      goodRuns = 0;
+      stepPixels(1);
+    }
+    return;
+  }
+  // In between: keeping up, but not with room to spare.
+  goodRuns = 0;
 }
 
 renderer.setAnimationLoop((time) => {
@@ -1812,6 +1864,16 @@ renderer.setAnimationLoop((time) => {
 
   updateFriendLayer();
 
+  /**
+   * And which of the building's seventy lamps are worth shading against, which
+   * is two thirds of this frame. See lightPool.js.
+   *
+   * Last, and after the camera has been written: it is a frustum test, so it
+   * has to run against the view that is about to be drawn rather than the one
+   * before it.
+   */
+  lightPool.update(delta);
+
   // Two passes sharing one depth buffer: the lit room, then the dark one. Each
   // pass only sees its own lights, which is the only way to deny the ambient
   // light to one room while keeping it in the other.
@@ -1839,6 +1901,7 @@ if (import.meta.env.DEV) {
    * room is added.
    */
   window.game.__scenes = SCENES;
+  window.game.lightPool = lightPool;
   // The library itself, so a harness can raycast the scene and name what it
   // hit. Everything else on this handle is a thing the game built; this is
   // the one entry that is just a way to ask questions about them.

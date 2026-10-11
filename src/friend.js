@@ -144,6 +144,57 @@ const LINEAR_DAMPING = 0.45;
 const STRANDED_SECONDS = 4;
 const STRANDED_DISTANCE = 6;
 
+/**
+ * And the same two numbers again, for when you are being chased.
+ *
+ * Four seconds and six metres is the right patience for a building you are
+ * walking round: the bucket is behind you somewhere, it works the furniture
+ * out, and nothing is lost if it takes a moment about it.
+ *
+ * From the two-body door on there is no moment. You are running at 5.6 and
+ * the route is a crate stair, a jumped climb and a lift — three things it
+ * cannot do on its legs — so at the walking patience it spends the whole
+ * chase arriving twenty-odd metres behind you, which is the same as it not
+ * being there. One and a quarter seconds and four metres is near enough that
+ * the rescue reads as it catching you up rather than as it reappearing.
+ *
+ * It is still a rescue and not a leash: it is only ever spent while the
+ * thing is getting nowhere, so on open floor, where it keeps up on its own
+ * legs at 6.5 against your 5.6, this never fires once.
+ */
+const URGENT_SECONDS = 1.25;
+const URGENT_DISTANCE = 4;
+/**
+ * And the other way of losing it, which the stuck test cannot see.
+ *
+ * Everything above fires on the bucket *getting nowhere*. The climb out of
+ * the fall is the opposite: eight pads with a jump between each, and it is
+ * busy the whole time — hopping, landing, covering ground, resetting the
+ * timer on every one of them — while you go up the same eight pads faster
+ * than it does. Measured over the run, that put it thirteen metres behind at
+ * the top with nothing in the file having noticed anything was wrong.
+ *
+ * So the second rule is simply being a long way back for long enough,
+ * whether or not it is making progress. Six metres and a second and a fifth,
+ * which is tuned rather than picked: it has 0.9m/s on you at a run, so from
+ * six metres back it needs seven seconds of clear floor to close on its own
+ * and the whole chase is seventy. Measured over the route, 8m/1.5s left it
+ * eleven metres down at the top of the climb and this leaves it seven, for
+ * two more rescues across seventy seconds.
+ */
+const URGENT_FAR = 6;
+const URGENT_FAR_SECONDS = 1.2;
+/**
+ * And it tucks in closer while it is doing it.
+ *
+ * 2.6 is a polite distance to be followed at and it is most of a second
+ * behind at a run, which is long enough for you to lose it round a corner.
+ * 1.5 is at your elbow. It cannot collide with you — the two bodies do not
+ * push each other — so the only cost of the shorter radius is that it is in
+ * shot, which during a chase is the point.
+ */
+const URGENT_FOLLOW = 1.5;
+
 /** Hops it may take without getting anywhere before it stops trying. */
 const HOPS_BEFORE_GIVING_UP = 3;
 
@@ -301,6 +352,10 @@ export function createFriend(scene) {
   // the middle — and in those, "give up and go to the player" is not a rescue,
   // it is the puzzle solving itself.
   let recallAllowed = true;
+  /** Chase rules: closer, and quicker to give up and catch up. See URGENT_*. */
+  let urgent = false;
+  /** How long it has been a long way back, which is the other way to lose it. */
+  let farTimer = 0;
   /**
    * How close it tries to get to whatever it is following.
    *
@@ -464,7 +519,8 @@ export function createFriend(scene) {
     lastX = position.x;
     lastZ = position.z;
 
-    if (distance <= FOLLOW_DISTANCE) {
+    const stopAt = urgent ? URGENT_FOLLOW : FOLLOW_DISTANCE;
+    if (distance <= stopAt) {
       stuckTimer = 0;
       // Brake rather than coast, or it drifts past you and oscillates.
       if (grounded && speed > 0.05) {
@@ -477,7 +533,7 @@ export function createFriend(scene) {
 
     // Ease the target speed down as it closes, so it settles instead of
     // hunting back and forth around the stop radius.
-    const approach = Math.min(1, (distance - FOLLOW_DISTANCE) / 1.5);
+    const approach = Math.min(1, (distance - stopAt) / 1.5);
     const want = FOLLOW_SPEED * approach;
 
     let dvx = (dx / distance) * want - velocity.x;
@@ -507,9 +563,17 @@ export function createFriend(scene) {
       strandedTimer = 0;
       hopsSinceProgress = 0;
     }
-    if (recallAllowed && strandedTimer > STRANDED_SECONDS && distance > STRANDED_DISTANCE) {
+    const patience = urgent ? URGENT_SECONDS : STRANDED_SECONDS;
+    const leash = urgent ? URGENT_DISTANCE : STRANDED_DISTANCE;
+    if (recallAllowed && strandedTimer > patience && distance > leash) {
       wantsRecall = true;
     }
+    // See URGENT_FAR. Only while being chased: walking round the building,
+    // a bucket six metres back and working on it is a bucket following you,
+    // and teleporting that one would be answering a question nobody asked.
+    if (urgent && distance > URGENT_FAR) farTimer += delta;
+    else farTimer = 0;
+    if (recallAllowed && farTimer > URGENT_FAR_SECONDS) wantsRecall = true;
 
     // The hop is for a lip it can clear. Capped, because when it cannot clear
     // the thing in front of it the hop changes nothing and the next one is due
@@ -542,33 +606,26 @@ export function createFriend(scene) {
   }
 
   /**
-   * Put it back beside you, having failed to walk there.
+   * The spot to put it in, given where you are standing and which way you
+   * are looking.
    *
    * Behind you by preference, so it does not pop into view in front of you —
    * you turn round and it is there, which is how a thing that has been trailing
    * you ought to appear. Then either side, and last your own feet, which need
    * no check at all because you are standing in them.
    */
-  function recall(targetPosition, camera, colliders) {
-    RECALL_DIR.set(0, 0, -1).applyQuaternion(camera.quaternion);
-    RECALL_DIR.y = 0;
-    if (RECALL_DIR.lengthSq() < 1e-6) RECALL_DIR.set(0, 0, -1);
-    RECALL_DIR.normalize();
-
-    // Feet, not eyes — targetPosition is the camera. A shade above the floor so
-    // it settles through the normal ground test rather than starting inside it.
-    const feetY = Math.max(0, targetPosition.y - PLAYER.eyeHeight) + 0.05;
+  function placeNear(atX, feetY, atZ, dirX, dirZ, colliders) {
     const reach = FOLLOW_DISTANCE * 0.5;
 
-    let x = targetPosition.x;
-    let z = targetPosition.z;
+    let x = atX;
+    let z = atZ;
     for (const [ox, oz] of [
-      [-RECALL_DIR.x, -RECALL_DIR.z],
-      [-RECALL_DIR.z, RECALL_DIR.x],
-      [RECALL_DIR.z, -RECALL_DIR.x],
+      [-dirX, -dirZ],
+      [-dirZ, dirX],
+      [dirZ, -dirX],
     ]) {
-      const cx = targetPosition.x + ox * reach;
-      const cz = targetPosition.z + oz * reach;
+      const cx = atX + ox * reach;
+      const cz = atZ + oz * reach;
       if (!blockedAt(cx, cz, feetY, colliders)) {
         x = cx;
         z = cz;
@@ -580,7 +637,21 @@ export function createFriend(scene) {
     velocity.set(0, 0, 0);
     stuckTimer = 0;
     strandedTimer = 0;
+    farTimer = 0;
     hopsSinceProgress = 0;
+  }
+
+  /** Put it back beside you, having failed to walk there. */
+  function recall(targetPosition, camera, colliders) {
+    RECALL_DIR.set(0, 0, -1).applyQuaternion(camera.quaternion);
+    RECALL_DIR.y = 0;
+    if (RECALL_DIR.lengthSq() < 1e-6) RECALL_DIR.set(0, 0, -1);
+    RECALL_DIR.normalize();
+
+    // Feet, not eyes — targetPosition is the camera. A shade above the floor so
+    // it settles through the normal ground test rather than starting inside it.
+    const feetY = Math.max(0, targetPosition.y - PLAYER.eyeHeight) + 0.05;
+    placeNear(targetPosition.x, feetY, targetPosition.z, RECALL_DIR.x, RECALL_DIR.z, colliders);
   }
 
   /** Turn the whole cube so its eye face points at whoever is watching. */
@@ -696,6 +767,7 @@ export function createFriend(scene) {
       // up hopping stayed given up after being respawned across the level.
       stuckTimer = 0;
       strandedTimer = 0;
+      farTimer = 0;
       hopsSinceProgress = 0;
       wantsRecall = false;
       lastX = at.x;
@@ -707,11 +779,44 @@ export function createFriend(scene) {
       mesh.visible = true;
     },
 
+    /**
+     * Alive, at your shoulder, and already following — wherever you have
+     * just been put.
+     *
+     * For the two ways of arriving somewhere without having walked there: a
+     * scene jump and every death in the chase. `spawn` is the wrong verb for
+     * those. It drops the bucket at exactly the coordinates it is handed and
+     * leaves it waiting there, and the coordinates those callers have are
+     * your own feet, so what it makes is a bucket standing inside you not
+     * following you.
+     *
+     * Feet and a yaw rather than a camera, because both callers have just
+     * teleported the player and the camera does not catch up with that until
+     * the next frame — handed the camera, this would put the bucket neatly
+     * behind wherever you were standing before.
+     */
+    arriveWith(feet, lookYaw, colliders) {
+      active = true;
+      standUp();
+      hopsSinceProgress = 0;
+      wantsRecall = false;
+      lastX = feet.x;
+      lastZ = feet.z;
+      // yaw 0 faces -z, so forward is (-sin, -cos) and placeNear puts it at
+      // the other end of that.
+      placeNear(feet.x, feet.y + 0.05, feet.z, -Math.sin(lookYaw), -Math.cos(lookYaw), colliders);
+      prevVelocity.copy(velocity);
+      mesh.position.copy(position);
+      mesh.visible = true;
+      following = true;
+    },
+
     /** Start trailing the player. Same clean slate as being told to follow. */
     collect() {
       following = true;
       stuckTimer = 0;
       strandedTimer = 0;
+      farTimer = 0;
       hopsSinceProgress = 0;
       wantsRecall = false;
     },
@@ -730,8 +835,21 @@ export function createFriend(scene) {
       following = on;
       stuckTimer = 0;
       strandedTimer = 0;
+      farTimer = 0;
       hopsSinceProgress = 0;
       wantsRecall = false;
+    },
+
+    /**
+     * Keep up, or take your time.
+     *
+     * On from the two-body door to the window, which is the one stretch of
+     * this game where being left behind is not recoverable: it closes to
+     * your elbow instead of two and a half metres back, and it gives up on
+     * walking after a second and a quarter rather than four. See URGENT_*.
+     */
+    keepUp(on) {
+      urgent = on;
     },
 
     /** See recallAllowed. Set every frame from wherever it is standing. */
@@ -887,6 +1005,7 @@ export function createFriend(scene) {
       // which is what settles it onto the floor wherever it has been put.
       if (wantsRecall) {
         wantsRecall = false;
+        farTimer = 0;
         recall(targetPosition, camera, colliders);
       }
 

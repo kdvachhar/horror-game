@@ -327,6 +327,10 @@ const death = createDeathScreen({
       codeLift.reset();
       const back = storageRoom.atThePress;
       player.teleport({ position: back.position, yaw: back.yaw, pitch: 0 });
+      // And the bucket, which came through the door with you the first time
+      // and is not going to be fetched from behind it again — that door is
+      // shut and slammed by the time anything in here can kill you.
+      bucketWithYou();
       storageRoom.skipToChase();
       return;
     }
@@ -837,6 +841,8 @@ function updateFriendLayer() {
  * than to a default.
  */
 let followWanted = true;
+/** Whether the two-body door was open last frame. See the handover below. */
+let pairWasOpen = false;
 
 window.addEventListener('keydown', (event) => {
   if (event.code !== 'KeyG' || event.repeat) return;
@@ -863,6 +869,26 @@ window.addEventListener('keydown', (event) => {
         : 'Your friend is waiting here'
   );
 });
+
+/**
+ * Put the bucket at your feet and set it off after you.
+ *
+ * For the two ways of arriving somewhere past the two-body door without
+ * having walked through it: a scene jump, and every death in the chase. Both
+ * are "you are here", and from that door on the honest answer to where the
+ * bucket is, is "so is it" — a retry of the set piece that starts with your
+ * friend still standing on a plate forty metres back starts in a state the
+ * run cannot get back to, because the door it is behind is shut and slammed.
+ *
+ * Behind you if there is floor behind you, then either side, and your own
+ * feet if there is not — which is the same search the give-up recall does,
+ * because this is called from eight different rooms and "a metre to the
+ * left" is a guess in all of them. See arriveWith in friend.js.
+ */
+function bucketWithYou() {
+  friend.arriveWith(player.position, player.lookYaw, room.colliders);
+  followWanted = true;
+}
 
 /**
  * Your friend comes round in there with you.
@@ -1379,8 +1405,9 @@ const SCENES = [
       lift.parkAtTop();
       const entry = storageRoom.entry;
       player.teleport({ position: entry.position, yaw: entry.yaw, pitch: 0 });
-      const { room: top, top: floor } = lift.state;
-      friend.spawn(new THREE.Vector3(top.maxX - 2.0, floor + 0.05, (top.minZ + top.maxZ) / 2));
+      // In here with you, not on its plate in the room behind. The door that
+      // gets you in here opens for two and the bucket is the other one.
+      bucketWithYou();
       setObjective('Find the switch');
     },
   },
@@ -1393,8 +1420,7 @@ const SCENES = [
       lift.parkAtTop();
       const stair = storageRoom.atTheStair;
       player.teleport({ position: stair.position, yaw: stair.yaw, pitch: 0 });
-      const { room: top, top: floor } = lift.state;
-      friend.spawn(new THREE.Vector3(top.maxX - 2.0, floor + 0.05, (top.minZ + top.maxZ) / 2));
+      bucketWithYou();
       // Straight past the speech. This jump exists to look at the chase, and
       // twenty seconds of dialogue before it can start is twenty seconds of
       // nothing every time somebody wants to see the thing move.
@@ -1410,6 +1436,7 @@ const SCENES = [
       giantHall.lift.parkAtTop();
       const entry = transferHall.entry;
       player.teleport({ position: entry.position, yaw: entry.yaw, pitch: 0 });
+      bucketWithYou();
       setObjective('Keep going');
     },
   },
@@ -1420,6 +1447,7 @@ const SCENES = [
       pastTheChase();
       const entry = splitHalls.entry;
       player.teleport({ position: entry.position, yaw: entry.yaw, pitch: 0 });
+      bucketWithYou();
       setObjective('Climb the fall');
     },
   },
@@ -1430,6 +1458,7 @@ const SCENES = [
       pastTheChase();
       const at = splitHalls.atTheFirstSplit;
       player.teleport({ position: at.position, yaw: at.yaw, pitch: 0 });
+      bucketWithYou();
       setObjective('Find the way on');
     },
   },
@@ -1440,6 +1469,7 @@ const SCENES = [
       pastTheChase();
       const at = codeLift.entry;
       player.teleport({ position: at.position, yaw: at.yaw, pitch: 0 });
+      bucketWithYou();
       setObjective('Work the pad');
     },
   },
@@ -1451,6 +1481,7 @@ const SCENES = [
       codeLift.sendDown();
       const at = codeLift.atTheWindow;
       player.teleport({ position: at.position, yaw: at.yaw, pitch: 0 });
+      bucketWithYou();
       setObjective('Get to the window');
     },
   },
@@ -1752,11 +1783,55 @@ renderer.setAnimationLoop((time) => {
    * arm's reach gets picked back up: without that the two would fight, one
    * setting the flag each frame and the other clearing it.
    */
+  /**
+   * And the room at the top stops holding it once its door is open.
+   *
+   * Both halves of this gate are about a puzzle in progress. The bucket is
+   * up there to work the treads and stand on a plate, and until the pair is
+   * complete, "give up and teleport to the player" and "set off after a body
+   * seventy metres down a shaft" are both the room undoing itself.
+   *
+   * The frame the door latches, that stops being true. There is nothing left
+   * up there to solve, the way on is open, and what the player does next is
+   * walk through it — so from then on the room is a room like any other and
+   * the bucket is free to come too. Without this it stands on its plate
+   * watching you leave, which is where it has been for every run so far.
+   */
   const driveOnly =
     gauntlet.contains(friend.position.x, friend.position.z) ||
-    giantHall.lift.holds(friend.position);
+    (giantHall.lift.holds(friend.position) && !giantHall.lift.pairDoor.isOpen);
   friend.setRecallAllowed(!driveOnly);
   if (driveOnly && friend.isFollowing) friend.setFollowing(false);
+  /**
+   * The bucket comes with you through the two-body door.
+   *
+   * It is the one door in the building that cannot be opened alone, so the
+   * frame it latches is the frame the game has just finished insisting the
+   * two of you are a pair — and then the old build had you walk through it
+   * on your own, into the one room where being on your own is the whole
+   * point. Whatever that is, it is not what the door just said.
+   *
+   * So: asked for, and collected. `followWanted` is the flag G sets and the
+   * loop below reads, and setting it is what makes the collection stick
+   * rather than being undone by the next frame. On the edge and not on the
+   * state, or holding G down would be the only way to tell it to wait from
+   * here on; once you are through, the toggle is yours again.
+   *
+   * It self-clears, because `isOpen` is the door's own latch and a reset
+   * puts that back down with everything else.
+   */
+  const pairIsOpen = giantHall.lift.pairDoor.isOpen;
+  if (pairIsOpen && !pairWasOpen && friend.isActive) {
+    followWanted = true;
+    friend.collect();
+  }
+  pairWasOpen = pairIsOpen;
+
+  // And from the shed to the window it is at your elbow rather than politely
+  // behind you, and it gives up on walking round things in a second and a
+  // quarter rather than four. See keepUp in friend.js: the route from here is
+  // a crate stair, a jumped climb and a lift, none of which it can walk.
+  friend.keepUp(storageRoom.isChasing);
   friend.update(delta, camera, camera.position, room.colliders);
   // After the friend has moved, so the plates read where it is now, and given
   // the *body's* position rather than the camera's — while you are driving the

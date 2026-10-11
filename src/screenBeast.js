@@ -1402,6 +1402,29 @@ export function createScreenBeast({
     },
 
     /**
+     * It is somewhere you cannot see it, which is not the same as gone.
+     *
+     * For the lift. The doors shut on it and the car goes down twelve metres
+     * of shaft with the thing on the roof, and there is no honest way to draw
+     * that: the shaft is three and a quarter metres across, the animal is
+     * eleven, and crushing it into the box would be a great deal of work to
+     * make a monster quarter size inside something you cannot see into anyway.
+     * So the body stays and the picture goes, and the ride is carried entirely
+     * by what you can hear overhead — see the `riding` phase in codeLift.js.
+     *
+     * `restartAt` is what brings it back, and it is written to be called on a
+     * thing in this state: it puts the body somewhere, shows it, and starts
+     * hunting from a clean trail.
+     */
+    lurk() {
+      if (phase === 'wait') return;
+      phase = 'done';
+      music.stop();
+      life.stop();
+      group.visible = false;
+    },
+
+    /**
      * It gave up — something came down between you.
      *
      * No sound of its own. Whatever stopped it is the thing that made the

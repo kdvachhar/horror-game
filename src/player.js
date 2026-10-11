@@ -109,6 +109,31 @@ export function createPlayer(camera, domElement, colliders) {
    * hall's workbench at 1.03 and a tipped bed's frame at 1.05 both stay put.
    */
   const STEP_HEIGHT = 0.9;
+  /**
+   * And how far the floor can leave from under you before you are falling.
+   *
+   * There is a step up in this game and there was no step down, and the
+   * difference shows up on a lift. Going up, a platform's top arrives under
+   * your feet and a step's worth of free climb swallows it — liftTower.js says
+   * so at length and is right. Going down, the floor moves away from your feet
+   * faster than one frame of gravity brings them after it, so you are airborne;
+   * then you fall until you are coming down faster than the lift, land, and the
+   * floor leaves again. Measured on the code lift's twelve metre descent:
+   * **forty landings**, four or five a second, each with a thump on it,
+   * standing perfectly still in a lift.
+   *
+   * It had never mattered, because nothing used to happen on a ride down. It
+   * matters now that one of them is eight and a half seconds of listening for
+   * something on the roof of the car.
+   *
+   * So a body that was on the ground stays on the ground while the ground is
+   * within this. Thirty centimetres is thirty times what the fastest platform
+   * in the building moves in a frame and well under anything you would call a
+   * drop — walking off a kerb this high now steps down it instead of falling
+   * off it, which is the same liberty the step up already takes and the same
+   * answer: being thumped by furniture is worse than the liberty.
+   */
+  const STEP_DOWN = 0.3;
   /** Metres per second the view catches up after a step. */
   const STEP_SMOOTHING = 4.5;
 
@@ -320,7 +345,10 @@ export function createPlayer(camera, domElement, colliders) {
 
       const ground = supportHeight(nextPosition.x, nextPosition.z, previousFeetY);
       const wasGrounded = grounded;
-      if (nextPosition.y <= ground) {
+      // Stood on something that has moved down, rather than stepped off
+      // something. See STEP_DOWN.
+      const sank = wasGrounded && verticalVelocity < 0 && previousFeetY - ground <= STEP_DOWN;
+      if (nextPosition.y <= ground || sank) {
         // Only a real fall thumps — ignore the sub-centimetre settling that
         // happens every frame you walk across a flat floor.
         if (!wasGrounded && verticalVelocity < -2) playLanding();

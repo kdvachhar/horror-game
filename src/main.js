@@ -287,6 +287,28 @@ const death = createDeathScreen({
      * the two is the one that should win.
      */
     const died = player.position;
+    /**
+     * Caught in the last corridor, which is its own checkpoint.
+     *
+     * Before the splits branch, for the same reason that one is before the
+     * shed's: during this stretch both are true and the nearer should win.
+     * What is behind you here is the climb, three junctions and eight arrows
+     * — about ninety seconds of ground you have already covered, most of it
+     * standing still at a keypad — and the run that killed you is sixteen
+     * metres long. Paying for the second with the first is the game over the
+     * death screen is supposed not to be.
+     */
+    if (codeLift.inTheCorridor(died.x, died.z)) {
+      storageRoom.scare.reset();
+      codeLift.backToTheCar();
+      const back = codeLift.atTheCar;
+      player.teleport({ position: back.position, yaw: back.yaw, pitch: 0 });
+      // Out of sight until you walk out of the car again, which is what arms
+      // it: the corridor's own trigger does that and it has just been rewound.
+      storageRoom.beast.lurk();
+      setObjective('Get to the window');
+      return;
+    }
     if (splitHalls.contains(died.x, died.z) || codeLift.contains(died.x, died.z)) {
       /**
        * The shot first, and it is not optional.
@@ -440,7 +462,8 @@ const storageRoom = createStorageRoom({
    * do not exist yet on this line — the hall hangs off this room's opening
    * and the corridors hang off the hall's.
    */
-  clearance: (x, z) => transferHall.clearance(x, z) ?? splitHalls.clearance(x, z),
+  clearance: (x, z) =>
+    transferHall.clearance(x, z) ?? codeLift.clearance(x, z) ?? splitHalls.clearance(x, z),
   onChase: () => giantHall.lift.pairDoor.slam(),
   onCalm: () => giantHall.lift.pairDoor.release(),
 });
@@ -496,7 +519,60 @@ const codeLift = createCodeLift({
   doorway: splitHalls.liftDoor,
   player,
   camera,
-  onLeave: () => storageRoom.beast.stop(),
+  /**
+   * The doors shut on it, and that is all they do.
+   *
+   * The car's doorway was meant to be the end of the chase — the first
+   * opening in the building too small to fold through, and the eight arrows
+   * were its price. It is not, because the thing does not need the car, it
+   * needs the shaft, and the shaft is a hole twelve metres straight down to
+   * the floor you are going to. So the doors shutting only buy the ride: it
+   * is shut out of the car and it goes over the top, which is what you can
+   * hear on the roof all the way down.
+   *
+   * `lurk` and not `stop`, because this is not it giving up. It is it being
+   * somewhere you cannot see — see screenBeast.js, which keeps the body and
+   * takes the picture away.
+   */
+  onShut: () => storageRoom.beast.lurk(),
+  /**
+   * And out of the shaft behind you, once you are clear of the car.
+   *
+   * With a second and a bit of it getting out, which is not decoration. It
+   * arrives five metres behind you and its reach is 1.9, so a player who does
+   * the thing every player does when something screams behind them in a
+   * corridor — stop and look — was dead in about half a second. Held at the
+   * mouth of the lift while it drags itself out of the shaft, the same stop
+   * costs you the look and not the run.
+   *
+   * The hold is the shutter's mechanism and it brings the shutter's sound with
+   * it: see `heldUntil` in screenBeast.js, which grinds and screeches on the
+   * frame it comes off whatever was holding it. So the lift being torn open is
+   * one noise and it coming after you is another, a beat apart, which is the
+   * right number of events for what is happening.
+   */
+  onOut: () => {
+    const at = codeLift.atTheShaft;
+    storageRoom.beast.restartAt(new THREE.Vector3(at.x, at.y, at.z), at.yaw);
+    storageRoom.beast.holdAt(at.z - 1.2, 1.2, 'z', { y: [at.y - 1.0, at.y + 1.0] });
+  },
+  /**
+   * The gap at the end, and it is the hold that does this rather than a stop.
+   *
+   * A pursuer that is switched off the instant you are through reads as a
+   * pursuer that was never really behind you: it stops wherever it happens to
+   * be, which in a corridor is the middle of nothing. Held at the wall it
+   * keeps coming, arrives, and presses — so the last thing in this building
+   * is a thing you are watching fail to fit through a door.
+   *
+   * The hold is long enough to be permanent at the pace of the six metres it
+   * is holding you off; `onWindow` is what actually ends it.
+   */
+  onSafe: () =>
+    storageRoom.beast.holdAt(codeLift.pinchZ, 900, 'z', {
+      y: [codeLift.atTheShaft.y - 1.0, codeLift.atTheShaft.y + 1.0],
+    }),
+  onWindow: () => storageRoom.beast.stop(),
 });
 room.colliders.push(...codeLift.colliders);
 

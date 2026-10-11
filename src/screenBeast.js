@@ -1302,10 +1302,41 @@ export function createScreenBeast({
      * It makes the noise on the way out rather than on the way in — what you
      * hear from the far side of a shutter is not it arriving, it is it
      * leaving.
+     *
+     * `axis` is which way it is being stopped, and it is a parameter because
+     * there are now two of these and they are at right angles: the shutter is
+     * across the hall and holds it off a plane in z, and the roof comes down
+     * across the front of the machine and holds it off a plane in x. Both are
+     * a floor and not a ceiling — the thing travels toward -z down the hall
+     * and toward -x down the shed, so in each case the barrier is the lowest
+     * value it is allowed to reach. A general obstacle would be a box and a
+     * normal; two barriers at right angles are a field name.
      */
-    holdAt(z, seconds) {
+    holdAt(plane, seconds, axis = 'z', keep = null) {
       if (phase !== 'hunt') return;
-      heldUntil = { z, left: seconds };
+      /**
+       * And a hold that is already standing is not replaced by a shorter one.
+       *
+       * This was a silent fault and it cost the whole mechanism. There are two
+       * barriers in this chase and the player trips the second one while the
+       * first is still holding: the roof comes down across the shed and buys
+       * fifteen seconds, and about eleven seconds later you run under the
+       * shutter in the hall, which asked for its own two and eight tenths and
+       * *got it* — a straight assignment, so a barrier forty metres behind the
+       * thing it is supposed to be stopping cut the roof's hold down to the
+       * shutter's and released it at the shutter's plane. Every hold from
+       * twelve seconds up measured the same arrival at the far end, which is
+       * what sent me looking.
+       *
+       * Whichever barrier has it keeps it, and a second one can only make the
+       * wait longer. That is also the honest reading: the thing is standing at
+       * the heap, and the shutter coming down is nothing it can see.
+       */
+      if (heldUntil) {
+        heldUntil.left = Math.max(heldUntil.left, seconds);
+        return;
+      }
+      heldUntil = { plane, left: seconds, axis, keep };
     },
 
     /** Whether something is currently in its way. For a harness. */
@@ -1532,7 +1563,34 @@ export function createScreenBeast({
 
         if (heldUntil) {
           heldUntil.left -= delta;
-          here.z = Math.max(here.z, heldUntil.z + 1.2);
+          const { axis, keep } = heldUntil;
+          here[axis] = Math.max(here[axis], heldUntil.plane + 1.2);
+          /**
+           * And inside the room the barrier is in, which is not the same
+           * thing and was the whole bug.
+           *
+           * A plane in one axis leaves the other two free, and a thing that
+           * is still steering at you with two axes free does not stand behind
+           * a barrier — it slides along it. The shutter got away with that
+           * because the hall it is in is seven metres wide; the roof across
+           * the shed does not, because the free axis there runs forty metres
+           * out of the back of the building. Held for fifteen seconds it went
+           * with you: clamped in x at the heap, it tracked your z straight
+           * through the end wall and sat in the void alongside the corridor
+           * you were running down, which cost it nothing. Four extra seconds
+           * of hold measured two extra metres of lead at the far end.
+           *
+           * So a hold is a plane *and* the box it is allowed to be in. With
+           * the box on, the same fifteen seconds is fifteen seconds of
+           * standing still, which is the eighty metres of trail it then has
+           * to walk to get back to where you are.
+           */
+          if (keep) {
+            for (const a of ['x', 'y', 'z']) {
+              if (!keep[a]) continue;
+              here[a] = Math.max(keep[a][0], Math.min(keep[a][1], here[a]));
+            }
+          }
           if (heldUntil.left <= 0) {
             heldUntil = null;
             playSpikeGrind(1);

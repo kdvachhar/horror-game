@@ -1685,3 +1685,85 @@ export function tapOutput() {
     return { peak, rms: Math.sqrt(sum / frame.length) };
   };
 }
+
+/**
+ * A roof coming in: twenty tonnes of rock arriving over about two seconds.
+ *
+ * Three layers, because a collapse is three sounds and missing any one of them
+ * makes it something else. The sub is the mass — a 34 Hz body that lands on the
+ * first frame and is most of what you feel. The sweep is the air and the dust:
+ * broad noise under a lowpass that starts open and shuts down to a rumble, so
+ * the crack is at the front and the weight is behind it. Without the third
+ * layer the two together are a bomb and not a rockfall: what says *stone* is
+ * the clatter, a dozen short bandpassed hits scattered over the first second
+ * and a half with no two at the same pitch, which is individual boulders
+ * finding somewhere to stop after the main body has already landed.
+ *
+ * Scattered deterministically is not worth it here — `Math.random` is right for
+ * a sound in a way it is never right for the world. Nothing is screenshotted
+ * and nothing is measured, and two collapses that are audibly the same sample
+ * is the one thing a procedural kit is supposed to buy its way out of.
+ */
+export function playCollapse(level = 1) {
+  if (!ready() || level < 0.02) return;
+  playedCount++;
+  const t = context.currentTime + 0.005;
+
+  // The mass. Two sines a fifth apart rather than one, so the bottom end has
+  // some beat in it instead of reading as a test tone with a fade on it.
+  for (const [hz, gain, len] of [
+    [34, 0.5, 1.9],
+    [51, 0.24, 1.3],
+  ]) {
+    const body = context.createOscillator();
+    body.type = 'sine';
+    body.frequency.setValueAtTime(hz * 1.5, t);
+    body.frequency.exponentialRampToValueAtTime(hz, t + 0.5);
+    const bodyGain = context.createGain();
+    bodyGain.gain.setValueAtTime(0.0001, t);
+    bodyGain.gain.linearRampToValueAtTime(gain * level, t + 0.04);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    body.connect(bodyGain);
+    send(bodyGain, 0.4);
+    body.start(t);
+    body.stop(t + len + 0.05);
+  }
+
+  // The air. Open at the front, shut at the back.
+  const air = context.createBufferSource();
+  air.buffer = getNoise();
+  const sweep = context.createBiquadFilter();
+  sweep.type = 'lowpass';
+  sweep.frequency.setValueAtTime(2600, t);
+  sweep.frequency.exponentialRampToValueAtTime(140, t + 1.7);
+  sweep.Q.value = 1.1;
+  const airGain = context.createGain();
+  airGain.gain.setValueAtTime(0.0001, t);
+  airGain.gain.linearRampToValueAtTime(0.4 * level, t + 0.05);
+  airGain.gain.exponentialRampToValueAtTime(0.0001, t + 2.1);
+  air.connect(sweep).connect(airGain);
+  send(airGain, 1);
+  air.start(t, Math.random() * 1.5);
+  air.stop(t + 2.2);
+
+  // The stones. Each one is a boulder landing somewhere the last one did not.
+  for (let i = 0; i < 14; i++) {
+    const at = t + 0.02 + Math.random() * Math.random() * 1.5;
+    const hit = context.createBufferSource();
+    hit.buffer = getNoise();
+    const knock = context.createBiquadFilter();
+    knock.type = 'bandpass';
+    knock.frequency.value = 420 + Math.random() * 1800;
+    knock.Q.value = 1.6 + Math.random() * 2.4;
+    const hitGain = context.createGain();
+    const loud = (0.1 + Math.random() * 0.2) * level;
+    const len = 0.1 + Math.random() * 0.22;
+    hitGain.gain.setValueAtTime(0.0001, at);
+    hitGain.gain.linearRampToValueAtTime(loud, at + 0.008);
+    hitGain.gain.exponentialRampToValueAtTime(0.0001, at + len);
+    hit.connect(knock).connect(hitGain);
+    send(hitGain, 0.8);
+    hit.start(at, Math.random() * 1.5);
+    hit.stop(at + len + 0.02);
+  }
+}

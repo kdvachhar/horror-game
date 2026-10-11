@@ -13,6 +13,7 @@ import {
 import { buildScreenFace, createScreenLife, FACE } from './screenFace.js';
 import { createScreenBeast, BREAKOUT } from './screenBeast.js';
 import { createScreenScare } from './screenScare.js';
+import { createBoulderDrop } from './boulderDrop.js';
 import { playButtonPress, playSpikeGrind, createLiftMotor } from './audio.js';
 import { showNote, setObjective } from './hud.js';
 
@@ -165,6 +166,30 @@ const STAIR = { steps: 6, rise: 0.6, wide: 1.8, deep: 2.2, from: 13.0 };
 
 /** The button. Giant, because it is the only control in a room this size. */
 const BUTTON = { base: 1.9, cap: 1.5, rise: 0.55, dome: 0.34, at: 0.58 };
+
+/**
+ * How long the roof holds it, in seconds, and it is the most load-bearing
+ * number in the back half of this game.
+ *
+ * What it buys is not time here, it is time at the pad two hundred metres
+ * away. The only part of the route where you have to stand still is the lift's
+ * eight-arrow code, and standing still against something that walks at 5.1 is
+ * a timer whether it is written as one or not.
+ *
+ * Measured, not chosen, and the whole measurement is one number: how long you
+ * can stand at the pad before it has you. With no roof at all that was four
+ * seconds — three arrows of eight, and the puzzle was unsolvable by anybody
+ * who had not already memorised it. Every second of hold is worth about a
+ * second and a sixth there, and eighteen measures a twenty and a half second
+ * window: eight arrows at two and a half seconds each, which is a player
+ * reading the strip, aiming, and pressing, with the thing coming into the
+ * lobby behind them on the last two.
+ *
+ * This is the dial. Nothing is derived from it and the rest of the chase does
+ * not care, so if the end of this game wants to be crueller, lower it — three
+ * seconds off is one arrow's worth of grace.
+ */
+const HOLD = 18;
 
 /**
  * Waking up, in seconds from the press.
@@ -1040,6 +1065,30 @@ export function createStorageRoom({ scene, doorway, player, camera, death, clear
     height: WAY_UP.high,
   };
 
+  /**
+   * The roof across the front of the machine.
+   *
+   * Built here and not in main.js because it is part of the breakout, and the
+   * breakout is this room's: the cabinet shakes, the screen goes, the thing
+   * comes forward and the ceiling comes down in front of it, all on one clock.
+   * It stands against the face of the machine and fills the whole width of the
+   * shed, so there is nothing to go round — see boulderDrop.js for why it is
+   * rock and not another shutter.
+   */
+  const boulders = createBoulderDrop({
+    scene,
+    parent: group,
+    colliders,
+    player,
+    x: far - RIG.deep - 0.2,
+    z: midZ,
+    width: WIDTH,
+    floorY,
+    ceilingY: crown,
+    // The one thing in the apron the toe of it must not land on.
+    clear: { x: buttonX, z: midZ, r: BUTTON.base / 2 + 0.4 },
+  });
+
   const beast = createScreenBeast({
     scene,
     player,
@@ -1177,6 +1226,9 @@ export function createStorageRoom({ scene, doorway, player, camera, death, clear
     /** The shot it ends on, for a harness. */
     scare,
 
+    /** The roof that comes in across the apron, for a harness and the menu. */
+    boulders,
+
     /** Whether the chase is on, so a death knows which room it happened in. */
     get isChasing() {
       return chasing;
@@ -1226,6 +1278,7 @@ export function createStorageRoom({ scene, doorway, player, camera, death, clear
       // back, and it is holding a reference to the thing being reset.
       scare.reset();
       beast.reset();
+      boulders.reset();
       onCalm?.();
       wound.visible = false;
       bezel.visible = true;
@@ -1311,6 +1364,49 @@ export function createStorageRoom({ scene, doorway, player, camera, death, clear
         }
       }
       beast.update(delta);
+
+      /**
+       * And the roof, after the thing rather than before it.
+       *
+       * Order matters on exactly one frame. `holdAt` is only accepted while
+       * the beast is hunting, and the frame it starts hunting is the frame
+       * BREAKOUT.free comes round inside `beast.update` — asked a line earlier
+       * it is still coming out of the wall, the hold is dropped on the floor,
+       * and twenty tonnes of rock lands in front of a thing that walks
+       * straight through it.
+       */
+      boulders.update(delta);
+      if (chasing) {
+        if (!boulders.hasFallen && chaseSince >= BREAKOUT.free) {
+          boulders.drop();
+          /**
+           * A metre in front of the back of the heap, so what comes over the
+           * top of the rock is the face and not the whole animal: held at its
+           * own front face it is already through.
+           *
+           * And kept in the shed while it is held, which is the part that
+           * makes the hold worth anything — see screenBeast.js. It is allowed
+           * to slide along the back of the rock looking for you, four metres
+           * clear of each side wall, and it is allowed none of the height you
+           * gain going up the pallet stair: a thing that follows you up to the
+           * transfer opening while it is supposed to be buried is a thing
+           * standing on the roof of its own shed.
+           */
+          beast.holdAt(boulders.front + 1.0, HOLD, 'x', {
+            z: [minZ + 4.0, maxZ - 4.0],
+            y: [floorY + 3.0, floorY + 5.0],
+          });
+        }
+        // It stops being held and the heap gives on the same frame, because
+        // they are the same event seen from either side of it.
+        if (boulders.isDown && !boulders.isOpen && !beast.isHeld) {
+          // Where it was when it got through, so the hole is under the thing
+          // rather than in the middle of the heap: it spends the hold sliding
+          // along the back of this looking for you, and eleven seconds of that
+          // can leave it thirteen metres off centre.
+          boulders.open(beast.position.z);
+        }
+      }
 
       if (!awake) return;
       since += delta;

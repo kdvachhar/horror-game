@@ -474,7 +474,7 @@ const transferHall = createTransferHall({
    * two junctions away, which is not a chase. At 2.8 you reach the pad with
    * it in the corridor behind you.
    */
-  onSeal: () => storageRoom.beast.holdAt(transferHall.gateZ, 2.8),
+  onSeal: () => storageRoom.beast.holdAt(transferHall.gateZ, 2.8, 'z'),
 });
 room.colliders.push(...transferHall.colliders);
 

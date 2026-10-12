@@ -6,6 +6,7 @@ import {
   playBucketJump,
   playBucketLand,
   playCrush,
+  playCollapse,
 } from './audio.js';
 import { setObjective } from './hud.js';
 
@@ -47,13 +48,26 @@ import { setObjective } from './hud.js';
  * Read it as a storyboard: the thing arrives and fills the frame, the bucket
  * comes in off the floor and goes for its face, it screeches and thrashes
  * with the bucket hanging off it, a hand comes in and takes the bucket,
- * closes, and drops what is left; then it goes down, and the arm that is
- * still hanging over you comes down with it, across the window.
+ * closes, and drops what is left; then it screams, goes over, and lands
+ * face down on the concrete in front of you, and the arm that is still
+ * hanging over you comes down across the window.
  *
  * The one timing that was measured rather than felt is `grab` minus `hit`:
  * under a second and a half, the bucket reads as having bounced off rather
  * than as having got hold of it, and the whole point of the shot is that the
  * animal cannot get it off.
+ *
+ * `dying` to `down` is the fall and it is in two parts on purpose. For a
+ * second it is still standing and failing to — that is `dying`, the sag, and
+ * the screech that goes with it — and then at `topple` it stops being held
+ * up at all and the last one and three fifths of a second is the thing going
+ * over. Both halves have to be there: a body this size that starts falling
+ * the frame it dies has not died, it has been switched off.
+ *
+ * `swing` is the arm, and the gap between `down` and it is a beat on a dead
+ * animal lying on a floor — the only still frame in the sequence and the one
+ * the ending needs, or the hand comes down while you are still watching the
+ * thing land.
  */
 const AT = {
   close: 1.0,
@@ -65,10 +79,11 @@ const AT = {
   crushed: 5.5,
   drop: 5.7,
   dying: 6.2,
-  down: 8.8,
-  fall: 9.2,
-  glass: 10.1,
-  over: 12.5,
+  topple: 7.3,
+  down: 8.9,
+  swing: 10.0,
+  glass: 10.9,
+  over: 13.3,
 };
 
 /**
@@ -211,11 +226,13 @@ export function createFinale({ scene, camera, player, beast, friend, lift, onFin
    * another silhouette. A shot that needs light brings light — screenScare
    * hangs its own backdrop for the same reason.
    *
-   * On the camera, four metres of reach and no further, so what it lifts is
-   * the face, the hand and the glass, and the twenty metres of corridor
-   * behind them stay as black as they were.
+   * On the camera, nine metres of reach and no further, so what it lifts is
+   * the face, the hand, the floor it all ends up on and the glass five
+   * metres the other way, while the rest of the corridor stays as black as
+   * it was. It was seven, which stopped a metre and a half short of a
+   * window that is now behind you rather than against your back.
    */
-  const fill = new THREE.PointLight('#c8d2c0', 0, 7, 1.6);
+  const fill = new THREE.PointLight('#c8d2c0', 0, 9, 1.6);
   fill.visible = false;
   camera.add(fill);
 
@@ -282,21 +299,25 @@ export function createFinale({ scene, camera, player, beast, friend, lift, onFin
       /**
        * You are put on a mark, and it is the one liberty this takes.
        *
-       * Everything else here is staged around where you happen to be, but
-       * the window is what the last ten seconds of this are about and the
-       * animal is five metres tall: standing anywhere but close to the
-       * glass, the shot opens on a face with no room in the frame for what
-       * is about to happen to it, and the window is somewhere behind your
-       * head.
+       * Five metres off the glass, which is two and a half times what it
+       * was. Everything in this shot is staged off the lens and the lens
+       * used to be two metres from the back wall, which is close enough
+       * that the window at the end of it was a pane filling the frame
+       * rather than a window in a wall, and close enough that a body going
+       * over forwards had nowhere to land but on top of you.
        *
-       * Two metres off the glass is where this works from, and it is also
-       * where a player who has run twenty-two metres at a window and found
-       * it shut is standing — so the move is small and most of the time it
-       * is no move at all. Off to one side, because something is going to
-       * come down on that glass.
+       * At five there is room behind the lens for the thing to come down
+       * in and room behind your head for the window to read as what it is
+       * — a hole in the end of a building with a lit city in it — when the
+       * shot turns round to it. The corridor is twenty-two metres long and
+       * you are standing in the fifth of them, so there is nothing else
+       * this costs.
+       *
+       * Off to one side still, because something is going to come down on
+       * that glass.
        */
       player.teleport({
-        position: [win.x + 0.9, win.floor, win.z + 2.0],
+        position: [win.x + 0.9, win.floor, win.z + 5.0],
         yaw: Math.PI,
         pitch: 0,
       });
@@ -334,6 +355,7 @@ export function createFinale({ scene, camera, player, beast, friend, lift, onFin
         /** And where it was when the hand opened, which is where it stays. */
         restAt: null,
         screeched: false,
+        wailed: false,
         jumped: false,
         grabSaid: false,
         crushSaid: false,
@@ -391,27 +413,76 @@ export function createFinale({ scene, camera, player, beast, friend, lift, onFin
       here.y += Math.sin(t * 17 + 1.3) * 0.22 * fury;
 
       /**
-       * And it dies, which is the body coming down rather than going away.
+       * And it dies, which is it going over rather than going away.
        *
-       * Eleven metres of animal does not fall over in a corridor nine
-       * across — it sinks, which is also the only way to get the face from
-       * head height to the floor without putting it through a wall. The
-       * pitch forward is what makes it a collapse and not a lift
-       * descending.
+       * It used to sink — straight down, with a lean on it — on the
+       * reasoning that something this size does not topple in a corridor
+       * nine metres across. What it actually reads as is a lift descending,
+       * and what a thing dying in front of you does is fall over.
+       *
+       * So it falls, and face first, because the face is the whole animal:
+       * everything you have been afraid of for the last twenty minutes is
+       * on the front of it and the shot ends with that front against the
+       * floor. Two parts — `sag`, a second of it failing to hold itself up,
+       * and `tip`, squared rather than eased because the last third of a
+       * fall is faster than the first and a smoothstep lands things like
+       * feathers.
+       *
+       * The three numbers under it are all one measurement. The body is
+       * five and a half metres from its bottom edge to its top and its
+       * middle is 2.9 off the floor, so a quarter turn about that middle
+       * has to come down a bit over two metres to put the flat of it on the
+       * concrete, and the top half of it — which is the half coming at you
+       * — sweeps two and three quarters forward in the doing. It goes back
+       * nine tenths of a metre while it falls so that what lands in front
+       * of the lens lands in front of it and not through it.
        */
-      const dying = EASE(over(t, AT.dying, AT.down));
-      here.y -= dying * 0.95;
+      const sag = EASE(over(t, AT.dying, AT.topple));
+      const going = over(t, AT.topple, AT.down);
+      const tip = going * going;
+      here.y -= sag * 0.35 + tip * 1.75;
+      here.z += tip * 0.9;
       beast.group.position.copy(here);
-      beast.group.rotation.x = dying * 0.3 + Math.sin(t * 13) * 0.04 * fury;
+      /**
+       * Negative, and that is not a taste call.
+       *
+       * The face is drawn in the group's local +z and the group is turned a
+       * half turn to look at you, so with y at pi the local +z is pointing
+       * down the corridor at the lens. Under that turn a positive x tips the
+       * face up at the ceiling and lays the thing on its back — which is
+       * what the lean on the old sink was doing, at a fifth of a radian,
+       * too small for anybody to notice it was the wrong way. A quarter turn
+       * the other way is the face against the floor.
+       */
+      beast.group.rotation.x =
+        -(sag * 0.14 + tip * (Math.PI / 2 - 0.14)) + Math.sin(t * 13) * 0.04 * fury;
       beast.group.rotation.y = Math.PI + Math.sin(t * 9) * 0.06 * fury;
 
       /**
-       * And the frame it is on the floor is the frame the screen goes out,
-       * which is the only way this animal has of being dead. See `die`.
+       * The scream, which is the one sound in this it makes about itself.
+       *
+       * Everything else it has screeched at is a thing it was doing to you.
+       * This one is on `dying` and not on the impact: it goes up as the body
+       * starts to give, and what cuts it off is the floor.
+       */
+      if (t >= AT.dying && !run.wailed) {
+        run.wailed = true;
+        playScreech(1);
+      }
+
+      /**
+       * And the frame it lands is the frame the screen goes out, which is
+       * the only way this animal has of being dead. See `die`.
+       *
+       * Both halves of the sound, because this is five metres of meat and a
+       * television arriving on concrete at once: the collapse is the mass
+       * and the lunge is the wet of it.
        */
       if (t >= AT.down && !run.died) {
         run.died = true;
         beast.die();
+        playCollapse(0.85);
+        playMeatLunge(1);
       }
 
       if (t >= AT.hit && !run.screeched) {
@@ -477,12 +548,23 @@ export function createFinale({ scene, camera, player, beast, friend, lift, onFin
         /**
          * Where the palm goes, as a point, and the arm is solved to it.
          *
-         * In from the right, closing on the thing stuck to the face; then,
-         * once the body is on the floor, up over the lens and down onto the
-         * glass. Two moves and one solver, so the hand is never in a pose
-         * this file did not ask for.
+         * Three moves and one solver, so the hand is never in a pose this
+         * file did not ask for: in from the right onto the thing stuck to
+         * the face, then still, then up over the lens and down onto the
+         * glass.
+         *
+         * The still one is the fall. The reach is written against `look`,
+         * which is the animal's face and is live every frame, and for as
+         * long as the body only sank that was the hand coming down with it.
+         * A face that goes over sends the face two and three quarter metres
+         * forward, and an arm still tracking it swings through the lens and
+         * out of the back of your head. So the frame the hand opens is the
+         * frame it stops being told where the face is: it hangs where it
+         * let go, which is also what an arm that has just dropped something
+         * does.
          */
-        if (t < AT.fall) {
+        const holding = t < AT.drop + 0.4;
+        if (holding) {
           const reach = EASE(over(t, AT.grab, AT.caught));
           want.set(
             look.x + 3.4 - reach * 2.6,
@@ -497,6 +579,9 @@ export function createFinale({ scene, camera, player, beast, friend, lift, onFin
           }
           run.heldAt = run.heldAt ?? new THREE.Vector3();
           run.heldAt.copy(want);
+        } else if (t < AT.swing) {
+          want.copy(run.heldAt);
+          grip(0.18);
         } else {
           /**
            * And it comes down, which is the last thing in the building.
@@ -506,7 +591,7 @@ export function createFinale({ scene, camera, player, beast, friend, lift, onFin
            * a metre and a half from your face. The lift in the middle of
            * the swing is what makes it an arc and not a slide.
            */
-          const swing = EASE(over(t, AT.fall, AT.glass));
+          const swing = EASE(over(t, AT.swing, AT.glass));
           const from = run.heldAt;
           want.set(
             from.x + (win.x - from.x) * swing,
@@ -534,13 +619,34 @@ export function createFinale({ scene, camera, player, beast, friend, lift, onFin
 
       // ------------------------------------------------------------ the lens
       /**
-       * Three turns and nothing else. The animal while it is still an
-       * animal, the floor while what is left of your friend is landing on
-       * it, and then round behind you for the window.
+       * Four turns and nothing else.
+       *
+       * The animal while it is still an animal; the floor, while what is
+       * left of your friend is landing on it; back up to the animal for the
+       * fall, which is the one thing in this sequence you could not be
+       * looking away from; and then round behind you for the window.
+       *
+       * The third of those is `look`, which is the face — so the lens goes
+       * over with it, and the turn down onto the floor at the end of the
+       * fall is the camera following a thing down rather than a camera
+       * being pointed at a floor.
        */
       if (t < AT.drop) aim(look, 6, delta);
-      else if (t < AT.fall) aim(friend.mesh.position, 3.4, delta);
+      else if (t < AT.dying) aim(friend.mesh.position, 3.4, delta);
+      else if (t < AT.swing) aim(look, 3.0, delta);
       else aim(run.broke ? { x: win.x, y: win.y, z: win.z } : arm.position, 2.6, delta);
+
+      /**
+       * And the floor kicks, for half a second, on the frame it lands.
+       *
+       * Written onto the camera after the aim and not into `run.pitch`, so
+       * it shakes the shot without being in the angle the player is handed
+       * back at the end of it.
+       */
+      if (t >= AT.down && t < AT.down + 0.55) {
+        const kick = 1 - (t - AT.down) / 0.55;
+        camera.rotation.x += Math.sin((t - AT.down) * 46) * 0.055 * kick * kick;
+      }
 
       if (t >= AT.over) {
         const yaw = run.yaw;

@@ -1045,13 +1045,19 @@ export function createCodeLift({
     },
 
     /**
-     * Whether you are at the glass, which is the end of the building.
+     * Whether you are at the end of the building.
      *
-     * The last three metres of the corridor. It used to be the gap that said
-     * the chase was over; there is no gap, so this does — see the trigger in
-     * main.js, which wants it along with a thing in the room behind you.
+     * The last seven metres of the corridor, and it used to be the last
+     * three. It is the ending's own staging that sets this: the shot stands
+     * you five metres off the glass — see the mark in finale.js — so a test
+     * that only fired inside three metres was a test that could not fire
+     * without moving you backwards out of it.
+     *
+     * It used to be the gap that said the chase was over; there is no gap,
+     * so this does — see the trigger in main.js, which wants it along with
+     * a thing in the room behind you.
      */
-    atTheGlass: (x, z) => inCorridor(x, z) && z < outZ0 + 3.4,
+    atTheGlass: (x, z) => inCorridor(x, z) && z < outZ0 + 7.0,
 
     /** The lobby wall the doors are in, for whatever has to stay outside it. */
     get doorZ() {

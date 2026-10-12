@@ -497,6 +497,13 @@ export function createCorpseHall({ scene, passage, player }) {
   const contains = (x, z) => x > axis - HALF && x < axis + HALF && z > near && z < far;
 
   return {
+    /**
+     * Whether a point is in this room, for whatever has to know where you
+     * are. The room has always worked this out for its own arrival note;
+     * this is the same answer, said out loud — see the save in main.js,
+     * which asks every room in the building the same question.
+     */
+    contains,
     group,
     colliders,
     contains,

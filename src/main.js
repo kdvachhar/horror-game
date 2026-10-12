@@ -61,6 +61,8 @@ import { createLightPool } from './lightPool.js';
 import { createCodeLift } from './codeLift.js';
 import { createFinale } from './finale.js';
 import { createEndCard } from './endCard.js';
+import { readSave, writeSave } from './save.js';
+import { createTitleScreen } from './titleScreen.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 
@@ -1279,6 +1281,19 @@ const SCENES = [
   {
     label: '5 · Medical room',
     hint: 'Stood in the medical room with control already handed back',
+    /**
+     * And whether you are standing in it, which is what the save is.
+     *
+     * A scene with an `at` is a room the game writes down when you walk into
+     * it — see the watcher further down this file, which asks the furthest
+     * one first and only ever moves forward. Every one of them is a room
+     * with a door you come through and a `contains` of its own; the beats
+     * that happen inside those rooms do not have one, so a save landing on
+     * the room is the worst this can do.
+     */
+    at: (p) =>
+      Math.abs(p.x - MEDICAL.center[0]) < MEDICAL.width / 2 &&
+      Math.abs(p.z - MEDICAL.center[2]) < MEDICAL.depth / 2,
     go() {
       resetSequences();
       placeFriendInMedicalRoom();
@@ -1329,6 +1344,7 @@ const SCENES = [
   {
     label: '7 · The red hall',
     hint: 'Through the red door, at the top of the hall, with the trap not yet armed',
+    at: (p) => gauntlet.contains(p.x, p.z),
     go() {
       resetSequences();
       medical.openDoor();
@@ -1354,6 +1370,7 @@ const SCENES = [
   {
     label: '8 · The room behind the hall',
     hint: 'Through the way out, with the button and the console',
+    at: (p) => exitRoom.contains(p.x, p.z),
     go() {
       resetSequences();
       medical.openDoor();
@@ -1377,6 +1394,7 @@ const SCENES = [
   {
     label: '9 · The swing room',
     hint: 'Through the orange door, both of you in it, puzzle unsolved',
+    at: (p) => orangeRoom.contains(p.x, p.z),
     go() {
       resetSequences();
       medical.openDoor();
@@ -1401,6 +1419,7 @@ const SCENES = [
   {
     label: '10 · The hall of bodies',
     hint: 'Behind the orange door, which this opens for you — the yellow door and the pile',
+    at: (p) => corpseHall.contains(p.x, p.z),
     go() {
       resetSequences();
       medical.openDoor();
@@ -1428,6 +1447,7 @@ const SCENES = [
   {
     label: '11 · The control room',
     hint: 'Through the staff door in the hall — the console and the machinery',
+    at: (p) => controlRoom.contains(p.x, p.z),
     go() {
       resetSequences();
       medical.openDoor();
@@ -1455,6 +1475,7 @@ const SCENES = [
   {
     label: '12 · The giant hall',
     hint: 'Through the door he opens — the long hall behind it',
+    at: (p) => giantHall.contains(p.x, p.z),
     go() {
       resetSequences();
       medical.openDoor();
@@ -1480,6 +1501,7 @@ const SCENES = [
   {
     label: '13 · The tall room',
     hint: 'Through the end of the long hall — the shaft with the holes in it',
+    at: (p) => tallRoom.contains(p.x, p.z),
     go() {
       reachTheTallRoom();
       const entry = tallRoom.entry;
@@ -1554,6 +1576,7 @@ const SCENES = [
   {
     label: '16 · Storage',
     hint: 'Behind the two-body door at the top: racking, and the thing on the screens',
+    at: (p) => storageRoom.contains(p.x, p.z),
     go() {
       reachTheTallRoom();
       // Both of you through, because the door that gets you in here needs the
@@ -1589,6 +1612,7 @@ const SCENES = [
   {
     label: '18 · The transfer hall',
     hint: 'Through the hole over the racking, with the run still ahead of you',
+    at: (p) => transferHall.contains(p.x, p.z),
     go() {
       reachTheTallRoom();
       giantHall.lift.parkAtTop();
@@ -1612,6 +1636,7 @@ const SCENES = [
   {
     label: '20 · The splits',
     hint: 'Up on the deck, in the mouth of the first junction',
+    at: (p) => splitHalls.contains(p.x, p.z),
     go() {
       pastTheChase();
       const at = splitHalls.atTheFirstSplit;
@@ -1623,6 +1648,7 @@ const SCENES = [
   {
     label: '21 · The lift',
     hint: 'In the car, with eight arrows to put in and no floors to pick from',
+    at: (p) => codeLift.contains(p.x, p.z),
     go() {
       pastTheChase();
       const at = codeLift.entry;
@@ -1637,6 +1663,7 @@ const SCENES = [
   {
     label: '22 · The window',
     hint: 'Out of the lift at the bottom, looking down the last corridor',
+    at: (p) => codeLift.inTheCorridor(p.x, p.z),
     go() {
       pastTheChase();
       codeLift.sendDown();
@@ -1647,6 +1674,64 @@ const SCENES = [
     },
   },
 ];
+
+/**
+ * And the save, which is one line of storage and this.
+ *
+ * Every scene above that is a room carries an `at`. This walks them from the
+ * far end of the building backwards and stops at the first one that says you
+ * are standing in it, which gives the furthest room you are in when two
+ * overlap — the lift's corridor is inside the lift's own bounds, the hoist's
+ * chamber is inside the giant hall — and then writes it down.
+ *
+ * **It only ever goes forward.** The loop gives up the moment it reaches a
+ * room at or behind the one already saved, so walking back through the
+ * building cannot cost you progress, and the common case — you are where you
+ * were last frame — is one `contains` call and a comparison. A save is
+ * therefore "the furthest room you have been in", which is what a player
+ * means by it.
+ *
+ * Nothing here knows how to put the world back. That is `go()`, the same
+ * call the debug menu makes and the same one `npm run check:scenes` walks
+ * every scene with — see save.js on why the save is an index into a list of
+ * tested states rather than a serialised world.
+ */
+const ROOMS = SCENES.map((scene, index) => ({ scene, index })).filter((r) => r.scene.at);
+let savedRoom = -1;
+
+function rememberWhereYouAre() {
+  for (let k = ROOMS.length - 1; k >= 0; k--) {
+    const { scene, index } = ROOMS[k];
+    if (index <= savedRoom) return;
+    if (!scene.at(player.position)) continue;
+    savedRoom = index;
+    if (writeSave(index, scene.label)) title.setSave(readSave());
+    return;
+  }
+}
+
+/** Wind the whole thing back to the top and start the save again with it. */
+function startNewGame() {
+  SCENES[0].go();
+  savedRoom = 0;
+  writeSave(0, SCENES[0].label);
+}
+
+/**
+ * And back to wherever you got to, which is a scene jump with a different
+ * name on it.
+ *
+ * Clamped rather than trusted: the file in storage was written by a build
+ * that may have had more rooms in it than this one does.
+ */
+function loadSavedGame() {
+  const save = readSave();
+  if (!save) return startNewGame();
+  const room = Math.min(save.room, SCENES.length - 1);
+  SCENES[room].go();
+  savedRoom = room;
+  return undefined;
+}
 
 /**
  * Everything that has to have happened before the far end of the building is
@@ -1739,13 +1824,34 @@ for (const type of ['pointerdown', 'keydown']) {
 
 const overlay = document.getElementById('overlay');
 let announced = false;
+/**
+ * Whether this session has been in the building yet.
+ *
+ * The overlay is two screens wearing one coat: before you start it is the
+ * title screen, and every time you let the pointer go afterwards it is the
+ * pause screen. The difference is what a click on the backdrop means — a way
+ * back in, or nothing at all, because before the first game there is nothing
+ * to carry on with and the two buttons are the way in.
+ */
+let started = false;
 
-overlay.addEventListener('click', () => {
+/**
+ * Audio, the pointer, and the one line the game says before you move.
+ *
+ * @param opening false when you are being put back somewhere you have
+ *        already been. The monologue over the first room is the game
+ *        introducing itself, and a save loaded into the twelfth room does not
+ *        want introducing.
+ */
+function enterTheGame({ opening = true } = {}) {
   // Audio FIRST, and synchronously. requestPointerLock throws outright in
   // Safari when it doesn't like the request, and it used to run before this —
   // one throw and unlockAudio never ran, leaving the whole session silent with
   // no way back. Nothing may come between the gesture and the unlock.
   const unlocked = unlockAudio();
+
+  started = true;
+  document.body.classList.add('started');
 
   try {
     player.requestLock();
@@ -1759,8 +1865,37 @@ overlay.addEventListener('click', () => {
     if (announced) return;
     announced = true;
     playObjectiveBlip();
-    monologue.play(OPENING_LINES);
+    if (opening) monologue.play(OPENING_LINES);
   });
+}
+
+overlay.addEventListener('click', () => {
+  // Every gesture unlocks audio, including the ones that do nothing else.
+  if (!started) {
+    unlockAudio();
+    return;
+  }
+  enterTheGame();
+});
+
+/**
+ * And the front of it. See titleScreen.js, which owns the picture.
+ *
+ * Both buttons do the same two things in the same order — put the world
+ * somewhere, then go there. The only asymmetry is the opening monologue,
+ * which belongs to the first room and not to the twelfth.
+ */
+const title = createTitleScreen({
+  save: readSave(),
+  onNewGame: () => {
+    startNewGame();
+    title.setSave(readSave());
+    enterTheGame();
+  },
+  onLoadGame: () => {
+    loadSavedGame();
+    enterTheGame({ opening: false });
+  },
 });
 
 window.addEventListener('resize', () => {
@@ -2130,6 +2265,12 @@ renderer.setAnimationLoop((time) => {
     theEnd.show();
   }
   theEnd.update(delta);
+  // Where you have got to, written down the moment you walk into somewhere
+  // new. Cheap enough to ask every frame — see rememberWhereYouAre, which
+  // gives up at the room it already knows about.
+  rememberWhereYouAre();
+  // And the menu's own face, which draws nothing while the menu is down.
+  title.update(delta);
   // After the room that raises it. The screen's own clock is only the beat it
   // waits before it will take a key — see death.js — and that beat starts on
   // the frame the room puts it up.

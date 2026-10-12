@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Create One Yourself</title>
+    <title>Friend Factory</title>
     <link
       rel="icon"
       href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>%F0%9F%95%B7</text></svg>"
@@ -69,7 +69,86 @@
 
       #overlay p { font-size: 0.85rem; letter-spacing: 0.12em; line-height: 2; text-align: center; }
       #overlay .prompt { color: #e6efe8; animation: pulse 2.4s ease-in-out infinite; }
+      /* There is nothing to carry on with until there has been a first time. */
+      #resume-hint { visibility: hidden; }
+      body.started #resume-hint { visibility: visible; }
       @keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+
+      /* The title screen proper: the thing on the left, the way in on the
+         right. Stacked instead on a narrow window, picture first, because the
+         picture is the half that says what this is. */
+      #title {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: clamp(1.5rem, 6vw, 5rem);
+        flex-wrap: wrap;
+      }
+
+      /* Three by two, because the set is: a square panel round a 2:1
+         television is a square of black with a letterbox in it. The wires out
+         of the top and bottom are meant to run off the edges. */
+      #title-face {
+        width: clamp(260px, 34vw, 470px);
+        aspect-ratio: 3 / 2;
+        display: block;
+      }
+
+      #title-menu {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.7rem;
+        min-width: 15rem;
+      }
+
+      /* Built like the interact prompt's key cap, which is the only other
+         thing in this game that looks like a control: a bordered plate in the
+         same green over the same near-black. */
+      .menu-button {
+        font-family: inherit;
+        font-size: 0.95rem;
+        letter-spacing: 0.22em;
+        text-indent: 0.22em;
+        text-transform: uppercase;
+        color: #e6efe8;
+        background: rgba(10, 14, 11, 0.72);
+        border: 1px solid rgba(70, 224, 122, 0.45);
+        border-radius: 6px;
+        padding: 0.85rem 1.6rem;
+        cursor: pointer;
+        transition: border-color 0.18s, background 0.18s, color 0.18s;
+      }
+      .menu-button:hover,
+      .menu-button:focus-visible {
+        border-color: rgba(70, 224, 122, 0.95);
+        background: rgba(16, 30, 20, 0.9);
+        color: #ffffff;
+        outline: none;
+      }
+      .menu-button:disabled {
+        color: #5e6962;
+        border-color: rgba(120, 134, 124, 0.25);
+        background: rgba(10, 14, 11, 0.45);
+        cursor: default;
+      }
+
+      /* What loading would give you back, under the button that would do it. */
+      #menu-where {
+        font-size: 0.68rem !important;
+        letter-spacing: 0.2em !important;
+        line-height: 1.6 !important;
+        text-transform: uppercase;
+        color: #6f7c73;
+        margin-top: -0.2rem;
+      }
+
+      #overlay .controls {
+        font-size: 0.72rem !important;
+        line-height: 1.9 !important;
+        color: #7f8c84;
+        margin-top: 0.8rem;
+      }
 
       /* Objective banner, top centre. On a plate, because as bare text over a
          concrete wall it was the one thing on screen you could look straight
@@ -216,15 +295,23 @@
     <div id="vignette"></div>
 
     <div id="overlay">
-      <h1><span class="g">Create</span> <span class="b">One</span> <span class="p">Yourself</span></h1>
-      <p>
-        WASD / arrows &nbsp;—&nbsp; move<br />
-        mouse &nbsp;—&nbsp; look &nbsp;&nbsp;·&nbsp;&nbsp; shift &nbsp;—&nbsp; run<br />
-        space &nbsp;—&nbsp; jump &nbsp;&nbsp;·&nbsp;&nbsp; E &nbsp;—&nbsp; interact<br />
-        F &nbsp;—&nbsp; possess &nbsp;&nbsp;·&nbsp;&nbsp; G &nbsp;—&nbsp; wait / follow<br />
-        esc &nbsp;—&nbsp; release cursor
-      </p>
-      <p class="prompt">click to enter the room</p>
+      <h1><span class="g">Friend</span> <span class="b">Factory</span></h1>
+      <div id="title">
+        <canvas id="title-face"></canvas>
+        <div id="title-menu">
+          <button type="button" class="menu-button" id="menu-load">Load game</button>
+          <p id="menu-where"></p>
+          <button type="button" class="menu-button" id="menu-new">New game</button>
+          <p class="controls">
+            WASD / arrows &nbsp;—&nbsp; move<br />
+            mouse &nbsp;—&nbsp; look &nbsp;&nbsp;·&nbsp;&nbsp; shift &nbsp;—&nbsp; run<br />
+            space &nbsp;—&nbsp; jump &nbsp;&nbsp;·&nbsp;&nbsp; E &nbsp;—&nbsp; interact<br />
+            F &nbsp;—&nbsp; possess &nbsp;&nbsp;·&nbsp;&nbsp; G &nbsp;—&nbsp; wait / follow<br />
+            esc &nbsp;—&nbsp; release cursor
+          </p>
+        </div>
+      </div>
+      <p class="prompt" id="resume-hint">click anywhere else to carry on</p>
     </div>
 
     <script type="module" src="/src/main.js"></script>

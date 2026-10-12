@@ -533,6 +533,7 @@ export function createSplitHalls({ scene, doorway, player }) {
     chunk.castShadow = true;
     chunk.receiveShadow = true;
     group.add(chunk);
+    return chunk;
   };
 
   /**
@@ -672,6 +673,19 @@ export function createSplitHalls({ scene, doorway, player }) {
    * Then a body under each surface, because a collider with no mesh is an
    * invisible staircase, and stones over every edge a camera can reach.
    */
+  /**
+   * The loose rock on the bank, and where each piece ends up when something
+   * shoves its way over the top.
+   *
+   * Both ends worked out here rather than when it happens: the scatter is
+   * deterministic like everything else in this building, and a burst that is
+   * computed on the frame it fires is a burst that is different every run
+   * and impossible to report a bug in.
+   *
+   * Shoved toward the lift, because that is the way the thing is coming, and
+   * down onto the floor, because that is where rock goes.
+   */
+  const bankStones = [];
   const bankZ0 = lobby.z0 + BANK.apron;
   const bankZ1 = bankZ0 + BANK.deep;
   /** The line something is on one side or the other of. See `pastTheBank`. */
@@ -718,16 +732,30 @@ export function createSplitHalls({ scene, doorway, player }) {
       // spot in the room is a low spot nobody reads as one.
       if (rise === BANK.low && Math.abs(ox) < BANK.saddle * 0.34) continue;
       const big = 0.5 + random() * 0.6;
-      if (band === 2) {
-        stone(mid + ox, deck + rise - 0.16 - random() * 0.22, bankLine + (random() - 0.5) * BANK.deep * 0.7, big);
-      } else {
-        stone(
-          mid + ox,
-          deck + 0.2 + random() * (rise - 0.1),
-          bankLine + (band ? 1 : -1) * (BANK.deep / 2 - 0.1),
-          big
-        );
-      }
+      const chunk =
+        band === 2
+          ? stone(mid + ox, deck + rise - 0.16 - random() * 0.22, bankLine + (random() - 0.5) * BANK.deep * 0.7, big)
+          : stone(
+              mid + ox,
+              deck + 0.2 + random() * (rise - 0.1),
+              bankLine + (band ? 1 : -1) * (BANK.deep / 2 - 0.1),
+              big
+            );
+      bankStones.push({
+        mesh: chunk,
+        from: chunk.position.clone(),
+        turn: chunk.rotation.clone(),
+        to: new THREE.Vector3(
+          chunk.position.x + (random() - 0.5) * 2.4,
+          deck + 0.1 + random() * 0.2,
+          chunk.position.z - (0.8 + random() * 1.9)
+        ),
+        spin: new THREE.Euler(
+          chunk.rotation.x + (random() - 0.5) * 4,
+          chunk.rotation.y + (random() - 0.5) * 4,
+          chunk.rotation.z + (random() - 0.5) * 4
+        ),
+      });
     }
   }
 
@@ -950,6 +978,8 @@ export function createSplitHalls({ scene, doorway, player }) {
   let toldFall = false;
   let climbed = false;
   let toldSplit = false;
+  /** Nought to one while the bank's loose rock is being thrown. Null until. */
+  let burst = null;
 
   return {
     group,
@@ -1055,14 +1085,52 @@ export function createSplitHalls({ scene, doorway, player }) {
       toldFall = false;
       climbed = false;
       toldSplit = false;
+      burst = null;
+      for (const rock of bankStones) {
+        rock.mesh.position.copy(rock.from);
+        rock.mesh.rotation.copy(rock.turn);
+      }
       houseLights(false);
       for (const { lamp } of lamps) lamp.intensity = 0;
       for (const strip of strips) strip.material.color.copy(DEAD_STRIP);
     },
 
+    /**
+     * Something comes over the bank, and the bank shows it.
+     *
+     * The masses stay where they are and the loose rock goes: the thing is
+     * six and a half metres tall against a metre and a bit of rubble, so
+     * what it does to this is come over the top of it, and what that looks
+     * like from the car is every stone on the crest being thrown at you.
+     *
+     * **The colliders do not move, and that is deliberate rather than
+     * lazy.** The bank's one job is that your friend cannot get over it; a
+     * burst that lowered it would hand the bucket the lift as a reward for
+     * you running out of time, which is the opposite of what is happening.
+     */
+    burstTheBank() {
+      if (burst !== null) return;
+      burst = 0;
+    },
+
     update(delta) {
       const here = player.position;
       houseLights(here.z < head + (lampsIn ? 26 : 16));
+
+      if (burst !== null && burst < 1) {
+        // Out fast and settling slow, which is a stone being thrown rather
+        // than a stone being animated. Same curve the shed's heap gives on.
+        burst = Math.min(1, burst + delta / 0.7);
+        const t = 1 - (1 - burst) ** 2.6;
+        for (const rock of bankStones) {
+          rock.mesh.position.lerpVectors(rock.from, rock.to, t);
+          rock.mesh.rotation.set(
+            rock.turn.x + (rock.spin.x - rock.turn.x) * t,
+            rock.turn.y + (rock.spin.y - rock.turn.y) * t,
+            rock.turn.z + (rock.spin.z - rock.turn.z) * t
+          );
+        }
+      }
 
       /**
        * The lights come up on being anywhere in here, and the line only in

@@ -1238,7 +1238,7 @@ export function createCodeLift({
        * because a player who steps in and reads the strip for ten seconds
        * before touching anything is the player this is for.
        */
-      if (phase === 'wait' && inside(here.x, here.z)) onInTheCar?.();
+      if (phase === 'wait' && inside(here.x, here.z)) onInTheCar?.(delta);
 
       if (!told && inside(here.x, here.z)) {
         told = true;

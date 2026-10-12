@@ -46,6 +46,8 @@ import {
   tapOutput,
   playMeatLunge,
   playScreech,
+  playCollapse,
+  playRubble,
 } from './audio.js';
 import { createDebugMenu } from './debug.js';
 import { createCutscene } from './cutscene.js';
@@ -325,6 +327,8 @@ const death = createDeathScreen({
       transferHall.reset();
       splitHalls.reset();
       codeLift.reset();
+      breakIn = BREAK_IN;
+      camePast = false;
       const back = storageRoom.atThePress;
       player.teleport({ position: back.position, yaw: back.yaw, pitch: 0 });
       // And the bucket, which came through the door with you the first time
@@ -501,6 +505,95 @@ room.colliders.push(...transferHall.colliders);
 const splitHalls = createSplitHalls({ scene, doorway: transferHall.onward, player });
 room.colliders.push(...splitHalls.colliders);
 
+/**
+ * How long the rock in the lobby keeps it off the car, in seconds, measured
+ * from the moment it arrives at the rock rather than from the moment you
+ * step in.
+ *
+ * This is the clock on the eight arrows and therefore the last real dial in
+ * the game. Twenty-five, because the code is eight presses at about two and
+ * a half seconds each for somebody reading the strip, aiming and pressing —
+ * twenty seconds — so a clean entry has about five to spare and a wrong
+ * press, which costs all eight, is only survivable if you make it early.
+ *
+ * **Measured from its arrival, which is what makes the run worth running.**
+ * Since the roof stopped holding it, nothing you did between the shed and
+ * the lobby changed anything that happened at the pad: it was a permanent
+ * hold, so a player who arrived twenty metres up and a player who arrived
+ * two metres up both typed in perfect safety. Now the lead is the time it
+ * takes it to cover that lead, and then this on top.
+ */
+const BREAK_IN = 25;
+let breakIn = BREAK_IN;
+let camePast = false;
+/** How long until the next stone comes off it. See the rubble below. */
+let shedding = 0;
+
+/**
+ * Holding it off the car, and then not.
+ *
+ * Called every frame you are standing in the car with the code unfinished —
+ * see `onInTheCar` in codeLift.js, and the note on the hold below for why
+ * this is a fraction of a second re-armed rather than one long hold.
+ *
+ * The clock only runs while it is actually standing there. It is a hold at
+ * a plane, so `isHeld` is "it has arrived and is leaning on the thing",
+ * which is the only part of this the player can hear.
+ */
+function holdItOffTheCar(delta) {
+  const beast = storageRoom.beast;
+  /**
+   * And "it is there" is where it is, not whether a hold is armed.
+   *
+   * `isHeld` is true from the frame the hold is set, which is the frame you
+   * step into the car — so running the clock off it handed a player who
+   * arrived two metres up and a player who arrived twenty metres up exactly
+   * the same twenty-five seconds, which is the thing this was written to
+   * stop. The clamp stands it at the plane plus 1.2; a metre of slack past
+   * that is it having got there.
+   */
+  const atTheRock = beast.position.z < codeLift.doorZ + 3.2;
+  if (atTheRock) {
+    breakIn -= delta;
+    /**
+     * And rock coming off it the whole time, faster as it gives.
+     *
+     * The code is eight presses at a pad on the far wall of the car, which
+     * means the player is facing away from the one thing in the room that
+     * matters. The countdown has to be audible or it is not a countdown: a
+     * stone every second and a half at the start, every third of a second
+     * by the end, getting louder. It is the same sound the heap in the shed
+     * makes when something is leaning on it, which is the point — you have
+     * heard what this means already.
+     */
+    shedding -= delta;
+    if (shedding <= 0) {
+      const left = Math.max(0, breakIn / BREAK_IN);
+      shedding = 0.3 + 1.2 * left;
+      playRubble(0.45 + 0.55 * (1 - left));
+    }
+  }
+  if (breakIn > 0) {
+    storageRoom.beast.holdAt(codeLift.doorZ + 1.0, 0.4, 'z');
+    return;
+  }
+  /**
+   * And it comes over the top, once.
+   *
+   * Nothing is released here — the hold is four tenths of a second long and
+   * this simply stops renewing it, so it comes off on its own, with the
+   * grind and the screech that every barrier in this chase ends on. What is
+   * added is the rock: the bank throws its loose stone at you and then the
+   * thing is in the doorway, and the doorway is the last place it has to be
+   * before it is in the car with you.
+   */
+  if (!camePast) {
+    camePast = true;
+    splitHalls.burstTheBank();
+    playCollapse(0.8);
+  }
+}
+
 const codeLift = createCodeLift({
   scene,
   doorway: splitHalls.liftDoor,
@@ -543,7 +636,7 @@ const codeLift = createCodeLift({
    * it and stopped there, which from the car reads as a monster losing
    * interest.
    */
-  onInTheCar: () => storageRoom.beast.holdAt(codeLift.doorZ + 1.0, 0.4, 'z'),
+  onInTheCar: (delta) => holdItOffTheCar(delta),
   /**
    * The doors shut on it, and that is all they do.
    *
@@ -1095,6 +1188,9 @@ function resetSequences() {
   transferHall.reset();
   splitHalls.reset();
   codeLift.reset();
+  // And the clock on the eight arrows, with the rock it is counting down to.
+  breakIn = BREAK_IN;
+  camePast = false;
   handoverSaid = false;
   // The loop fires the cutscene the moment a door that has been open closes.
   // Clearing this stops a jump from immediately retriggering it underneath you.

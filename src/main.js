@@ -511,10 +511,14 @@ room.colliders.push(...splitHalls.colliders);
  * step in.
  *
  * This is the clock on the eight arrows and therefore the last real dial in
- * the game. Twenty-five, because the code is eight presses at about two and
- * a half seconds each for somebody reading the strip, aiming and pressing —
- * twenty seconds — so a clean entry has about five to spare and a wrong
- * press, which costs all eight, is only survivable if you make it early.
+ * the game. Eighteen, and it is as short as it can be and still be a code
+ * rather than a memory test. The code is eight presses at about two and a
+ * half seconds each for somebody reading the strip, aiming and pressing;
+ * measured against this, that player finishes with 2.3 seconds in hand, a
+ * player taking three seconds a press is caught on the seventh arrow, and
+ * a wrong press, which costs all eight, is death at any point after the
+ * first two. It was twenty-five, which left eight and a half seconds spare
+ * and no reason to hurry.
  *
  * **Measured from its arrival, which is what makes the run worth running.**
  * Since the roof stopped holding it, nothing you did between the shed and
@@ -523,7 +527,7 @@ room.colliders.push(...splitHalls.colliders);
  * two metres up both typed in perfect safety. Now the lead is the time it
  * takes it to cover that lead, and then this on top.
  */
-const BREAK_IN = 25;
+const BREAK_IN = 18;
 let breakIn = BREAK_IN;
 let camePast = false;
 /** How long until the next stone comes off it. See the rubble below. */

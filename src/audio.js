@@ -1837,3 +1837,124 @@ export function playRubble(level = 1) {
   body.start(t);
   body.stop(t + 0.55);
 }
+
+/**
+ * Glass going, and it is the only pane in the building.
+ *
+ * Three layers, and the order they arrive in is the whole of it. The hit is
+ * a low thud with a crack on top — something heavy meeting something rigid —
+ * and it has to land first and alone, because that is the frame the window
+ * stops existing. Then the sheet: a short bright burst of high-passed noise,
+ * which is a square metre of glass losing its shape all at once. Then the
+ * fall: thirty little bandpassed pings scattered over a second and a half,
+ * most of them in the first half, because that is what the pieces do on a
+ * concrete floor and it is the part that tells you how big the window was.
+ *
+ * Bright and dry. Every other impact in this game is sent wet into the room
+ * reverb — concrete, rock, steel — and glass is the one material here that
+ * is thin enough to sound like itself.
+ */
+export function playGlassBreak(level = 1) {
+  if (!ready()) return;
+  playedCount++;
+  const t = context.currentTime + 0.005;
+
+  // The hit: the thing that broke it, not the breaking.
+  const thud = context.createOscillator();
+  thud.type = 'sine';
+  thud.frequency.setValueAtTime(96, t);
+  thud.frequency.exponentialRampToValueAtTime(44, t + 0.22);
+  const thudGain = context.createGain();
+  thudGain.gain.setValueAtTime(0.0001, t);
+  thudGain.gain.linearRampToValueAtTime(0.28 * level, t + 0.01);
+  thudGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
+  thud.connect(thudGain);
+  send(thudGain, 0.6);
+  thud.start(t);
+  thud.stop(t + 0.36);
+
+  // The sheet letting go.
+  const sheet = context.createBufferSource();
+  sheet.buffer = getNoise();
+  const bright = context.createBiquadFilter();
+  bright.type = 'highpass';
+  bright.frequency.value = 2600;
+  const sheetGain = context.createGain();
+  sheetGain.gain.setValueAtTime(0.0001, t);
+  sheetGain.gain.linearRampToValueAtTime(0.3 * level, t + 0.008);
+  sheetGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+  sheet.connect(bright).connect(sheetGain);
+  send(sheetGain, 0.35);
+  sheet.start(t, Math.random() * 1.5);
+  sheet.stop(t + 0.32);
+
+  // And the pieces, for a second and a half.
+  for (let i = 0; i < 30; i++) {
+    const at = t + 0.03 + Math.random() ** 1.8 * 1.45;
+    const ping = context.createBufferSource();
+    ping.buffer = getNoise();
+    const ring = context.createBiquadFilter();
+    ring.type = 'bandpass';
+    ring.frequency.value = 2200 + Math.random() * 5200;
+    ring.Q.value = 7 + Math.random() * 16;
+    const gain = context.createGain();
+    const loud = (0.02 + Math.random() * 0.07) * level;
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.linearRampToValueAtTime(loud, at + 0.003);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.1);
+    ping.connect(ring).connect(gain);
+    send(gain, 0.5);
+    ping.start(at, Math.random() * 1.5);
+    ping.stop(at + 0.12);
+  }
+}
+
+/**
+ * A steel pail being closed by something much stronger than a steel pail.
+ *
+ * Written for one moment and it will never be used again, which is why it is
+ * four lines of oscillator rather than a system: a long metallic groan that
+ * bends *down* as the shape goes, two buckling cracks a beat apart inside it,
+ * and nothing after. No tail and no reverb send to speak of — the thing
+ * doing this is a metre from the lens and the room is not part of it.
+ */
+export function playCrush(level = 1) {
+  if (!ready()) return;
+  playedCount++;
+  const t = context.currentTime + 0.005;
+
+  const groan = context.createOscillator();
+  groan.type = 'sawtooth';
+  groan.frequency.setValueAtTime(420, t);
+  groan.frequency.exponentialRampToValueAtTime(90, t + 0.9);
+  const bend = context.createBiquadFilter();
+  bend.type = 'bandpass';
+  bend.frequency.setValueAtTime(900, t);
+  bend.frequency.exponentialRampToValueAtTime(220, t + 0.9);
+  bend.Q.value = 3.2;
+  const groanGain = context.createGain();
+  groanGain.gain.setValueAtTime(0.0001, t);
+  groanGain.gain.linearRampToValueAtTime(0.16 * level, t + 0.06);
+  groanGain.gain.exponentialRampToValueAtTime(0.0001, t + 1.0);
+  groan.connect(bend).connect(groanGain);
+  send(groanGain, 0.4);
+  groan.start(t);
+  groan.stop(t + 1.05);
+
+  for (const at of [t + 0.18, t + 0.62]) {
+    const crack = context.createBufferSource();
+    crack.buffer = getNoise();
+    const metal = context.createBiquadFilter();
+    metal.type = 'bandpass';
+    metal.frequency.value = 1400 + Math.random() * 900;
+    metal.Q.value = 5;
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.linearRampToValueAtTime(0.22 * level, t + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.16);
+    crack.connect(metal).connect(gain);
+    send(gain, 0.45);
+    crack.start(at, Math.random() * 1.5);
+    crack.stop(at + 0.18);
+  }
+}

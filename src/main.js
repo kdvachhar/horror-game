@@ -59,6 +59,7 @@ import { updateWireCurrent } from './wire.js';
 import { createSplitHalls } from './splitHalls.js';
 import { createLightPool } from './lightPool.js';
 import { createCodeLift } from './codeLift.js';
+import { createFinale } from './finale.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 
@@ -327,6 +328,7 @@ const death = createDeathScreen({
       transferHall.reset();
       splitHalls.reset();
       codeLift.reset();
+      finale.reset();
       breakIn = BREAK_IN;
       camePast = false;
       const back = storageRoom.atThePress;
@@ -715,9 +717,29 @@ const codeLift = createCodeLift({
    * glass is not built. This is the beat that says the building is not done
    * with you, and it currently has one outcome.
    */
-  onAgain: () => storageRoom.beast.again(),
+  onAgain: () => {
+    // Unless it is lying on the floor of that corridor with its screen out,
+    // which is the one state in this building nothing comes back from.
+    if (!finale.hasRun) storageRoom.beast.again();
+  },
 });
 room.colliders.push(...codeLift.colliders);
+
+/**
+ * And the end of it, which is the one scene with both bodies and the animal
+ * in it at once. See finale.js.
+ *
+ * Built here because it is the last thing in the building and it needs all
+ * four of them: the lens, the thing, your friend, and the window.
+ */
+const finale = createFinale({
+  scene,
+  camera,
+  player,
+  beast: storageRoom.beast,
+  friend,
+  lift: codeLift,
+});
 
 /**
  * And the stand-ins for every lamp in it.
@@ -1196,6 +1218,7 @@ function resetSequences() {
   transferHall.reset();
   splitHalls.reset();
   codeLift.reset();
+  finale.reset();
   // And the clock on the eight arrows, with the rock it is counting down to.
   breakIn = BREAK_IN;
   camePast = false;
@@ -2010,7 +2033,19 @@ renderer.setAnimationLoop((time) => {
   // quarter rather than four. See keepUp in friend.js: the route from here is
   // a crate stair, a jumped climb and a lift, none of which it can walk.
   friend.keepUp(storageRoom.isChasing);
-  friend.update(delta, camera, camera.position, room.colliders);
+  /**
+   * And the bucket's own update stops for good at the end.
+   *
+   * The last scene in the game owns that body — see finale.js, which picks
+   * it up, throws it at a face and leaves what is left of it on the floor.
+   * Its own update would put it back on its feet and set it walking at you
+   * on the next frame, because as far as friend.js is concerned nothing has
+   * happened to it. `hasRun` and not just `isPlaying`: it is dead
+   * afterwards, and dead is a state nothing in this building undoes.
+   */
+  if (!finale.isPlaying && !finale.hasRun) {
+    friend.update(delta, camera, camera.position, room.colliders);
+  }
   // After the friend has moved, so the plates read where it is now, and given
   // the *body's* position rather than the camera's — while you are driving the
   // bucket the camera is in the other lane and the thing the spikes are walking
@@ -2062,6 +2097,30 @@ renderer.setAnimationLoop((time) => {
   // After the halls it hangs off, so a frame in which you step out of the car
   // is a frame the corridor under it has already had.
   codeLift.update(delta);
+  /**
+   * The last thing in the building, and what sets it off is the thing
+   * arriving rather than a clock.
+   *
+   * The gap gives fourteen seconds after you reach the glass — see CHASE in
+   * codeLift.js — and what comes through it crushes itself down to the size
+   * of the hole and then opens out again in the corridor. This waits for
+   * that: through the gap, in the room with you, and near enough to be the
+   * only thing in the frame. The frame it is through is the frame this
+   * starts, with six metres of corridor between it and you — any later and
+   * the catch test gets there first, because its reach is 1.9 and the last
+   * stretch of this building is six metres long.
+   */
+  if (
+    !finale.isPlaying &&
+    !finale.hasRun &&
+    storageRoom.beast.isHunting &&
+    storageRoom.beast.position.z < codeLift.pinchZ - 0.3 &&
+    codeLift.contains(player.position.x, player.position.z) &&
+    storageRoom.beast.position.distanceTo(player.position) < 12
+  ) {
+    finale.start();
+  }
+  finale.update(delta);
   // After the room that raises it. The screen's own clock is only the beat it
   // waits before it will take a key — see death.js — and that beat starts on
   // the frame the room puts it up.
@@ -2123,7 +2182,7 @@ renderer.setAnimationLoop((time) => {
 
 // Dev-only handle for poking at the scene from the console.
 if (import.meta.env.DEV) {
-  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, corpseHall, controlRoom, giantHall, tallRoom, storageRoom, transferHall, splitHalls, codeLift, wakeUp, possession, painter, monologue, death };
+  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, corpseHall, controlRoom, giantHall, tallRoom, storageRoom, transferHall, splitHalls, codeLift, finale, wakeUp, possession, painter, monologue, death };
   window.game.__tvLines = TV_LINES;
   /**
    * The scene jumps, so a harness can walk all fifteen of them.

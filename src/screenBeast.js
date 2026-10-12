@@ -1098,6 +1098,8 @@ export function createScreenBeast({
   let heldUntil = null;
   /** Out of sight but still after you — the lift shaft. See `lurk`. */
   let lurking = false;
+  /** It has been killed. See `die`, which is called once, by the ending. */
+  let dead = false;
   /**
    * Fit the next frame's fold and crush instead of easing into them.
    *
@@ -1439,6 +1441,37 @@ export function createScreenBeast({
      * No sound of its own. Whatever stopped it is the thing that made the
      * noise, and a second bang on the same frame reads as a bug.
      */
+    /**
+     * Killed, which is a thing that happens to it exactly once.
+     *
+     * The screen going out is the whole of the signal. Everything this
+     * creature has ever done it has done with a lit face — it talked to you
+     * through one for an hour and then came off the wall still wearing it —
+     * and the one frame it is not lit is the frame it stops being anything.
+     * The limbs stop with it: see `haul`, which is zero from here, because
+     * a dead animal with its arms still working is an animal asleep.
+     *
+     * No position and no pose. Whoever killed it owns where the body is —
+     * see finale.js, which puts it on the floor over two and a half
+     * seconds and calls this on the frame it gets there.
+     */
+    die() {
+      if (dead) return;
+      dead = true;
+      phase = 'done';
+      lurking = false;
+      heldUntil = null;
+      music.stop();
+      life.stop();
+      life.setSnarl(0);
+      glassMat.color.set('#101d16');
+      bare(false);
+    },
+
+    get isDead() {
+      return dead;
+    },
+
     stop() {
       if (phase === 'done' || phase === 'wait') return;
       phase = 'done';
@@ -1453,6 +1486,7 @@ export function createScreenBeast({
       hunted = 0;
       caught = false;
       lurking = false;
+      dead = false;
       here.copy(home);
       script = null;
       nextLine = 0;
@@ -1671,7 +1705,9 @@ export function createScreenBeast({
        * arrives at the last with ten more on top of it, and it whips without
        * anything here knowing where the end of it is.
        */
-      const haul = phase === 'hunt' ? 1 : 0.35;
+      // Nothing hauls on a dead one. `done` is 0.35 because a thing that has
+      // given up is still breathing; this is the other state.
+      const haul = dead ? 0 : phase === 'hunt' ? 1 : 0.35;
       /**
        * How far folded, from how near the wall with the hole in it is.
        *

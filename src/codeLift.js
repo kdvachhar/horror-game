@@ -15,6 +15,7 @@ import {
   playWardDoor,
   playSpikeGrind,
   playScreech,
+  playGlassBreak,
 } from './audio.js';
 import { showNote, setObjective } from './hud.js';
 
@@ -64,10 +65,21 @@ const RIDE = { drop: 12, seconds: 8.5, shut: 1.3, open: 1.6 };
  * building are a sprint, and a creature that crushes itself to the room it is
  * in reads as a smaller animal in a narrower room: at five metres across it
  * came out of the lift at four and a half, which is a third of what came off
- * the wall in the shed. At six and a half it is the size it was in the maze,
- * which is the size the end of this should be.
+ * the wall in the shed. At six and a half it was the size it was in the maze.
+ *
+ * Nine by five and a half now, and the reason is the ending rather than the
+ * sprint. What happens at the window is the only scene in this game with two
+ * bodies and an animal in it at once — see finale.js — and it needs the
+ * animal at something like its own size, a hand's length of air over it, and
+ * floor for it to come down onto. At six and a half by three and a half it
+ * was crushed to the width of a corridor and its head was in the ceiling; it
+ * now stands in here at about eight and a half across, which is within a
+ * metre of the thing that came off the wall in the shed.
+ *
+ * The length is untouched at twenty-two, because that one is a clock: see
+ * CHASE below, which is measured in metres of this corridor.
  */
-const OUT = { wide: 6.4, long: 22, high: 3.6 };
+const OUT = { wide: 9.0, long: 22, high: 5.4 };
 
 /**
  * And the hole at the end of it, which is what saves you.
@@ -126,8 +138,14 @@ const CHASE = { after: 5.0, beat: 2.8, again: 14.0, squeeze: 2.2 };
  * This one has weather behind it, and that is the point of the whole stretch:
  * you came down twelve metres to an outside wall, and what is outside is
  * another face of the same building going up further than the haze goes.
+ *
+ * Four by two and a six, up from three by one and nine, and both of those
+ * numbers are about the last thing that happens to it: something the size of
+ * the thing in the corridor comes down on this and takes it out. A pane a
+ * person could not get through is a pane that reads as a porthole when a
+ * hand that size lands on it.
  */
-const WINDOW = { wide: 3.0, high: 1.9, sill: 1.0 };
+const WINDOW = { wide: 4.0, high: 2.6, sill: 1.0 };
 
 /**
  * The combination.
@@ -657,6 +675,44 @@ export function createCodeLift({
   group.add(glass);
 
   /**
+   * And what is left of it when something lands on it.
+   *
+   * Twelve shards hung off the frame, pointing inwards, hidden until the
+   * pane goes. They are the same unlit near-black as the cracks on the
+   * creature's own screen and for the same reason: broken glass at night is
+   * not a bright thing, it is the absence of the flat sheet that was
+   * catching the light a frame ago, with the lit facade outside suddenly
+   * coming through unfiltered.
+   *
+   * No collider changes. The wall across this opening stays solid — the
+   * window is a thing to look out of and the building has not decided to
+   * let you out of it, which is the state the end of this game is in.
+   */
+  const shards = new THREE.Group();
+  shards.visible = false;
+  group.add(shards);
+  for (let i = 0; i < 12; i++) {
+    const side = i % 4;
+    const along = ((i * 7) % 5) / 4 - 0.5;
+    const deep = 0.22 + ((i * 11) % 4) * 0.12;
+    const piece = new THREE.Shape();
+    piece.moveTo(0, 0);
+    piece.lineTo(0.34 + ((i * 13) % 3) * 0.2, 0);
+    piece.lineTo(0.12 + ((i * 5) % 3) * 0.16, -deep);
+    const mesh = new THREE.Mesh(
+      new THREE.ShapeGeometry(piece),
+      new THREE.MeshBasicMaterial({ color: '#0a1016', toneMapped: false, side: THREE.DoubleSide })
+    );
+    const midY = (winBottom + winTop) / 2;
+    if (side === 0) mesh.position.set(axis + along * WINDOW.wide, winTop, outZ0 + 0.02);
+    else if (side === 1) mesh.position.set(axis + along * WINDOW.wide, winBottom, outZ0 + 0.02);
+    else mesh.position.set(side === 2 ? winLow : winHigh, midY + along * WINDOW.high, outZ0 + 0.02);
+    mesh.rotation.z = side === 0 ? Math.PI : side === 1 ? 0 : side === 2 ? -Math.PI / 2 : Math.PI / 2;
+    mesh.rotation.z += (((i * 17) % 7) / 6 - 0.5) * 0.5;
+    shards.add(mesh);
+  }
+
+  /**
    * Light down here, and it is two strips and one lamp.
    *
    * The corridor had none at all in its first cut, which is a thing that only
@@ -1099,6 +1155,38 @@ export function createCodeLift({
       return doorway.z;
     },
 
+    /** The pane at the end: where it is and how big, for whatever breaks it. */
+    get windowAt() {
+      return {
+        x: axis,
+        y: (winBottom + winTop) / 2,
+        z: outZ0,
+        wide: WINDOW.wide,
+        high: WINDOW.high,
+        floor: floorBelow,
+        crown: outCrown,
+        across: OUT.wide,
+      };
+    },
+
+    /** Whether the pane has gone. */
+    get isGlazed() {
+      return glass.visible;
+    },
+
+    /**
+     * Take the window out.
+     *
+     * One line of state and two of scenery, because the sound is doing most
+     * of this — see playGlassBreak, which is written for this single frame.
+     */
+    breakTheWindow() {
+      if (!glass.visible) return;
+      glass.visible = false;
+      shards.visible = true;
+      playGlassBreak(1);
+    },
+
     /** Just out of the car at the bottom, which is the corridor's checkpoint. */
     get atTheCar() {
       return { position: [axis, floorBelow, outZ1 - 1.2], yaw: 0 };
@@ -1186,6 +1274,8 @@ export function createCodeLift({
     },
 
     reset() {
+      glass.visible = true;
+      shards.visible = false;
       phase = 'wait';
       since = 0;
       entered = 0;

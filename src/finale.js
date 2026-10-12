@@ -602,7 +602,11 @@ export function createFinale({ scene, camera, player, beast, friend, lift, onFin
           if (swing >= 1 && !run.broke) {
             run.broke = true;
             lift.breakTheWindow();
-            setObjective('The window is open');
+            // An instruction and not an observation. It is the last one in
+            // the game and the only way out of the building, and a metre of
+            // sill means it is also the only objective in here that cannot
+            // be walked into.
+            setObjective('Out of the window');
           }
         }
         putHandAt(want, t);

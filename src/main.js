@@ -60,6 +60,7 @@ import { createSplitHalls } from './splitHalls.js';
 import { createLightPool } from './lightPool.js';
 import { createCodeLift } from './codeLift.js';
 import { createFinale } from './finale.js';
+import { createEndCard } from './endCard.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 
@@ -329,6 +330,7 @@ const death = createDeathScreen({
       splitHalls.reset();
       codeLift.reset();
       finale.reset();
+      theEnd.clear();
       breakIn = BREAK_IN;
       camePast = false;
       const back = storageRoom.atThePress;
@@ -701,6 +703,19 @@ const finale = createFinale({
   beast: storageRoom.beast,
   friend,
   lift: codeLift,
+});
+
+/**
+ * And the screen after it, which is the end of the game.
+ *
+ * A peer of the death screen and built out of the same parts — see
+ * endCard.js. Nothing in the building raises it: it goes up when the player
+ * is on the far side of a window that is not there any more, which is the
+ * only way out of this place and the only thing in it that is not a door.
+ */
+const theEnd = createEndCard({
+  said: 'Thanks for playing',
+  onBlack: () => player.setEnabled(false),
 });
 
 /**
@@ -1181,6 +1196,7 @@ function resetSequences() {
   splitHalls.reset();
   codeLift.reset();
   finale.reset();
+  theEnd.clear();
   // And the clock on the eight arrows, with the rock it is counting down to.
   breakIn = BREAK_IN;
   camePast = false;
@@ -2096,6 +2112,24 @@ renderer.setAnimationLoop((time) => {
     finale.start();
   }
   finale.update(delta);
+  /**
+   * And out of it, which is the last thing you do.
+   *
+   * Only the player's own feet count and only once: the window is a hole
+   * from the frame the hand takes the pane out — see the pane's collider in
+   * codeLift.js — and a metre of sill is what stops you walking through it,
+   * so getting to this line is a jump you have to make on purpose.
+   *
+   * The body stays on until the black does — see `onBlack` where the card
+   * is built. There is nothing out there to land on, so the second the fade
+   * takes is a second of falling, and that is the only drop this ending
+   * gets; after it the body goes off rather than descend forever with
+   * footstep code running over a world that has ended.
+   */
+  if (!theEnd.isShowing && codeLift.isOutTheWindow(player.position.x, player.position.z)) {
+    theEnd.show();
+  }
+  theEnd.update(delta);
   // After the room that raises it. The screen's own clock is only the beat it
   // waits before it will take a key — see death.js — and that beat starts on
   // the frame the room puts it up.
@@ -2157,7 +2191,7 @@ renderer.setAnimationLoop((time) => {
 
 // Dev-only handle for poking at the scene from the console.
 if (import.meta.env.DEV) {
-  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, corpseHall, controlRoom, giantHall, tallRoom, storageRoom, transferHall, splitHalls, codeLift, finale, wakeUp, possession, painter, monologue, death };
+  window.game = { scene, camera, renderer, room, machine, bucket, friend, door, player, interactions, debugMenu, cutscene, playerBody, medical, gauntlet, exitRoom, orangeRoom, corpseHall, controlRoom, giantHall, tallRoom, storageRoom, transferHall, splitHalls, codeLift, finale, theEnd, wakeUp, possession, painter, monologue, death };
   window.game.__tvLines = TV_LINES;
   /**
    * The scene jumps, so a harness can walk all fifteen of them.

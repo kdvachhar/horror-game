@@ -550,8 +550,33 @@ export function createCodeLift({
     if (w <= 0.001 || h <= 0.001) continue;
     panel(wallOf(w, h), w, h, px, py, outZ0, 0);
   }
-  // Solid all the way across: the window is glazed, so nothing goes through it.
-  solid(outX0 - 0.3, outX1 + 0.3, outZ0 - 0.3, outZ0, { bottom: floorBelow });
+  /**
+   * And the wall it is in, which is a doorway for the last eight seconds of
+   * the game and a wall for the rest of them.
+   *
+   * Built the way every opening in this building is built — a piece either
+   * side, a piece under the sill and a piece over the head — plus a fifth
+   * one filling the hole, which is the pane. That one is the only collider
+   * in the project that answers to a mesh being visible: while there is
+   * glass in the window there is a wall across it, and the frame the hand
+   * takes the glass out is the frame the four metres by two and six become
+   * a hole you can get through. Nothing is added or removed; one box stops
+   * saying yes.
+   *
+   * The sill's piece is a metre high and the step a body can walk up is
+   * nine tenths of one, which is three decimal places of the whole ending:
+   * you cannot step out of this window, and a jump clears 1.31. See
+   * `isOutTheWindow`.
+   */
+  solid(outX0 - 0.3, winLow, outZ0 - 0.3, outZ0, { bottom: floorBelow });
+  solid(winHigh, outX1 + 0.3, outZ0 - 0.3, outZ0, { bottom: floorBelow });
+  solid(winLow, winHigh, outZ0 - 0.3, outZ0, { bottom: floorBelow, top: winBottom });
+  solid(winLow, winHigh, outZ0 - 0.3, outZ0, { bottom: winTop });
+  solid(winLow, winHigh, outZ0 - 0.3, outZ0, {
+    bottom: winBottom,
+    top: winTop,
+    enabled: () => glass.visible,
+  });
 
   /**
    * And nothing between it and the lift.
@@ -1084,6 +1109,18 @@ export function createCodeLift({
     },
 
     /**
+     * Whether you are through it, which is the last thing this game asks.
+     *
+     * The plane of the wall and the width of the hole, and it only answers
+     * once the pane is out — see the pane's own collider, which is what
+     * makes crossing this line possible in the first place. A tenth of a
+     * metre past the face rather than at it, so what fires this is a body
+     * that is through rather than a body leaning on the sill.
+     */
+    isOutTheWindow: (x, z) =>
+      !glass.visible && z < outZ0 - 0.1 && x > winLow - 0.5 && x < winHigh + 0.5,
+
+    /**
      * Take the window out.
      *
      * One line of state and two of scenery, because the sound is doing most
@@ -1092,6 +1129,11 @@ export function createCodeLift({
     breakTheWindow() {
       if (!glass.visible) return;
       glass.visible = false;
+      // With the bar down the middle of it, because the thing that takes a
+      // pane out from the outside with a hand four metres across does not
+      // leave the mullion standing, and a mullion left standing is a post
+      // through the middle of the way out.
+      mullion.visible = false;
       shards.visible = true;
       playGlassBreak(1);
     },
@@ -1175,6 +1217,7 @@ export function createCodeLift({
 
     reset() {
       glass.visible = true;
+      mullion.visible = true;
       shards.visible = false;
       phase = 'wait';
       since = 0;

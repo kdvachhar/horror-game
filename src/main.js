@@ -718,7 +718,32 @@ const finale = createFinale({
 const theEnd = createEndCard({
   said: 'Thanks for playing',
   onBlack: () => player.setEnabled(false),
+  onOver: () => backToTheTitle(),
 });
+
+/**
+ * And back to the front of it, four seconds after the last line.
+ *
+ * Two things, both of them done underneath the black — see HANDOVER in
+ * endCard.js, which keeps the card up for a breath after this runs so none of
+ * it is on screen while it happens.
+ *
+ * The building is wound back to the first room because the alternative is a
+ * menu whose "carry on" hands you a switched-off body in the air outside a
+ * window with nothing under it. It is `SCENES[0].go()` and not
+ * `startNewGame()` on purpose: that one writes the save, and finishing the
+ * game is not a reason to forget that you finished it. The save still says
+ * the window, Load still goes there, and New game is still the thing that
+ * starts the file again.
+ *
+ * And the pointer is let go, which is the whole of "put the menu back up" —
+ * the overlay is keyed off the lock and has been since the first room
+ * existed. See onPointerLockChange in player.js.
+ */
+function backToTheTitle() {
+  SCENES[0].go();
+  document.exitPointerLock?.();
+}
 
 /**
  * And the stand-ins for every lamp in it.

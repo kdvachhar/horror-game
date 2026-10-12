@@ -19,11 +19,13 @@
  * out there to fall past: a cut to black on the frame you cross the sill is a
  * crash, and the fade is the only thing standing in for the drop.
  *
- * And it takes no key. A death screen's whole job is to get out of the way,
- * because the thing on the other side of it is the game. There is nothing on
- * the other side of this one. The player who wants another go has a page to
- * reload and knows it; a "press any key" here would be the game asking for
- * one more input after the end of itself.
+ * And it takes no key — it takes a clock. A death screen's whole job is to
+ * get out of the way the moment you ask, because the thing on the other side
+ * of it is the game you were in the middle of. Nobody is in the middle of
+ * anything here, so there is nothing to ask for: it holds for four seconds
+ * and hands you back to the title screen on its own. An "any key" prompt
+ * under the last line of a game is the game asking for one more input after
+ * the end of itself.
  */
 
 const STYLE = `
@@ -76,6 +78,36 @@ const FADE = 1.1;
 const BEAT = 1.8;
 
 /**
+ * And how long the whole thing lasts before it hands you back.
+ *
+ * Measured from the frame you go through the window, not from the frame the
+ * words land, which is the reading of "four seconds" a player would check
+ * with a stopwatch. Of those four, one is the fade, four fifths is black, and
+ * the words have the last two and a fifth to themselves — which is a long
+ * time to look at three of them.
+ */
+const OVER = 4.0;
+
+/**
+ * And the backstop under that, which in practice never fires.
+ *
+ * Taking this screen down is not something it has to do for itself: the
+ * caller's `onOver` puts the building back, and winding the building back
+ * clears every screen in the game — see resetSequences in main.js. Measured,
+ * the card is gone inside a frame of `OVER`.
+ *
+ * What covers the join is the two fades running over each other. The menu
+ * comes up from nothing over six tenths of a second and it comes up *behind*
+ * this, which is the higher layer; this one goes out over one and a tenth.
+ * So the black is still most of the way there while the title arrives under
+ * it, and nobody sees the first room standing empty in between.
+ *
+ * This is here for the caller that does not reset anything. A screen with no
+ * key on it and no clock either is a screen a game can get stuck on.
+ */
+const HANDOVER = 0.75;
+
+/**
  * @param said   the line, once, in the middle of the screen
  * @param onBlack once, the frame the fade finishes — which is where the
  *               caller switches the body off. The player goes out of that
@@ -83,8 +115,11 @@ const BEAT = 1.8;
  *               on: for as long as there is anything to see they should be
  *               falling, and a body switched off on the sill is a player
  *               hanging in the air behind a half-black screen.
+ * @param onOver once, `OVER` seconds in: put the menu back up. Called while
+ *               this is still over the top of everything, so whatever it
+ *               does to the building is done where nobody can see it.
  */
-export function createEndCard({ said = 'Thanks for playing', onBlack } = {}) {
+export function createEndCard({ said = 'Thanks for playing', onBlack, onOver } = {}) {
   const style = document.createElement('style');
   style.textContent = STYLE;
   document.head.appendChild(style);
@@ -99,18 +134,20 @@ export function createEndCard({ said = 'Thanks for playing', onBlack } = {}) {
   let showing = false;
   let timer = 0;
   let blacked = false;
+  let handed = false;
 
   return {
     get isShowing() {
       return showing;
     },
 
-    /** Up it goes, and nothing takes it down again. */
+    /** Up it goes, and the clock in `update` is what takes it down. */
     show() {
       if (showing) return;
       showing = true;
       timer = 0;
       blacked = false;
+      handed = false;
       document.body.classList.add('over');
       screen.classList.add('up');
     },
@@ -120,6 +157,7 @@ export function createEndCard({ said = 'Thanks for playing', onBlack } = {}) {
       showing = false;
       timer = 0;
       blacked = false;
+      handed = false;
       screen.classList.remove('up', 'said');
       document.body.classList.remove('over');
     },
@@ -132,6 +170,12 @@ export function createEndCard({ said = 'Thanks for playing', onBlack } = {}) {
         onBlack?.();
       }
       if (timer >= BEAT) screen.classList.add('said');
+      if (!handed && timer >= OVER) {
+        handed = true;
+        onOver?.();
+      }
+      // Last, because `clear` is what stops this updating.
+      if (handed && timer >= OVER + HANDOVER) this.clear();
     },
   };
 }

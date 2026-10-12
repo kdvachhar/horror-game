@@ -684,44 +684,6 @@ const codeLift = createCodeLift({
     storageRoom.beast.restartAt(new THREE.Vector3(at.x, at.y, at.z), at.yaw);
     storageRoom.beast.holdAt(at.z - 1.2, 1.2, 'z', { y: [at.y - 1.0, at.y + 1.0] });
   },
-  /**
-   * The gap at the end, and it is the hold that does this rather than a stop.
-   *
-   * A pursuer that is switched off the instant you are through reads as a
-   * pursuer that was never really behind you: it stops wherever it happens to
-   * be, which in a corridor is the middle of nothing. Held at the wall it
-   * keeps coming, arrives, and presses — so the last thing in this building
-   * is a thing you are watching fail to fit through a door.
-   *
-   * The hold is long enough to be permanent at the pace of the six metres it
-   * is holding you off; `onWindow` is what actually ends it.
-   */
-  onSafe: () =>
-    storageRoom.beast.holdAt(codeLift.pinchZ, 900, 'z', {
-      y: [codeLift.atTheShaft.y - 1.0, codeLift.atTheShaft.y + 1.0],
-    }),
-  onWindow: () => storageRoom.beast.stop(),
-  /**
-   * And it starts again, which is the last thing this building does.
-   *
-   * Nothing is moved and nothing is rebuilt: it is standing a metre behind
-   * the gap where it gave up, and `again` tells it to stop having given up.
-   * What changed in between is on the lift's side — the gap hands out its own
-   * two and a bit metres as a clearance once the clock runs out, so the thing
-   * that could not fit through it crushes itself down to the size of the hole
-   * and comes through. See `clearance` in codeLift.js.
-   *
-   * There is nowhere to go from the window. That is not an oversight in this
-   * line, it is the state of the end of the game: the corridor past the gap is
-   * six metres long, the thing fills it, and what is on the other side of the
-   * glass is not built. This is the beat that says the building is not done
-   * with you, and it currently has one outcome.
-   */
-  onAgain: () => {
-    // Unless it is lying on the floor of that corridor with its screen out,
-    // which is the one state in this building nothing comes back from.
-    if (!finale.hasRun) storageRoom.beast.again();
-  },
 });
 room.colliders.push(...codeLift.colliders);
 
@@ -2098,25 +2060,38 @@ renderer.setAnimationLoop((time) => {
   // is a frame the corridor under it has already had.
   codeLift.update(delta);
   /**
-   * The last thing in the building, and what sets it off is the thing
-   * arriving rather than a clock.
+   * The last thing in the building, and what sets it off is where you are
+   * standing and how close it has got.
    *
-   * The gap gives fourteen seconds after you reach the glass — see CHASE in
-   * codeLift.js — and what comes through it crushes itself down to the size
-   * of the hole and then opens out again in the corridor. This waits for
-   * that: through the gap, in the room with you, and near enough to be the
-   * only thing in the frame. The frame it is through is the frame this
-   * starts, with six metres of corridor between it and you — any later and
-   * the catch test gets there first, because its reach is 1.9 and the last
-   * stretch of this building is six metres long.
+   * It used to be the gap. There was a cross-wall six metres short of the
+   * window that held the thing off for fourteen seconds and then handed out
+   * its own two metres as a clearance, and the frame the animal was through
+   * the hole was the frame this started — the trigger was literally a plane
+   * test against that wall. The wall is gone, so this is keyed on the two
+   * things that are actually true at the end of this game: you are at the
+   * glass, which is as far as the building goes, and the thing that came
+   * down the shaft is near enough to be the only thing in the frame.
+   *
+   * Eight metres and not twelve, and the gap between those two numbers is
+   * the shot. `start` opens with the animal wherever it happens to be and
+   * closes it onto the lens in about a second — from twelve that is nine
+   * metres in one second, which does not read as a lunge, it reads as a cut.
+   * From eight it is four and a half metres of a thing already coming at
+   * you, and you get the second before it standing at a window watching it
+   * come down a corridor, which is the beat the fourteen seconds of quiet
+   * used to be for.
+   *
+   * It is also what keeps you alive. There is nothing down here that stops
+   * the chase any more, so this is the only thing between the end of the
+   * corridor and the catch test — eight metres against a reach of 1.9, which
+   * is a second and a half of margin at the pace it closes.
    */
   if (
     !finale.isPlaying &&
     !finale.hasRun &&
     storageRoom.beast.isHunting &&
-    storageRoom.beast.position.z < codeLift.pinchZ - 0.3 &&
-    codeLift.contains(player.position.x, player.position.z) &&
-    storageRoom.beast.position.distanceTo(player.position) < 12
+    codeLift.atTheGlass(player.position.x, player.position.z) &&
+    storageRoom.beast.position.distanceTo(player.position) < 8
   ) {
     finale.start();
   }

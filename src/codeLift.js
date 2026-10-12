@@ -82,54 +82,28 @@ const RIDE = { drop: 12, seconds: 8.5, shut: 1.3, open: 1.6 };
 const OUT = { wide: 9.0, long: 22, high: 5.4 };
 
 /**
- * And the hole at the end of it, which is what saves you.
- *
- * The lift was supposed to be the thing too small to follow you through — the
- * eight arrows were its price — and it is not, because the thing does not need
- * the car, it needs the shaft. So the last gap in the building is the one that
- * holds: a cross-wall six metres short of the window with a doorway in it, two
- * and a bit each way, lit from the far side by the only lamp down here.
- *
- * `wide` and `high` are the two numbers that matter and they are a range with
- * one body in the middle of it. Over about 0.95 of head and you are crouching,
- * which this game has no control for; under 1.8 and the player cannot use it
- * either. 2.2 is a door — you run through it without thinking — and it is a
- * third of the span of the thing behind you, which is the point: every
- * opening since the shed has been something it could fold into, and this is
- * the first one that is simply a hole in a wall.
- */
-const PINCH = { wide: 2.2, high: 2.2, at: 6.0 };
-
-/**
  * When it comes out of the shaft after you, in metres down the corridor.
  *
  * Measured from the lift's doorway. Too close and the doors open onto a death;
  * too far and the twenty-two metres is a walk with a noise at the end of it.
  * Five is the length of the car behind you: you are clear of it, you are not
- * clear of anything else, and the sixteen metres left to the gap is a sprint
- * you win by about a second.
+ * clear of anything else, and the sixteen metres left to the window is a
+ * sprint you win by about a second.
  *
- * `beat` is how long after you reach the glass the thing is allowed to keep
- * coming, and it exists because the first cut of this ended wrong. Whatever is
- * following you is switched off at the window, and switched off the frame you
- * arrive it stops wherever it happens to be — measured at six metres short of
- * the wall, which is a thing giving up in the middle of an empty corridor. In
- * two and four fifths of a second it covers that, arrives at the gap, and is
- * pressing at it when it goes quiet.
+ * It is the only number this stretch has left, and that is the change. There
+ * used to be a cross-wall six metres short of the window with a hole in it
+ * the size of a person — the last gap in the building, the thing that held
+ * when the lift did not. You went through it, it did not, and you got
+ * fourteen seconds of quiet at the glass before the hole gave.
  *
- * And `again` is how long the quiet lasts, which is the last number in this
- * game and the only one in it that is a lie. The gap held. You watched it
- * hold. The thing went quiet behind a hole the size of a person, and you
- * turned round and looked out of a window at the rest of the building —
- * fourteen seconds is what that is worth: long enough to stop listening for
- * it, short enough that stopping was the mistake.
- *
- * It does not break the wall. It comes through the hole — see `clearance`,
- * which hands it the size of the gap once the clock runs out. Every opening in
- * this building since the shed has been something it could fold into, and the
- * last one is the smallest thing it has ever had to be.
+ * The wall is gone, and so are its three clocks. What is at the end of this
+ * corridor now is a window and nothing else: twenty-two metres, one lamp at
+ * the far end, no door in the middle of it and nothing between you and what
+ * came down the shaft. You do not get through anything and you do not get a
+ * beat to breathe — you get to the glass, and it arrives. See the trigger in
+ * main.js, which hands the last few metres to finale.js.
  */
-const CHASE = { after: 5.0, beat: 2.8, again: 14.0, squeeze: 2.2 };
+const CHASE = { after: 5.0 };
 
 /**
  * The window at the end of it, and the first one in the building.
@@ -238,9 +212,6 @@ function arrowShape() {
  *                 is the frame whatever is chasing you is shut out of the car
  * @param onOut    once, when you are far enough down the bottom corridor that
  *                 something can come out of the shaft behind you
- * @param onSafe   once, when you are through the gap at the end of it
- * @param onWindow once, when you are at the glass
- * @param onAgain  once, `CHASE.again` seconds after that: the gap gives
  */
 export function createCodeLift({
   scene,
@@ -250,9 +221,6 @@ export function createCodeLift({
   onInTheCar,
   onShut,
   onOut,
-  onSafe,
-  onWindow,
-  onAgain,
 }) {
   const group = new THREE.Group();
   scene.add(group);
@@ -586,59 +554,22 @@ export function createCodeLift({
   solid(outX0 - 0.3, outX1 + 0.3, outZ0 - 0.3, outZ0, { bottom: floorBelow });
 
   /**
-   * And the gap, six metres short of it.
+   * And nothing between it and the lift.
    *
-   * Built the same way every wall with a hole in it is built in this project —
-   * a piece either side and a piece over the head — and standing in a corridor
-   * rather than between two rooms, which is the one thing about it that is
-   * unusual. It is not a doorway between anywhere and anywhere. It is a wall
-   * somebody put across a corridor, with a hole in it the size of a person.
+   * There was a wall across here — six metres short of the window, a piece
+   * either side and a piece over the head, with a hole in it the size of a
+   * person. It was the last gap in the building and it was lit from the
+   * wrong side on purpose: what you ran at down twenty-two dark metres was
+   * a lit rectangle, and what ran at the back of a wall was the thing
+   * behind you.
    *
-   * It is also lit from the wrong side on purpose. The only lamp down here is
-   * at the window, past this, so what you are running at down twenty-two dark
-   * metres is a lit rectangle, and what the thing behind you is running at is
-   * the back of a wall.
+   * It is not here any more, and what that costs is the one safe moment at
+   * the end of this game. What it buys is the room: this is now a single
+   * unbroken twenty-two by nine by five and a half with one lamp at the far
+   * end of it, which is both the whole length of a thing coming at you and
+   * enough floor for what happens when it arrives. See finale.js, which was
+   * staging five metres of animal in a six metre pocket.
    */
-  const pinchZ = outZ0 + PINCH.at;
-  const pinchLow = axis - PINCH.wide / 2;
-  const pinchHigh = axis + PINCH.wide / 2;
-  for (const [w, h, px, py] of [
-    [pinchLow - outX0, OUT.high, (outX0 + pinchLow) / 2, outMidY],
-    [outX1 - pinchHigh, OUT.high, (pinchHigh + outX1) / 2, outMidY],
-    [PINCH.wide, OUT.high - PINCH.high, axis, floorBelow + PINCH.high + (OUT.high - PINCH.high) / 2],
-  ]) {
-    if (w <= 0.001 || h <= 0.001) continue;
-    // Both faces, because this is the one wall down here you see from each
-    // side — at a run going one way and standing still going the other.
-    panel(wallOf(w, h), w, h, px, py, pinchZ, 0);
-    panel(wallOf(w, h), w, h, px, py, pinchZ - 0.22, Math.PI);
-  }
-  // The reveal, so the hole has a thickness and reads as a wall rather than a
-  // sheet of card across a corridor.
-  for (const [a, b] of [
-    [pinchLow - 0.09, pinchLow],
-    [pinchHigh, pinchHigh + 0.09],
-  ]) {
-    const jamb = new THREE.Mesh(
-      new THREE.BoxGeometry(b - a + 0.09, PINCH.high, 0.22),
-      wallOf(0.3, PINCH.high)
-    );
-    jamb.position.set((a + b) / 2, floorBelow + PINCH.high / 2, pinchZ - 0.11);
-    group.add(jamb);
-  }
-  const lintel = new THREE.Mesh(
-    new THREE.BoxGeometry(PINCH.wide, 0.1, 0.22),
-    wallOf(PINCH.wide, 0.3)
-  );
-  lintel.position.set(axis, floorBelow + PINCH.high - 0.05, pinchZ - 0.11);
-  group.add(lintel);
-  for (const [a, b] of [
-    [outX0 - 0.3, pinchLow],
-    [pinchHigh, outX1 + 0.3],
-  ]) {
-    solid(a, b, pinchZ - 0.22, pinchZ, { bottom: floorBelow });
-  }
-  solid(pinchLow, pinchHigh, pinchZ - 0.22, pinchZ, { bottom: floorBelow + PINCH.high });
 
   // The frame, the sill and the glass.
   const sill = new THREE.Mesh(new THREE.BoxGeometry(WINDOW.wide + 0.5, 0.14, 0.34), dark);
@@ -874,35 +805,15 @@ export function createCodeLift({
   let told = false;
   let arrived = false;
   /**
-   * The last stretch, as three one-way flags.
+   * The last stretch, as one one-way flag.
    *
-   * `chasedOut` is whether the thing has been let out of the shaft behind you,
-   * `through` whether you are past the gap, and `looked`/`quiet` the beat at
-   * the window and the end of it. One-way because every one of them is an
-   * event with a sound on it and a thing that fires twice is a thing you hear
-   * twice.
+   * `chasedOut` is whether the thing has been let out of the shaft behind
+   * you. There were three of these — one for being through the gap and two
+   * for the beat at the window and the quiet that was counted off it — and
+   * they went with the wall. One-way because it is an event with a sound on
+   * it, and a thing that fires twice is a thing you hear twice.
    */
   let chasedOut = false;
-  let through = false;
-  /**
-   * null until you reach the glass, then seconds since; `quiet` once it ends.
-   *
-   * Not `glass`, which is the pane in the window eighty lines up. A second
-   * `glass` in this file is a redeclaration in the same module scope, and the
-   * module that does not evaluate is the whole game: the page threw
-   * "Identifier 'glass' has already been declared" and `window.game` never
-   * existed, which from a harness looks exactly like a browser that cannot
-   * keep a page up.
-   */
-  let looked = null;
-  let quiet = false;
-  /**
-   * Counting the quiet at the window: `yielding` once the gap starts letting
-   * it in, `came` once it is through.
-   */
-  let rested = null;
-  let yielding = false;
-  let came = false;
   /** How much of the ride is left to make a noise on, and the shake of it. */
   let banged = 0;
   let shook = 0;
@@ -1103,29 +1014,17 @@ export function createCodeLift({
     clearance(x, z) {
       if (!inCorridor(x, z)) return null;
       /**
-       * And the gap itself, but only once it is allowed through it.
+       * One number now, where there used to be two.
        *
-       * This is the whole of the last beat and it is two numbers behind a
-       * conditional. A room that declares its clearance gets a creature
-       * crushed to fit it — see `cram` in screenBeast.js — so the gap handing
-       * out its own size *is* the thing coming through the gap. No wall
-       * breaks and nothing animates.
-       *
-       * Gated on `yielding`, because this is a volume and the thing spends
-       * the quiet standing in it. Ungated it would squeeze itself down to two
-       * metres while it was still supposed to be a thing that cannot fit, and
-       * the hold would be keeping a creature the size of the hole out of the
-       * hole.
-       *
-       * Two and a half metres either side of the plane, so the squeeze is
-       * something it does on the way in rather than something that happens to
-       * it in one frame. Past the wall the corridor's own number takes over
-       * and it comes back up to six, which is the half of this worth having:
-       * it is the size of a door for about a second and a half.
+       * The gap handed out its own two and a bit metres while it was letting
+       * the thing through it, which is how something that could not fit came
+       * through a door without the door animating — a room that declares a
+       * clearance gets a creature crushed to fit it, see `cram` in
+       * screenBeast.js. With the wall gone there is nothing down here to be
+       * the size of, so the corridor answers for all twenty-two metres of
+       * itself and the animal comes at you at the biggest it has been since
+       * the shed.
        */
-      if (yielding && Math.abs(z - pinchZ) < 2.5) {
-        return { wide: PINCH.wide - 0.2, high: PINCH.high - 0.2 };
-      }
       return { wide: OUT.wide - 0.5, high: OUT.high - 0.4 };
     },
 
@@ -1145,10 +1044,14 @@ export function createCodeLift({
       return { x: axis, y: floorBelow + 2.4, z: outZ1 - 1.0, yaw: Math.PI };
     },
 
-    /** The plane of the gap, for whatever has to be held at it. */
-    get pinchZ() {
-      return pinchZ;
-    },
+    /**
+     * Whether you are at the glass, which is the end of the building.
+     *
+     * The last three metres of the corridor. It used to be the gap that said
+     * the chase was over; there is no gap, so this does — see the trigger in
+     * main.js, which wants it along with a thing in the room behind you.
+     */
+    atTheGlass: (x, z) => inCorridor(x, z) && z < outZ0 + 3.4,
 
     /** The lobby wall the doors are in, for whatever has to stay outside it. */
     get doorZ() {
@@ -1195,11 +1098,11 @@ export function createCodeLift({
     /**
      * Back to the bottom of the shaft with the last stretch re-armed.
      *
-     * The checkpoint for the corridor, and it is not `reset`: dying six metres
-     * from the window should not cost the eight arrows, and `reset` sends the
-     * car back up to the lobby with the combination wiped. This keeps the ride
-     * spent and winds back only the three events that make up the run for the
-     * gap, so the thing comes out of the shaft at you again.
+     * The checkpoint for the corridor, and it is not `reset`: dying a few
+     * metres from the window should not cost the eight arrows, and `reset`
+     * sends the car back up to the lobby with the combination wiped. This
+     * keeps the ride spent and winds back the one event that makes up the run
+     * for the window, so the thing comes out of the shaft at you again.
      */
     backToTheCar() {
       phase = 'done';
@@ -1209,15 +1112,6 @@ export function createCodeLift({
       slide();
       arrived = true;
       chasedOut = false;
-      through = false;
-      looked = null;
-      quiet = false;
-      rested = null;
-      came = false;
-      // The wall holds again on the retry: whatever came through it is going
-      // back in the shaft, so the hole it made itself through is a hole it has
-      // not made yet.
-      yielding = false;
     },
 
     /** Out of the lift at the bottom, looking down the corridor. */
@@ -1283,12 +1177,6 @@ export function createCodeLift({
       told = false;
       arrived = false;
       chasedOut = false;
-      through = false;
-      looked = null;
-      quiet = false;
-      rested = null;
-      yielding = false;
-      came = false;
       banged = 0;
       shook = 0;
       shut = 0;
@@ -1416,12 +1304,18 @@ export function createCodeLift({
       }
 
       /**
-       * And the last twenty-two metres, in three events.
+       * And the last twenty-two metres, which is now one event.
        *
-       * All three are keyed on where you are and not on a clock, because all
-       * three are about you: a player who sprints out of the car and a player
-       * who edges out of it should both get the same corridor, which is the
-       * thing coming out of the lift five metres behind them.
+       * It used to be three: out of the shaft, through the gap, and the beat
+       * at the glass the quiet was counted from. The gap is gone and both of
+       * the events that belonged to it went with it, so what is left is the
+       * thing being let out behind you — keyed on where you are and not on a
+       * clock, because it is about you: a player who sprints out of the car
+       * and a player who edges out of it should both get the same corridor,
+       * which is the thing coming out of the lift five metres behind them.
+       *
+       * Nothing in here ends the chase any more. That is finale.js, off the
+       * glass and whatever is standing near it — see the trigger in main.js.
        */
       if (arrived && !chasedOut && here.z < outZ1 - CHASE.after) {
         chasedOut = true;
@@ -1431,55 +1325,6 @@ export function createCodeLift({
         playScreech(0.95);
         showNote('It came down the shaft.', 2.4);
         onOut?.();
-      }
-      if (!through && here.z < pinchZ - 0.6) {
-        through = true;
-        onSafe?.();
-      }
-      if (looked === null && here.z < outZ0 + 2.6) looked = 0;
-      if (looked !== null && !quiet) {
-        looked += delta;
-        if (looked >= CHASE.beat) {
-          quiet = true;
-          rested = 0;
-          onWindow?.();
-        }
-      }
-      /**
-       * And then it comes through the gap.
-       *
-       * The clock starts when it goes quiet rather than when you arrive, so
-       * what you are being given is fourteen seconds of silence and not
-       * fourteen seconds of a thing pressing at a wall.
-       */
-      if (rested !== null && !came) {
-        rested += delta;
-        /**
-         * In two parts, and the gap between them is the whole image.
-         *
-         * The squeeze first: `yielding` hands the gap's own two metres out as
-         * a clearance, and the thing behind the wall collapses itself into
-         * that over about a second and a half while it is still being held
-         * off. Then it is let go, and what comes through the hole is already
-         * the size of the hole.
-         *
-         * One event measured 0.9 seconds between the thing being released and
-         * the thing having you, and the crush is eased over about a second —
-         * so what actually came through a two metre door was four metres nine
-         * of animal, in a corridor, having not squeezed at all. The squeeze
-         * has to happen before the release or it does not happen.
-         */
-        if (!yielding && rested >= CHASE.again - CHASE.squeeze) {
-          yielding = true;
-          // Concrete, not rock: nothing is coming down. This is the sound of
-          // something making itself the size of a door.
-          playSpikeGrind(1);
-          playScreech(1);
-        }
-        if (rested >= CHASE.again) {
-          came = true;
-          onAgain?.();
-        }
       }
     },
   };

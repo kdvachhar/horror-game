@@ -274,7 +274,7 @@ export function createFinale({ scene, camera, player, beast, friend, lift, onFin
       return run ? +run.t.toFixed(2) : 0;
     },
 
-    /** Called with the thing through the gap and a few metres off you. */
+    /** Called with the thing a few metres off you and still coming. */
     start() {
       if (run || done) return;
 
@@ -283,17 +283,17 @@ export function createFinale({ scene, camera, player, beast, friend, lift, onFin
        * You are put on a mark, and it is the one liberty this takes.
        *
        * Everything else here is staged around where you happen to be, but
-       * the pocket between the gap and the window is six metres and the
-       * animal is five of them tall: standing in the middle of it, the shot
-       * opens on a face with no room in the frame for the thing that is
-       * about to happen to it, and the window — which is what the last ten
-       * seconds are about — is three metres behind your head.
+       * the window is what the last ten seconds of this are about and the
+       * animal is five metres tall: standing anywhere but close to the
+       * glass, the shot opens on a face with no room in the frame for what
+       * is about to happen to it, and the window is somewhere behind your
+       * head.
        *
-       * Two metres off the glass is where this works from. It is
-       * also where a player who has run to a window and found it shut is
-       * standing, so the move is small and most of the time it is no move
-       * at all. Off to one side, because something is going to come down on
-       * that glass.
+       * Two metres off the glass is where this works from, and it is also
+       * where a player who has run twenty-two metres at a window and found
+       * it shut is standing — so the move is small and most of the time it
+       * is no move at all. Off to one side, because something is going to
+       * come down on that glass.
        */
       player.teleport({
         position: [win.x + 0.9, win.floor, win.z + 2.0],
@@ -314,10 +314,12 @@ export function createFinale({ scene, camera, player, beast, friend, lift, onFin
         /**
          * Square on, three and a half metres off the lens, on the floor.
          *
-         * Both numbers are the corridor rather than taste. The stretch from
-         * the gap to the window is six metres and you have just been put a
-         * couple of metres into it, so anything further back than about
-         * three and a half is inside the wall it came through. And the height is measured off the
+         * Both numbers are the corridor rather than taste. Three and a half
+         * metres is where a five metre body fits in a lens standing two
+         * metres off the glass: closer and the frame is a mouth, further
+         * back and there is corridor either side of it, and there is now
+         * twenty-two metres of corridor behind it to be further back into.
+         * And the height is measured off the
          * floor and not off your eyes: the body is about five metres tall
          * once it has crushed itself down to this corridor, so its middle
          * sits at 2.9 to leave its bottom edge a hand's width clear of the

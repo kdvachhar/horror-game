@@ -168,28 +168,33 @@ const STAIR = { steps: 6, rise: 0.6, wide: 1.8, deep: 2.2, from: 13.0 };
 const BUTTON = { base: 1.9, cap: 1.5, rise: 0.55, dome: 0.34, at: 0.58 };
 
 /**
- * How long the roof holds it, in seconds, and it is the most load-bearing
- * number in the back half of this game.
+ * The roof does not hold it any more, and the eight arrows are paid for
+ * somewhere else now.
  *
- * What it buys is not time here, it is time at the pad two hundred metres
- * away. The only part of the route where you have to stand still is the lift's
- * eight-arrow code, and standing still against something that walks at 5.1 is
- * a timer whether it is written as one or not.
+ * It used to stand behind the heap for eighteen seconds. That was never the
+ * point of the roof — the point was the time it bought at the pad two
+ * hundred metres away, because the lift's eight-arrow code is the only part
+ * of the route where you have to stand still, and standing still against
+ * something that walks at 5.1 is a timer whether it is written as one or
+ * not. Eighteen seconds of hold measured a twenty second window at the pad.
  *
- * Measured, not chosen, and the whole measurement is one number: how long you
- * can stand at the pad before it has you. With no roof at all that was four
- * seconds — three arrows of eight, and the puzzle was unsolvable by anybody
- * who had not already memorised it. Every second of hold is worth about a
- * second and a sixth there, and eighteen measures a twenty and a half second
- * window: eight arrows at two and a half seconds each, which is a player
- * reading the strip, aiming, and pressing, with the thing coming into the
- * lobby behind them on the last two.
+ * What it also bought was a chase with nothing in it. Measured over the full
+ * route, the gap never came below sixty metres after the shed and ran to a
+ * hundred in the maze: three junctions, a climb and a hundred and fifty
+ * metres of corridor with no creature in them at all. The thing you are
+ * running from spent the chase standing in a room you had left.
  *
- * This is the dial. Nothing is derived from it and the rest of the chase does
- * not care, so if the end of this game wants to be crueller, lower it — three
- * seconds off is one arrow's worth of grace.
+ * So it is not held. The roof still comes down — it is the reveal, and the
+ * stone is still coming off it — and it comes through the hole it makes for
+ * itself about a second later, which is the same picture without the wait.
+ * The time at the pad is bought by the car instead: the doorway is two
+ * metres eight, the thing is eleven and a half, and it has to stand in the
+ * lobby and watch you type. See `onBoarded` in codeLift.js.
+ *
+ * Left as a constant rather than deleted, because it is still the dial. Put
+ * a number back in it and the heap holds again for that many seconds.
  */
-const HOLD = 18;
+const HOLD = 0;
 
 /**
  * Waking up, in seconds from the press.
@@ -1427,22 +1432,23 @@ export function createStorageRoom({ scene, doorway, player, camera, death, clear
         if (!boulders.hasFallen && chaseSince >= BREAKOUT.free) {
           boulders.drop();
           /**
-           * A metre in front of the back of the heap, so what comes over the
-           * top of the rock is the face and not the whole animal: held at its
-           * own front face it is already through.
+           * And only held if HOLD says so, which it no longer does.
            *
-           * And kept in the shed while it is held, which is the part that
-           * makes the hold worth anything — see screenBeast.js. It is allowed
-           * to slide along the back of the rock looking for you, four metres
-           * clear of each side wall, and it is allowed none of the height you
-           * gain going up the pallet stair: a thing that follows you up to the
-           * transfer opening while it is supposed to be buried is a thing
-           * standing on the roof of its own shed.
+           * A metre in front of the back of the heap, so what comes over the
+           * top of the rock is the face and not the whole animal. The box is
+           * the half that made it worth anything: a hold is a plane and not
+           * a cage, so clamped in x at the heap it tracked your z straight
+           * out through the back wall of the building and the hold cost it
+           * nothing. It is allowed to slide along the back of the rock
+           * looking for you, four metres clear of each side wall, and none
+           * of the height you gain going up the pallet stair.
            */
-          beast.holdAt(boulders.front + 1.0, HOLD, 'x', {
-            z: [minZ + 4.0, maxZ - 4.0],
-            y: [floorY + 3.0, floorY + 5.0],
-          });
+          if (HOLD > 0) {
+            beast.holdAt(boulders.front + 1.0, HOLD, 'x', {
+              z: [minZ + 4.0, maxZ - 4.0],
+              y: [floorY + 3.0, floorY + 5.0],
+            });
+          }
         }
         // It stops being held and the heap gives on the same frame, because
         // they are the same event seen from either side of it.

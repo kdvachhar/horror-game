@@ -507,6 +507,44 @@ const codeLift = createCodeLift({
   player,
   camera,
   /**
+   * It cannot get into the car, and from now on that is what buys the code.
+   *
+   * The roof in the shed used to buy it, by standing the thing still for
+   * eighteen seconds — see HOLD in storageRoom.js for why that is gone. The
+   * replacement is the thing the lift already was: the car's doorway is two
+   * metres eight and the animal is eleven and a half, so it is the first
+   * opening in this building that is simply too small.
+   *
+   * It is held a metre outside the lobby wall, which puts its middle at 2.2
+   * — the clamp is the plane plus 1.2 — against a reach of 1.9. So a player
+   * standing at the pad is four metres clear and a player standing right in
+   * the open doorway watching it is eight tenths clear, and the arithmetic
+   * is deliberately that tight: the one way to be caught in here is to go
+   * and look at it.
+   *
+   * **Four tenths of a second, re-armed every frame you are in the car.**
+   * The obvious version of this is one long hold when you step in, and the
+   * obvious version leaves a monster parked at the lift for the rest of the
+   * game — board, walk back out past it, and the lobby is a museum. A hold
+   * that expires in half a second is only true while the call keeps coming,
+   * and the call stops the moment you leave the car. Stepping out is then
+   * exactly what it sounds like: see `heldUntil` in screenBeast.js, which
+   * grinds and screeches on the frame it comes off whatever was holding it.
+   *
+   * **No keep box, and that is the opposite of the roof's lesson for a
+   * reason.** The roof's hold needed one because its free axis ran forty
+   * metres out of the back of the building; this one's free axis is a ten
+   * metre lobby with a wall at each end, and the thing it steers at is you,
+   * so it centres itself on the doors without being told. Given a box it
+   * measured worse, not better: armed while it was still forty metres back
+   * in the maze, the clamp dragged it eight metres sideways on the first
+   * frame and it then spent its whole step budget fighting the clamp in x
+   * instead of walking in z. It arrived at the doorway six metres short of
+   * it and stopped there, which from the car reads as a monster losing
+   * interest.
+   */
+  onInTheCar: () => storageRoom.beast.holdAt(codeLift.doorZ + 1.0, 0.4, 'z'),
+  /**
    * The doors shut on it, and that is all they do.
    *
    * The car's doorway was meant to be the end of the chase — the first

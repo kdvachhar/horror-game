@@ -212,6 +212,10 @@ function arrowShape() {
  * @param doorway the lobby's lift opening: { x, y, z, width, height }
  * @param player  whose feet ride down with it
  * @param camera  for working out which arrow is being looked at
+ * @param onInTheCar every frame you are standing in the car with the code
+ *                 still to enter — which is every frame whatever is chasing
+ *                 you cannot get at you, and the reason the code is
+ *                 enterable at all
  * @param onShut   once, the frame the doors start to shut on the ride — which
  *                 is the frame whatever is chasing you is shut out of the car
  * @param onOut    once, when you are far enough down the bottom corridor that
@@ -225,6 +229,7 @@ export function createCodeLift({
   doorway,
   player,
   camera,
+  onInTheCar,
   onShut,
   onOut,
   onSafe,
@@ -1089,6 +1094,11 @@ export function createCodeLift({
       return pinchZ;
     },
 
+    /** The lobby wall the doors are in, for whatever has to stay outside it. */
+    get doorZ() {
+      return doorway.z;
+    },
+
     /** Just out of the car at the bottom, which is the corridor's checkpoint. */
     get atTheCar() {
       return { position: [axis, floorBelow, outZ1 - 1.2], yaw: 0 };
@@ -1204,6 +1214,31 @@ export function createCodeLift({
       houseLights(here.z < doorway.z + (lampsIn ? 40 : 30));
       const near = inside(here.x, here.z) || inCorridor(here.x, here.z);
       bulb.intensity = near || phase !== 'wait' ? 11 : 0;
+
+      /**
+       * While you are in the car, which is while you are not catchable —
+       * and the whole of what pays for the eight arrows.
+       *
+       * The roof in the shed used to pay for them, by standing the thing
+       * behind a heap for eighteen seconds two hundred metres from here. It
+       * does not any more, so this does: the car's doorway is two metres
+       * eight and the animal is eleven and a half, which makes it the first
+       * opening in the building that is simply too small. It comes into the
+       * lobby, it fills the hole, and it watches you type.
+       *
+       * **Every frame, and not once when you step in.** A one-shot here is
+       * a thing standing at the lift for ever: board the car, walk back out
+       * past it, and the lobby is a room with a frozen monster in it. What
+       * is wired to this is a hold that lasts a fraction of a second, so it
+       * is true exactly while this is being called and the moment you leave
+       * the car it comes off it — audibly, which is the right answer to
+       * stepping back out.
+       *
+       * Keyed on standing in the car rather than on the first press,
+       * because a player who steps in and reads the strip for ten seconds
+       * before touching anything is the player this is for.
+       */
+      if (phase === 'wait' && inside(here.x, here.z)) onInTheCar?.();
 
       if (!told && inside(here.x, here.z)) {
         told = true;

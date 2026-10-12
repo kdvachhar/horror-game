@@ -90,6 +90,22 @@ const GAP = { wide: 6.6, fall: 1.05, open: 1.2 };
  */
 const STRAIN = { shift: 0.05, rate: 23, grind: 2.4, fall: 1.3 };
 
+/**
+ * And how long it goes on shedding once it is down, whatever is or is not
+ * leaning on it.
+ *
+ * The shake and the grind are a thing under load, so they stop when the load
+ * does. The stones are not: twenty tonnes of roof that has just hit a
+ * concrete floor drops rock for a while afterwards whether anything is
+ * pushing on it or anything is not. It matters because nothing leans on this
+ * heap any more — see HOLD in storageRoom.js — and without this the falling
+ * rock you can hear behind you lasted one frame, which is the sound effect
+ * being deleted by a change that had nothing to do with it.
+ *
+ * Nine seconds, which is about the time it takes you to clear the shed.
+ */
+const SHED = 9;
+
 const ROCK_TINT = '#4a4b44';
 
 /**
@@ -565,7 +581,7 @@ export function createBoulderDrop({
        * in one frame, and a thing that stops in one frame has no weight: the
        * eye reads the settle, not the fall.
        */
-      if (state === 'down' || state === 'giving') {
+      if (state === 'down' || state === 'giving' || state === 'open') {
         fell += delta;
         const settle = fell < DROP.settle ? Math.sin((fell / DROP.settle) * Math.PI) : 0;
         /**
@@ -601,9 +617,12 @@ export function createBoulderDrop({
          * no two falls land on the same beat.
          */
         falling -= delta;
-        if (state === 'down' && falling <= 0) {
+        if (fell < SHED && falling <= 0) {
           falling = STRAIN.fall * (0.7 + Math.random() * 0.6);
-          playRubble(0.35 + 0.65 * strain);
+          // Loudest while something is actually on it, and failing that,
+          // loudest just after it lands and tailing off. Whichever of the two
+          // is saying more.
+          playRubble(0.3 + 0.5 * Math.max(strain, 1 - fell / SHED));
         }
       }
 

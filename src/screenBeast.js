@@ -74,15 +74,33 @@ import { createChaseMusic, playSpikeGrind, playScreech, playMeatLunge } from './
  * costs you time costs you distance: the climb, a wrong branch, a missed
  * jump, the eight presses at the end.
  *
- * `cruise` is 5.1 against a sprint of 5.6, and the half a metre is the whole
- * design of the second half of this chase. At 4.5 the first measured run
- * never saw it closer than twenty metres across the entire route — which is
- * a thing following you at a polite distance, not a thing chasing you. At 5.1
- * a player who never stops arrives at the lift with it about a dozen metres
- * back, and a player who takes one wrong branch arrives with it in the
- * corridor behind them.
+ * `cruise` is 4.5 against a sprint of 5.6, and it was 5.1 while there was a
+ * roof holding it still for eighteen seconds at the start. Both numbers were
+ * measured and the measurement changed under them, which is worth writing
+ * down because the first one still looks right on paper.
+ *
+ * With the hold, 5.1 was correct and 4.5 was the lazy option: the run opened
+ * with eighty metres of lead, so the only question left was how fast that
+ * eighty came back, and at 4.5 it never came back at all — the thing was
+ * never nearer than twenty metres across the whole route, which is a thing
+ * following you at a polite distance.
+ *
+ * With no hold — see HOLD in storageRoom.js — the lead is the seven metres
+ * you start with and whatever your legs earn, and 5.1 is a chase nobody
+ * survives twice. Measured: a clean run reaches the first junction with
+ * twelve metres and one wrong branch in a maze built out of wrong branches
+ * is caught in two and a half seconds, because it follows your trail and
+ * meets you coming back out of the dead end. At 4.5 the same clean run
+ * arrives at the junction with fifteen and the same wrong branch survives by
+ * three metres: it comes into the branch, you pass each other, and it is
+ * still behind you.
+ *
+ * The gap it produces now runs 14 to 22 metres for the whole route and grows
+ * slowly while you run well, which in a seven metre corridor is a creature
+ * you can see every time you look back. The eighty metres it replaced was a
+ * creature nobody ever saw.
  */
-const SPEED = { from: 3.0, to: 6.4, ramp: 10, cruise: 5.1, settle: 26 };
+const SPEED = { from: 3.0, to: 6.4, ramp: 10, cruise: 4.5, settle: 26 };
 
 /**
  * How it finds its way through a building it cannot see.

@@ -51,8 +51,13 @@ const TRIM = '#3c4147';
  * it went dark when it had said its piece, and the next screen it appears on is
  * at the far end of the room it just watched you run. Pleased with itself,
  * which is the only register this character has — it apologises for the hall in
- * the same breath as it explains what the hall was for, and what it was for is
- * the worst thing anything in this game has said out loud.
+ * the same breath as it explains what the hall was for.
+ *
+ * And it says "I". The wall was a scanner that sent people back and it is a
+ * wall of spikes now because this thing changed it, which is the only moment
+ * in the game where it owns one of them out loud: everything else it has told
+ * you about this building is something the building did. The register does
+ * not change for it either, and that is the line.
  *
  * Then it goes out, and there is no asking it again. A thing that will repeat
  * that on request is a menu rather than a character.
@@ -61,20 +66,14 @@ const CONSOLE_LINES = [
   { text: 'You made it.', hold: 1.6, frown: true },
   { text: 'Sorry about the trouble getting here.', hold: 2.0, eyes: 'closed', frown: true },
   { text: 'That spike wall used to be a scanner.', hold: 2.0, frown: true },
-  { text: 'It would close the door and send the children back.', hold: 2.6, frown: true },
-  // Split at the comma rather than mid-clause. The voice takes its pauses from
-  // the punctuation, so a line cut anywhere else is heard as a stumble.
+  // One line, and the only one in the building with the brows on it — the
+  // eyes have to be open for that, so it has none of the shut-eyed delivery
+  // the apology above it does. It is the better reading anyway: it says this
+  // one looking at you. Not split, because the voice takes its pauses from
+  // the punctuation and there is none in here to cut at: a line broken
+  // anywhere else is heard as a stumble.
   {
-    text: 'Eventually, the smarter experiments replaced it with spikes,',
-    hold: 1.2,
-    arms: 'crossed',
-    frown: true,
-  },
-  // The only line in the building with the brows on it — and the eyes have to
-  // be open for that, so this one lost the shut-eyed delivery it had. It is the
-  // better reading anyway: it says this one looking at you.
-  {
-    text: 'to kill all the remaining people in the building.',
+    text: 'Eventually I replaced it with spikes to stop people from coming back.',
     hold: 2.8,
     arms: 'crossed',
     brows: 'angry',

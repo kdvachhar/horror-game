@@ -741,7 +741,7 @@ const theEnd = createEndCard({
  * existed. See onPointerLockChange in player.js.
  */
 function backToTheTitle() {
-  SCENES[0].go();
+  windBackToTheBeginning();
   document.exitPointerLock?.();
 }
 
@@ -1735,11 +1735,42 @@ function rememberWhereYouAre() {
   }
 }
 
-/** Wind the whole thing back to the top and start the save again with it. */
-function startNewGame() {
+/**
+ * The building at its first frame, act one included.
+ *
+ * `SCENES[0].go()` is not this and is not meant to be: it is the debug
+ * menu's "put me back at the spawn point", a teleport with the sequences
+ * wound back, and it deliberately leaves the first room's own progress
+ * alone so that jumping to the hall mid-game shows you the hall you have.
+ *
+ * A restart is a different question. Act one is four pieces of state that
+ * live nowhere else — the hatch, the bucket on the floor, the thing that
+ * came off the belt, and the door that unsealed when it did — plus the
+ * interact targets, which are one-shot and are the whole of the
+ * progression: inspect the machine, pick up the bucket, load the bucket.
+ * Put the player back in the first room without clearing those and the room
+ * has nothing left to press, the way on is already open, and your friend is
+ * standing next to you before the machine that makes it has run.
+ */
+function windBackToTheBeginning() {
   SCENES[0].go();
+  machine.closeHatch();
+  bucket.putBack();
+  friend.retire();
+  door.close();
+  processing = null;
+  interactions.rearm();
+  followWanted = true;
+}
+
+/** That, and the save file started again with it. */
+function startNewGame() {
+  windBackToTheBeginning();
   savedRoom = 0;
   writeSave(0, SCENES[0].label);
+  // A new game gets the opening lines again. They are the game introducing
+  // itself and this is the game starting.
+  announced = false;
 }
 
 /**

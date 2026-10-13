@@ -229,11 +229,16 @@ export function buildBucketMesh() {
   return group;
 }
 
+/** Knocked over at a slight angle, as if dropped rather than placed. */
+const LEANING = new THREE.Euler(0.06, 0.7, 0.09);
+
 export function createBucket(scene, position) {
   const group = buildBucketMesh();
-  group.position.copy(position);
-  // Knocked over at a slight angle, as if dropped rather than placed.
-  group.rotation.set(0.06, 0.7, 0.09);
+  // Kept, because a restart has to be able to put it back exactly here —
+  // see `putBack`.
+  const where = position.clone();
+  group.position.copy(where);
+  group.rotation.copy(LEANING);
   scene.add(group);
 
   let held = false;
@@ -266,6 +271,21 @@ export function createBucket(scene, position) {
       parent.add(group);
       group.position.copy(localPosition);
       group.rotation.set(0, 0.4, 0);
+      group.scale.setScalar(1);
+    },
+
+    /**
+     * And back on the floor exactly as it was found, for a restart.
+     *
+     * Reparented as well as moved: by the time anybody asks for this the
+     * bucket is either riding on the camera or sitting inside the machine's
+     * own group, and a local position means nothing in either of them.
+     */
+    putBack() {
+      held = false;
+      scene.add(group);
+      group.position.copy(where);
+      group.rotation.copy(LEANING);
       group.scale.setScalar(1);
     },
   };

@@ -109,13 +109,36 @@ export function createTitleScreen({ onNewGame, onLoadGame, save }) {
   };
   offerSave(save);
 
+  /**
+   * And both of them deaf while the game is up, which is not belt and braces.
+   *
+   * A `<button>` that has been clicked keeps the focus, and a focused button
+   * fires on space and on enter. The menu is hidden the moment you start —
+   * opacity nought, pointer-events none — but hidden is not the same as gone:
+   * the first jump of the first playthrough was landing on "New game",
+   * because the key that jumps is the key that presses the button you
+   * started with, and the game wound itself back to the first room while you
+   * were in the air.
+   *
+   * Two things stop it. The focus is dropped the moment either is used, so
+   * the keyboard has nothing to press; and both handlers check that the menu
+   * is actually on screen, which is the rule that holds for enter, for a
+   * screen reader, for a synthetic click, and for whatever the next way in
+   * turns out to be. A control nobody can see is a control nobody can
+   * operate.
+   */
+  const menuIsUp = () => !document.body.classList.contains('playing');
+
   loadButton.addEventListener('click', (event) => {
-    if (loadButton.disabled) return;
+    if (loadButton.disabled || !menuIsUp()) return;
     event.stopPropagation();
+    loadButton.blur();
     onLoadGame?.();
   });
   newButton.addEventListener('click', (event) => {
+    if (!menuIsUp()) return;
     event.stopPropagation();
+    newButton.blur();
     onNewGame?.();
   });
 

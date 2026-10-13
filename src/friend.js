@@ -839,6 +839,22 @@ export function createFriend(scene) {
     },
 
     /** Start trailing the player. Same clean slate as being told to follow. */
+    /**
+     * Never made, for a game being started over.
+     *
+     * The inverse of `spawn`, and the only thing in here that takes the
+     * bucket out of the world rather than moving it: before the machine has
+     * run there is no friend, and a restart that leaves one standing in the
+     * first room is a restart you cannot play — the machine has nothing to
+     * deliver and you already have what it would have delivered.
+     */
+    retire() {
+      active = false;
+      following = false;
+      seated = false;
+      mesh.visible = false;
+    },
+
     collect() {
       following = true;
       stuckTimer = 0;

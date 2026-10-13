@@ -43,6 +43,19 @@ export function createInteractions(camera, onActiveChange) {
       targets.push(target);
     },
 
+    /**
+     * Every one-shot offered again, for a game being started over.
+     *
+     * `spent` is the whole of act one's progression — the machine is
+     * inspected once, the bucket is picked up once, the bucket is loaded
+     * once — so a restart that puts the world back without clearing these
+     * puts you in the first room with nothing left to press. See
+     * windBackToTheBeginning in main.js.
+     */
+    rearm() {
+      for (const target of targets) target.spent = false;
+    },
+
     update() {
       camera.getWorldDirection(forward);
 
